@@ -288,6 +288,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"CustomCruise", {PERSISTENT, FLOAT, "1.0", "1.0", 2, SETTINGS_SIMPLE}},
     {"CustomCruiseLong", {PERSISTENT, FLOAT, "5.0", "5.0", 2, SETTINGS_SIMPLE}},
     {"CustomPersonalities", {PERSISTENT, BOOL, "0", "0", 2}},
+    {"LongitudinalPersonalityProfiles", {PERSISTENT, JSON, "{}", "{}", 2}},
     {"CancelButtonControl", {PERSISTENT, INT, "1", "0", 2, SETTINGS_SIMPLE}},
     {"CancelButtonControlsMigrated", {PERSISTENT, BOOL, "0", "0"}},
     {"AOLLKASMigratedToButtonControl", {PERSISTENT, BOOL, "0", "0"}},

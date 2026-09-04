@@ -1,11 +1,13 @@
-import pytest
 import datetime
 import os
 import threading
 import time
 import uuid
 
-from openpilot.common.params import Params, ParamKeyFlag, UnknownKeyName
+import pytest
+
+from openpilot.common.params import ParamKeyFlag, ParamKeyType, Params, UnknownKeyName
+
 
 class TestParams:
   def setup_method(self):
@@ -127,6 +129,16 @@ class TestParams:
     assert isinstance(self.params.get("LongitudinalPersonality", return_default=True), int)
     assert self.params.get("LiveParameters") is None
     assert self.params.get("LiveParameters", return_default=True) is None
+
+  def test_longitudinal_personality_profiles_json_round_trip(self):
+    key = "LongitudinalPersonalityProfiles"
+    value = {"standard": {"following": {"preset": "custom", "curve": [1.2, 1.3]}}}
+    self.params.remove(key)
+
+    assert self.params.get_type(key) == ParamKeyType.JSON
+    assert self.params.get(key) is None
+    self.params.put(key, value)
+    assert self.params.get(key) == value
 
   def test_params_get_type(self):
     # json

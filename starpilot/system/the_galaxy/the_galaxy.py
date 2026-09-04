@@ -102,6 +102,19 @@ from openpilot.starpilot.common.favorite_slots import (
   trigger_favorite_action,
 )
 from openpilot.starpilot.common.lateral_delay import full_lateral_delay
+from openpilot.starpilot.common.longitudinal_personality_profiles import (
+  ACCELERATION_PRESETS,
+  ACCELERATION_SPEEDS_MPH,
+  BRAKING_PRESETS,
+  BRAKING_SPEEDS_MPH,
+  CURVE_BOUNDS,
+  FOLLOWING_PRESETS,
+  FOLLOWING_SPEEDS_MPH,
+  PERSONALITY_PROFILES_PARAM,
+  default_personality_profiles,
+  strict_personality_profiles,
+  update_personality_profile,
+)
 from openpilot.starpilot.common.starpilot_utilities import delete_file, get_lock_status, run_cmd
 from openpilot.starpilot.common.starpilot_variables import ACTIVE_THEME_PATH, BUTTON_FUNCTIONS, ERROR_LOGS_PATH, EXCLUDED_KEYS, LEGACY_STARPILOT_PARAM_RENAMES, MAPS_PATH, MODELS_PATH, RESOURCES_REPO, SCREEN_RECORDINGS_PATH, STOCK_THEME_PATH, THEME_SAVE_PATH,\
                                                            default_ev_tuning_enabled, migrate_cancel_button_controls, update_starpilot_toggles
@@ -3570,6 +3583,20 @@ def _has_runtime_default_value(key, raw_value):
   except Exception:
     return True
 
+_PERSONALITY_PROFILES_LOCK = threading.Lock()
+
+
+def _get_detected_ev_tuning():
+  cp_bytes = _safe_params_get_live_raw("CarParamsPersistent")
+  if not cp_bytes:
+    return False
+  try:
+    with car.CarParams.from_bytes(cp_bytes) as cp:
+      return default_ev_tuning_enabled(cp)
+  except Exception:
+    return False
+
+
 def _get_runtime_default_param_overrides():
   overrides = {}
   static_defaults = _get_static_default_param_values()
@@ -5590,6 +5617,63 @@ def setup(app):
       return jsonify({"error": "Favorite action failed."}), 400
     return jsonify({"message": "Favorite action sent."}), 200
 
+  @app.route("/api/personality_profiles", methods=["GET", "PUT"])
+  def personality_profiles():
+    ev_tuning = _get_detected_ev_tuning()
+
+    if request.method == "PUT":
+      if params.get_bool("IsOnroad"):
+        return jsonify({"error": "Longitudinal personality profiles can only be changed while off-road."}), 403
+
+      data = request.get_json(silent=True)
+      required_fields = {"profile", "category", "preset", "curve"}
+      if not isinstance(data, dict) or set(data) != required_fields:
+        return jsonify({"error": "Expected exactly profile, category, preset, and curve."}), 400
+
+      with _PERSONALITY_PROFILES_LOCK:
+        if params.get_bool("IsOnroad"):
+          return jsonify({"error": "Longitudinal personality profiles can only be changed while off-road."}), 403
+        raw_profiles = _safe_params_get_live_raw(PERSONALITY_PROFILES_PARAM)
+        profiles = strict_personality_profiles(raw_profiles) or default_personality_profiles(ev_tuning)
+        try:
+          profiles = update_personality_profile(
+            profiles,
+            data["profile"],
+            data["category"],
+            data["preset"],
+            data["curve"],
+            ev_tuning,
+          )
+        except (TypeError, ValueError) as error:
+          return jsonify({"error": str(error)}), 400
+
+        params.put(PERSONALITY_PROFILES_PARAM, profiles)
+      configured = True
+      update_starpilot_toggles()
+    else:
+      raw_profiles = _safe_params_get_live_raw(PERSONALITY_PROFILES_PARAM)
+      profiles = strict_personality_profiles(raw_profiles)
+      configured = profiles is not None
+      if profiles is None:
+        profiles = default_personality_profiles(ev_tuning)
+
+    return jsonify({
+      "bounds": {key: list(value) for key, value in CURVE_BOUNDS.items()},
+      "configured": configured,
+      "default_profiles": default_personality_profiles(ev_tuning),
+      "options": {
+        "acceleration": list(ACCELERATION_PRESETS),
+        "braking": list(BRAKING_PRESETS),
+        "following": list(FOLLOWING_PRESETS),
+      },
+      "profiles": profiles,
+      "speed_breakpoints_mph": {
+        "acceleration": list(ACCELERATION_SPEEDS_MPH),
+        "braking": list(BRAKING_SPEEDS_MPH),
+        "following": list(FOLLOWING_SPEEDS_MPH),
+      },
+    }), 200
+
   @app.route("/api/params", methods=["GET", "PUT"])
   def get_param():
     if request.method == "PUT":
@@ -5598,6 +5682,8 @@ def setup(app):
         return jsonify({"error": "Missing 'key' or 'value' in request body."}), 400
 
       key = str(data["key"]).strip()
+      if key.casefold() == PERSONALITY_PROFILES_PARAM.casefold():
+        return jsonify({"error": "Driving personalities must be changed through the validated profile editor."}), 403
       if key.lower() == FAVORITE_SLOTS_PARAM.lower():
         key = FAVORITE_SLOTS_PARAM
         raw_slots = data["value"]
