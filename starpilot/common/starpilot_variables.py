@@ -49,7 +49,7 @@ from openpilot.starpilot.common.accel_profile import (
   normalize_deceleration_profile,
   parse_custom_accel_profile_curve,
 )
-from openpilot.starpilot.common.longitudinal_personality_profiles import PERSONALITY_PROFILES_PARAM, strict_personality_profiles
+from openpilot.starpilot.common.longitudinal_personality_profiles import PERSONALITY_PROFILES_PARAM, is_truck_fingerprint, strict_profile_document
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.hardware.hw import Paths
 from openpilot.system.hardware.power_monitoring import VBATT_PAUSE_CHARGING
@@ -261,7 +261,6 @@ EXCLUDED_KEYS = {
   "StarPilotCarParamsPersistent",
   "KonikMinutes",
   "LastUpdateTime",
-  "LongitudinalPersonalityProfiles",
   "MapBoxRequests",
   "ModelDrivesAndScores",
   "ModelReleasedDates",
@@ -796,9 +795,12 @@ class StarPilotVariables:
     # Seed powertrain-based defaults once, but always honor persisted user overrides.
     toggle.ev_tuning = ev_tuning_param
     toggle.truck_tuning = truck_tuning_param
-    # New personality presets select the detected powertrain curve automatically;
-    # legacy EV/Truck flags remain only for stock fallback and truck controller logic.
+    # New personality presets select detected powertrain curves automatically;
+    # retain the legacy manual truck override, with EV taking precedence.
     toggle.personality_ev_tuning = bool(ev_vehicle)
+    toggle.personality_truck_tuning = (
+      is_truck_fingerprint(CP.carFingerprint) or truck_tuning_param
+    ) and not toggle.personality_ev_tuning
     toggle.trailer_load_kg = self.get_value("TrailerLoad", cast=float, condition=advanced_longitudinal_tuning,
                                             default=0.0, conversion=CV.LB_TO_KG, min=0, max=15000 * CV.LB_TO_KG)
     toggle.longitudinalActuatorDelay = self.get_value("LongitudinalActuatorDelay", cast=float, condition=advanced_longitudinal_tuning, default=longitudinalActuatorDelay, min=0, max=1)
@@ -895,7 +897,7 @@ class StarPilotVariables:
 
     toggle.custom_personalities = toggle.openpilot_longitudinal and self.get_value("CustomPersonalities")
     profile_settings_raw = self.params_raw.get(PERSONALITY_PROFILES_PARAM)
-    toggle.longitudinal_personality_profiles = strict_personality_profiles(profile_settings_raw) or {}
+    toggle.longitudinal_personality_profiles = strict_profile_document(profile_settings_raw) or {}
     toggle.aggressive_jerk_acceleration = self.get_value("AggressiveJerkAcceleration", cast=float, condition=toggle.custom_personalities, conversion=0.01, min=0.25, max=2.0)
     toggle.aggressive_jerk_deceleration = self.get_value("AggressiveJerkDeceleration", cast=float, condition=toggle.custom_personalities, conversion=0.01, min=0.25, max=2.0)
     toggle.aggressive_jerk_danger = self.get_value("AggressiveJerkDanger", cast=float, condition=toggle.custom_personalities, conversion=0.01, min=0.25, max=2.0)

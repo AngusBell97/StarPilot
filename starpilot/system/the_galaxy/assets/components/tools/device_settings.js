@@ -1,5 +1,5 @@
 import { html, reactive } from "/assets/vendor/arrow-core.js"
-import { copyCurve, pasteCurve, valueFromPointer } from "/assets/components/tools/personality_profiles.mjs"
+import { copyCurve, formatSpeedMph, pasteCurve, valueFromPointer } from "/assets/components/tools/personality_profiles.mjs"
 
 const endpointOptionsCache = {}
 const endpointOptionsInflight = {}
@@ -90,9 +90,9 @@ const PERSONALITY_DEFINITIONS = [
   { id: "relaxed", label: "Relaxed", icon: "R", description: "Smoother driving with larger gaps" },
 ]
 const PERSONALITY_CATEGORY_DEFINITIONS = {
-  acceleration: { label: "Acceleration", title: "Custom acceleration", description: "maximum acceleration", unit: "m/s² requested", step: 0.05 },
-  braking: { label: "Braking", title: "Custom braking", description: "braking strength", unit: "m/s² braking", step: 0.05 },
-  following: { label: "Following distance", title: "Custom following distance", description: "following time", unit: "seconds of headway", step: 0.05 },
+  acceleration: { label: "Acceleration", title: "Custom acceleration", description: "maximum acceleration", fieldDescription: "How quickly StarPilot speeds up", unit: "m/s² requested", valueUnit: "m/s²", step: 0.05 },
+  braking: { label: "Braking", title: "Custom braking", description: "braking strength", fieldDescription: "Cruise and speed-limit deceleration floor", unit: "m/s² braking", valueUnit: "m/s²", step: 0.05 },
+  following: { label: "Following", title: "Custom following", description: "base following time", fieldDescription: "Base time headway before existing dynamic modifiers", unit: "seconds", valueUnit: "s", step: 0.05 },
 }
 const PERSONALITY_ADVANCED_KEYS = {
   traffic: ["TrafficJerkAcceleration", "TrafficJerkDeceleration", "TrafficJerkDanger", "TrafficJerkSpeedDecrease", "TrafficJerkSpeed"],
@@ -133,6 +133,7 @@ const state = reactive({
   personalityClipboard: null,
   personalityConfigured: false,
   personalityDefaults: {},
+  personalityEnabled: false,
   personalityExpanded: { traffic: true },
   personalityMeta: null,
   personalityProfiles: {},
@@ -451,6 +452,7 @@ async function fetchPersonalityProfiles() {
     if (!response.ok) throw new Error(data.error || response.statusText || "Failed to load driving personalities")
     state.personalityProfiles = data.profiles || {}
     state.personalityConfigured = !!data.configured
+    state.personalityEnabled = !!data.enabled
     state.personalityDefaults = data.default_profiles || {}
     state.personalityMeta = {
       bounds: data.bounds || {},
@@ -982,8 +984,17 @@ function isNumericUpdating(key) {
   return !!state.numericUpdating[key]
 }
 
+function escapeSnackbarText(message) {
+  return String(message ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
 function showParamSnackbar(message, level, timeout = 2200) {
-  showSnackbar(message, level, timeout, {
+  showSnackbar(escapeSnackbarText(message), level, timeout, {
     key: "device-settings-param-update",
     replace: true,
   })
@@ -1500,6 +1511,7 @@ async function savePersonalityCategory(profileId, category, preset, curve, succe
     if (!response.ok) throw new Error(data.error || response.statusText || "Failed to save driving personality")
     state.personalityProfiles = data.profiles || state.personalityProfiles
     state.personalityConfigured = !!data.configured
+    state.personalityEnabled = !!data.enabled
     showParamSnackbar(successMessage || `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} updated.`)
     return true
   } catch (error) {
@@ -1516,7 +1528,32 @@ function updatePersonalityPreset(profileId, category, event) {
   const config = state.personalityProfiles?.[profileId]?.[category]
   if (!config) return
   const preset = String(event?.currentTarget?.value || "")
-  savePersonalityCategory(profileId, category, preset, [...config.curve], `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} set to ${personalityPresetLabel(preset)}.`)
+  const curve = preset === "custom" ? [...config.curve] : []
+  savePersonalityCategory(profileId, category, preset, curve, `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} set to ${personalityPresetLabel(preset)}.`)
+}
+
+async function setPersonalityProfilesEnabled(enabled) {
+  if (state.values.IsOnroad || state.personalityUpdating.enabled) return
+  state.personalityUpdating = { ...state.personalityUpdating, enabled: true }
+  try {
+    const response = await fetch("/api/personality_profiles", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !!enabled }),
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || response.statusText || "Failed to update driving personalities")
+    state.personalityProfiles = data.profiles || state.personalityProfiles
+    state.personalityConfigured = !!data.configured
+    state.personalityEnabled = !!data.enabled
+    showParamSnackbar(`Per-personality acceleration and braking ${state.personalityEnabled ? "enabled" : "disabled"}.`)
+  } catch (error) {
+    showParamSnackbar(error?.message || "Failed to update driving personalities.", "error")
+  } finally {
+    const next = { ...state.personalityUpdating }
+    delete next.enabled
+    state.personalityUpdating = next
+  }
 }
 
 function copyPersonalityCurve(profileId, category) {
@@ -1600,7 +1637,7 @@ function drawPersonalityCurve(canvas, category, curve) {
     context.lineTo(x, geometry.height - geometry.bottom)
     context.stroke()
     context.textAlign = "center"
-    context.fillText(String(speed), x, geometry.height - 13)
+    context.fillText(formatSpeedMph(speed), x, geometry.height - 13)
   })
   context.textAlign = "start"
 
@@ -1637,10 +1674,11 @@ function drawPersonalityCurve(canvas, category, curve) {
 }
 
 function updateDraggedCurveVisual(canvas, profileId, category, curve) {
+  const valueUnit = PERSONALITY_CATEGORY_DEFINITIONS[category]?.valueUnit || ""
   drawPersonalityCurve(canvas, category, curve)
   curve.forEach((value, index) => {
     const valueNode = document.getElementById(`personality-value-${profileId}-${category}-${index}`)
-    if (valueNode) valueNode.textContent = `${Number(value).toFixed(2)}${category === "following" ? " s" : ""}`
+    if (valueNode) valueNode.textContent = `${Number(value).toFixed(2)} ${valueUnit}`
   })
 }
 
@@ -1720,9 +1758,8 @@ function renderPersonalityCurve(profile, category, config) {
           <p>Drag points to shape ${definition.description} across speed.</p>
         </div>
         <div class="ds-personality-curve-actions">
-          <button type="button" class="ds-reset-btn" disabled="${() => !!state.personalityUpdating[updateKey]}" @click="${() => copyPersonalityCurve(profile.id, category)}">Copy</button>
-          <button type="button" class="ds-reset-btn" disabled="${() => !canPaste || !!state.personalityUpdating[updateKey]}" @click="${() => pastePersonalityCurve(profile.id, category)}">Paste</button>
-          <button type="button" class="ds-reset-btn" disabled="${() => !!state.personalityUpdating[updateKey]}" @click="${() => resetPersonalityCurve(profile.id, category)}">Reset curve</button>
+          <button type="button" class="ds-reset-btn" disabled="${() => !!state.values.IsOnroad || !!state.personalityUpdating[updateKey]}" @click="${() => copyPersonalityCurve(profile.id, category)}">Copy</button>
+          <button type="button" class="ds-reset-btn" disabled="${() => !!state.values.IsOnroad || !canPaste || !!state.personalityUpdating[updateKey]}" @click="${() => pastePersonalityCurve(profile.id, category)}">Paste</button>
         </div>
       </div>
       <div class="ds-personality-graph-layout">
@@ -1733,25 +1770,26 @@ function renderPersonalityCurve(profile, category, config) {
           height="${geometry.height}"
           role="img"
           aria-label="${definition.title} by speed. Drag near a point to adjust it."
-          @pointerdown="${event => beginPersonalityCurveDrag(event, profile.id, category)}"></canvas>
+          aria-disabled="${() => !!state.values.IsOnroad}"
+          @pointerdown="${event => { if (!state.values.IsOnroad) beginPersonalityCurveDrag(event, profile.id, category) }}"></canvas>
         <div class="ds-personality-values">
           ${config.curve.map((value, index) => html`
             <label class="ds-personality-value">
-              <span>${geometry.speeds[index]} mph</span>
+              <span>${formatSpeedMph(geometry.speeds[index])} mph</span>
               <input
                 type="number"
                 min="${geometry.bounds[0]}"
                 max="${geometry.bounds[1]}"
                 step="${definition.step}"
                 value="${Number(value).toFixed(2)}"
-                disabled="${() => !!state.personalityUpdating[updateKey]}"
+                disabled="${() => !!state.values.IsOnroad || !!state.personalityUpdating[updateKey]}"
                 @change="${event => adjustPersonalityCurvePoint(profile.id, category, index, event.currentTarget.value, event.currentTarget)}" />
-              <b id="personality-value-${profile.id}-${category}-${index}">${Number(value).toFixed(2)}${category === "following" ? " s" : ""}</b>
+              <b id="personality-value-${profile.id}-${category}-${index}">${Number(value).toFixed(2)} ${definition.valueUnit}</b>
             </label>
           `)}
         </div>
       </div>
-      <div class="ds-personality-curve-note">Speed (mph) · ${definition.unit}.${category === "following" ? " The 0 mph point controls low-speed and launch headway." : ""}</div>
+      <div class="ds-personality-curve-note">Speed axis: mph · Value axis: ${definition.unit}.</div>
     </div>
   `
 }
@@ -1764,12 +1802,12 @@ function renderPersonalityCategoryField(profile, category, config) {
     <div class="ds-personality-field">
       <div>
         <label for="personality-${profile.id}-${category}">${definition.label}</label>
-        <p>${category === "acceleration" ? "How quickly" : category === "braking" ? "How firmly" : "How much time"} StarPilot ${category === "acceleration" ? "speeds up" : category === "braking" ? "slows down" : "leaves behind traffic"} in ${profile.label}.</p>
+        <p>${definition.fieldDescription} in ${profile.label}.</p>
       </div>
       <select
         class="ds-select ds-personality-select"
         id="personality-${profile.id}-${category}"
-        disabled="${() => !!state.personalityUpdating[updateKey]}"
+        disabled="${() => !!state.values.IsOnroad || !!state.personalityUpdating[updateKey]}"
         @change="${event => updatePersonalityPreset(profile.id, category, event)}">
         ${options.map(option => html`<option value="${option}" selected="${config.preset === option}">${personalityPresetLabel(option)}</option>`)}
       </select>
@@ -1835,7 +1873,12 @@ function renderPersonalityProfilesPanel() {
   if (!state.personalityMeta) return html`<div class="ds-personality-error">Driving personalities could not be loaded. Refresh the page to retry.</div>`
   return html`
     <div class="ds-personality-profiles">
-      <div class="ds-personality-intro"><strong>${() => state.personalityConfigured ? "New" : "Preview"}</strong><span>${() => `Acceleration, braking and following distance belong to each personality. Pick Custom to edit that behaviour over speed. Vehicle drive-mode mapping always overrides personality acceleration and braking, including Traffic Mode.${state.personalityConfigured ? "" : " Stock Dom behaviour remains active until you save the first profile selection."}`}</span></div>
+      <div class="ds-personality-intro">
+        <strong>${() => state.personalityEnabled ? "Enabled" : "Disabled"}</strong>
+        <span>Acceleration, cruise/SLC braking, and base following time can vary by Traffic, Aggressive, Standard, and Relaxed context. Existing dynamic following modifiers and jerk settings remain unchanged. Untouched selectors use Dom Default.</span>
+        <label class="ds-favorite-switch"><span>Use per-personality longitudinal profiles</span><input type="checkbox" class="ds-toggle" checked="${() => state.personalityEnabled}" disabled="${() => !!state.values.IsOnroad || !!state.personalityUpdating.enabled}" @change="${event => setPersonalityProfilesEnabled(!!event.currentTarget.checked)}" /></label>
+        ${() => state.values.IsOnroad ? html`<small>This editor is read-only while driving.</small>` : ""}
+      </div>
       ${PERSONALITY_DEFINITIONS.map(renderPersonalityCard)}
     </div>
   `
@@ -2213,11 +2256,11 @@ function renderSettingRow(p) {
             </div>
           ` : ""}
 
-          ${() => p.is_parent_toggle && isParamEnabledForChildren(p) ? html`
-            <div class="ds-manage-btn" @click="${() => toggleManage(p.key)}">
+          ${() => p.is_parent_toggle && (p.key === "CustomPersonalities" || isParamEnabledForChildren(p)) ? html`
+            <button type="button" class="ds-manage-btn" @click="${() => toggleManage(p.key)}">
               ${state.expanded[p.key] ? "Close" : "Manage"}
               <i class="bi bi-chevron-${state.expanded[p.key] ? "up" : "down"}"></i>
-            </div>
+            </button>
           ` : ""}
         </div>
         ${(isNumeric || isColor || isReadout) ? html`<span class="ds-row-value ${isReadout ? "ds-row-readout" : ""}" id="ds-display-${p.key}">${() => {
@@ -2246,7 +2289,7 @@ function renderSettingTree(paramsList, parentKey = null) {
     const row = renderSettingRow(param)
     if (row) rendered.push(row)
 
-    if (param.key === "CustomPersonalities" && isParamEnabledForChildren(param) && state.expanded[param.key]) {
+    if (param.key === "CustomPersonalities" && state.expanded[param.key]) {
       rendered.push(renderPersonalityProfilesPanel())
     }
 

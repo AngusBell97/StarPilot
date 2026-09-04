@@ -8,6 +8,11 @@ from openpilot.starpilot.common.accel_profile import (
   CUSTOM_ACCEL_PROFILE_BREAKPOINTS_INITIALIZED_KEY,
   CUSTOM_ACCEL_PROFILE_CURVE_PARAM_KEYS,
 )
+from openpilot.starpilot.common.longitudinal_personality_profiles import (
+  PERSONALITY_PROFILES_PARAM,
+  default_personality_profiles,
+  profile_document,
+)
 
 SAFE_MODE_PARAM = "SafeMode"
 SAFE_MODE_BACKUP_PARAM = "SafeModeBackup"
@@ -162,6 +167,7 @@ SAFE_MODE_MANAGED_KEYS = (
   "VisionSpeedLimitLowLimitThreshold",
   "VASMEnabled",
   "CustomPersonalities",
+  PERSONALITY_PROFILES_PARAM,
   "TrafficPersonalityProfile",
   "AggressivePersonalityProfile",
   "StandardPersonalityProfile",
@@ -218,6 +224,7 @@ SAFE_MODE_FIXED_VALUES = {
   "UseAutoSteerDelay": True,
   "SubaruStopStartOff": False,
   "SubaruAvhOnAtStartup": False,
+  PERSONALITY_PROFILES_PARAM: profile_document(default_personality_profiles(False), enabled=False),
 }
 
 SAFE_MODE_STOCK_PARAM_MAP = {

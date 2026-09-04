@@ -1,113 +1,145 @@
+#!/usr/bin/env python3
+"""Versioned, fail-closed longitudinal acceleration/braking profiles."""
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import math
 import numbers
-import sys
-from copy import deepcopy
 
 PERSONALITY_PROFILES_PARAM = "LongitudinalPersonalityProfiles"
+PROFILE_SCHEMA_VERSION = 1
 PERSONALITY_IDS = ("traffic", "aggressive", "standard", "relaxed")
+TRUCK_FINGERPRINT_TOKENS = (
+  " RAM 1500 ",
+  " RAM HD ",
+  " F 150 ",
+  " MAVERICK ",
+  " RANGER ",
+  " SILVERADO ",
+  " RIDGELINE ",
+  " SANTA CRUZ ",
+)
 
-ACCELERATION_SPEEDS_MPH = (0, 11, 22, 34, 45, 56, 89)
-_ACCELERATION_SPEEDS_MS = (0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0)
+ACCELERATION_SPEEDS_MPH = (0.0, 11.184681, 22.369363, 33.554044, 44.738726, 55.923407, 89.477452)
 BRAKING_SPEEDS_MPH = ACCELERATION_SPEEDS_MPH
 FOLLOWING_SPEEDS_MPH = tuple(range(0, 91, 10))
+_SPEEDS_MS = (0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0)
 
-FOLLOWING_PRESET_CURVES = {
-  "close": (0.90, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30),
-  "medium": (1.20, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60),
-  "far": (1.55, 1.55, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30),
-}
 
-ACCELERATION_PRESETS = ("eco", "standard", "sport", "sport_plus", "custom")
-BRAKING_PRESETS = ("eco", "standard", "sport", "custom")
-FOLLOWING_PRESETS = ("close", "medium", "far", "custom")
+def is_truck_fingerprint(fingerprint: object) -> bool:
+  if not isinstance(fingerprint, str) or not fingerprint.strip():
+    return False
+  normalized = f" {fingerprint.strip().upper().replace('_', ' ').replace('-', ' ')} "
+  return any(token in normalized for token in TRUCK_FINGERPRINT_TOKENS)
 
+ACCELERATION_PRESETS = ("dom_default", "standard", "eco", "sport", "sport_plus", "custom")
+BRAKING_PRESETS = ("dom_default", "standard", "eco", "sport", "custom")
+FOLLOWING_PRESETS = ("dom_default", "close", "medium", "far", "custom")
 CURVE_BOUNDS = {
   "acceleration": (0.0, 6.0),
   "braking": (0.5, 2.0),
   "following": (0.75, 3.0),
 }
-
 _CATEGORY_SPECS = {
   "acceleration": (ACCELERATION_PRESETS, len(ACCELERATION_SPEEDS_MPH)),
   "braking": (BRAKING_PRESETS, len(BRAKING_SPEEDS_MPH)),
   "following": (FOLLOWING_PRESETS, len(FOLLOWING_SPEEDS_MPH)),
 }
 
-_DEFAULT_SELECTIONS = {
-  "traffic": ("eco", "standard", "close"),
-  "aggressive": ("sport_plus", "sport", "close"),
-  "standard": ("standard", "standard", "medium"),
-  "relaxed": ("eco", "eco", "far"),
-}
-
-_ACCELERATION_PRESET_CURVES_GAS = {
-  "eco": (1.50, 1.30, 1.10, 0.90, 0.75, 0.55, 0.35),
-  "standard": (2.00, 1.80, 1.55, 1.30, 1.05, 0.85, 0.55),
-  "sport": (2.50, 2.25, 1.95, 1.60, 1.30, 1.05, 0.75),
-  "sport_plus": (3.50, 3.20, 2.80, 2.35, 1.90, 1.55, 1.15),
-}
-_ACCELERATION_PRESET_CURVES_EV = {
-  "eco": (1.50, 1.34, 1.18, 1.02, 0.90, 0.74, 0.58),
-  "standard": (2.00, 1.84, 1.64, 1.44, 1.24, 1.08, 0.84),
-  "sport": (2.50, 2.30, 2.06, 1.78, 1.54, 1.34, 1.10),
-  "sport_plus": (3.50, 3.26, 2.94, 2.58, 2.22, 1.94, 1.62),
-}
-
-
-def _acceleration_preset_curve(preset: str, ev_tuning: bool) -> list[float]:
-  curves = _ACCELERATION_PRESET_CURVES_EV if ev_tuning else _ACCELERATION_PRESET_CURVES_GAS
-  return list(curves[preset])
-
 _BRAKING_PRESET_CURVES = {
   "eco": (0.5,) * len(BRAKING_SPEEDS_MPH),
   "standard": (1.0,) * len(BRAKING_SPEEDS_MPH),
   "sport": (2.0,) * len(BRAKING_SPEEDS_MPH),
 }
+FOLLOWING_PRESET_CURVES = {
+  "close": (0.90, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30),
+  "medium": (1.20, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60),
+  "far": (1.55, 1.55, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30),
+}
+PROFILE_AXES = {
+  "acceleration": {
+    "speed": {"unit": "mph", "values": list(ACCELERATION_SPEEDS_MPH)},
+    "value": {"unit": "m/s^2", "meaning": "maximum_requested_acceleration"},
+  },
+  "braking": {
+    "speed": {"unit": "mph", "values": list(BRAKING_SPEEDS_MPH)},
+    "value": {"unit": "m/s^2", "meaning": "cruise_slc_deceleration_magnitude"},
+  },
+  "following": {
+    "speed": {"unit": "mph", "values": list(FOLLOWING_SPEEDS_MPH)},
+    "value": {"unit": "s", "meaning": "base_time_headway"},
+  },
+}
+
+_ACCELERATION_PROFILE_IDS = {
+  "standard": 0,
+  "eco": 1,
+  "sport": 2,
+  "sport_plus": 3,
+}
 
 
-def default_personality_profiles(ev_tuning: bool) -> dict[str, dict]:
-  profiles = {}
-  for personality in PERSONALITY_IDS:
-    acceleration, braking, following = _DEFAULT_SELECTIONS[personality]
-    profiles[personality] = {
-      "acceleration": {
-        "preset": acceleration,
-        "curve": _acceleration_preset_curve(acceleration, ev_tuning),
-      },
-      "braking": {
-        "preset": braking,
-        "curve": list(_BRAKING_PRESET_CURVES[braking]),
-      },
-      "following": {
-        "preset": following,
-        "curve": list(FOLLOWING_PRESET_CURVES[following]),
-      },
+def _acceleration_preset_curve(preset: str, ev_tuning: bool, truck_tuning: bool) -> list[float]:
+  # Import lazily so persisted-schema parsing remains independent of controls/runtime modules.
+  from openpilot.starpilot.common.accel_profile import get_accel_profile_curve_values
+
+  # Profile customisation resolves an impossible dual flag deterministically in favour of EV.
+  return get_accel_profile_curve_values(
+    _ACCELERATION_PROFILE_IDS[preset], bool(ev_tuning), bool(truck_tuning) and not bool(ev_tuning)
+  )
+
+
+def default_personality_profiles(ev_tuning: bool, truck_tuning: bool = False) -> dict[str, dict]:
+  del ev_tuning, truck_tuning
+  return {
+    personality: {
+      "acceleration": {"preset": "dom_default", "curve": []},
+      "braking": {"preset": "dom_default", "curve": []},
+      "following": {"preset": "dom_default", "curve": []},
     }
-  return deepcopy(profiles)
+    for personality in PERSONALITY_IDS
+  }
 
 
-def _decode_profiles(raw_profiles) -> dict:
-  if isinstance(raw_profiles, bytes):
-    raw_profiles = raw_profiles.decode("utf-8", errors="replace")
-  if isinstance(raw_profiles, str):
+def profile_document(profiles: dict[str, dict], *, enabled: bool) -> dict:
+  if type(enabled) is not bool:
+    raise ValueError("enabled must be a JSON boolean")
+  return {
+    "schemaVersion": PROFILE_SCHEMA_VERSION,
+    "enabled": enabled,
+    "axes": deepcopy(PROFILE_AXES),
+    "profiles": deepcopy(profiles),
+  }
+
+
+def _decode_json(raw):
+  if isinstance(raw, bytes):
     try:
-      raw_profiles = json.loads(raw_profiles)
-    except json.JSONDecodeError:
-      return {}
-  return raw_profiles if isinstance(raw_profiles, dict) else {}
+      raw = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+      return None
+  if isinstance(raw, str):
+    try:
+      raw = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+      return None
+  return raw
 
 
 def _validated_category(category: str, raw_category) -> dict | None:
-  if not isinstance(raw_category, dict):
+  if category not in _CATEGORY_SPECS or not isinstance(raw_category, dict) or set(raw_category) != {"preset", "curve"}:
     return None
-
   presets, expected_length = _CATEGORY_SPECS[category]
   preset = raw_category.get("preset")
   curve = raw_category.get("curve")
-  if preset not in presets or not isinstance(curve, (list, tuple)) or len(curve) != expected_length:
+  if not isinstance(preset, str) or preset not in presets or not isinstance(curve, list):
+    return None
+  if preset == "dom_default":
+    return {"preset": preset, "curve": []} if not curve else None
+  if preset != "custom":
+    return {"preset": preset, "curve": []} if not curve else None
+  if len(curve) != expected_length:
     return None
 
   minimum, maximum = CURVE_BOUNDS[category]
@@ -122,161 +154,170 @@ def _validated_category(category: str, raw_category) -> dict | None:
   return {"preset": preset, "curve": values}
 
 
-def load_personality_profiles(raw_profiles, ev_tuning: bool) -> dict[str, dict]:
-  profiles = default_personality_profiles(ev_tuning)
-  decoded = _decode_profiles(raw_profiles)
-  for personality in PERSONALITY_IDS:
-    raw_profile = decoded.get(personality)
-    if not isinstance(raw_profile, dict):
-      continue
-    for category in _CATEGORY_SPECS:
-      validated = _validated_category(category, raw_profile.get(category))
-      if validated is not None:
-        profiles[personality][category] = validated
-  return profiles
-
-
-def strict_personality_profiles(raw_profiles) -> dict[str, dict] | None:
-  if isinstance(raw_profiles, bytes):
-    try:
-      raw_profiles = raw_profiles.decode("utf-8")
-    except UnicodeDecodeError:
-      return None
-  if isinstance(raw_profiles, str):
-    try:
-      raw_profiles = json.loads(raw_profiles)
-    except json.JSONDecodeError:
-      return None
-  if not isinstance(raw_profiles, dict) or set(raw_profiles) != set(PERSONALITY_IDS):
+def strict_profile_document(raw_document) -> dict | None:
+  decoded = _decode_json(raw_document)
+  if not isinstance(decoded, dict) or set(decoded) != {"schemaVersion", "enabled", "axes", "profiles"}:
+    return None
+  if type(decoded["schemaVersion"]) is not int or decoded["schemaVersion"] != PROFILE_SCHEMA_VERSION:
+    return None
+  if type(decoded["enabled"]) is not bool or decoded["axes"] != PROFILE_AXES:
     return None
 
+  raw_profiles = decoded["profiles"]
+  if not isinstance(raw_profiles, dict) or set(raw_profiles) != set(PERSONALITY_IDS):
+    return None
   profiles = {}
   for personality in PERSONALITY_IDS:
-    raw_profile = raw_profiles[personality]
+    raw_profile = raw_profiles.get(personality)
     if not isinstance(raw_profile, dict) or set(raw_profile) != set(_CATEGORY_SPECS):
       return None
     profile = {}
     for category in _CATEGORY_SPECS:
-      raw_category = raw_profile.get(category)
-      if not isinstance(raw_category, dict) or set(raw_category) != {"preset", "curve"}:
-        return None
-      validated = _validated_category(category, raw_category)
+      validated = _validated_category(category, raw_profile.get(category))
       if validated is None:
         return None
       profile[category] = validated
     profiles[personality] = profile
-  return profiles
+  return profile_document(profiles, enabled=decoded["enabled"])
 
 
-def serialize_personality_profiles(profiles, ev_tuning: bool) -> str:
-  canonical = strict_personality_profiles(profiles)
+def strict_personality_profiles(raw_document) -> dict[str, dict] | None:
+  document = strict_profile_document(raw_document)
+  if document is None or not document["enabled"]:
+    return None
+  return deepcopy(document["profiles"])
+
+
+def load_personality_profiles(raw_document, ev_tuning: bool, truck_tuning: bool = False) -> dict[str, dict]:
+  document = strict_profile_document(raw_document)
+  return deepcopy(document["profiles"]) if document is not None else default_personality_profiles(ev_tuning, truck_tuning)
+
+
+def serialize_personality_profiles(profiles, ev_tuning: bool, truck_tuning: bool = False, *, enabled: bool) -> str:
+  del ev_tuning, truck_tuning
+  document = profile_document(profiles, enabled=enabled)
+  canonical = strict_profile_document(document)
   if canonical is None:
     raise ValueError("Longitudinal personality profiles must be complete and valid.")
-  return json.dumps(canonical, separators=(",", ":"), sort_keys=True)
+  return json.dumps(canonical, separators=(",", ":"), sort_keys=True, allow_nan=False)
 
 
-def update_personality_profile(profiles, personality: str, category: str, preset: str, curve, ev_tuning: bool) -> dict[str, dict]:
-  if not isinstance(personality, str) or personality not in PERSONALITY_IDS:
+def update_personality_profile(
+  profiles, personality: str, category: str, preset: str, curve, ev_tuning: bool, truck_tuning: bool = False,
+) -> dict[str, dict]:
+  if personality not in PERSONALITY_IDS:
     raise ValueError(f"Unknown personality: {personality}")
-  if not isinstance(category, str) or category not in _CATEGORY_SPECS:
-    raise ValueError(f"Unknown curve category: {category}")
-  if not isinstance(preset, str):
-    raise TypeError(f"Unknown {category} preset: {preset}")
-
+  if category not in _CATEGORY_SPECS:
+    raise ValueError(f"Unknown profile category: {category}")
   validated = _validated_category(category, {"preset": preset, "curve": curve})
   if validated is None:
     minimum, maximum = CURVE_BOUNDS[category]
     presets, expected_length = _CATEGORY_SPECS[category]
     message = f"Invalid {category} profile: preset must be one of {', '.join(presets)} and curve must contain "
-    raise ValueError(message + f"{expected_length} finite values between {minimum} and {maximum}.")
-  if preset != "custom":
-    validated["curve"] = category_curve(category, validated, ev_tuning)
+    message += f"{expected_length} finite numeric values between {minimum} and {maximum}."
+    raise ValueError(message)
 
-  updated = load_personality_profiles(profiles, ev_tuning)
+  base_document = profile_document(profiles, enabled=True)
+  canonical = strict_profile_document(base_document)
+  if canonical is None:
+    base = default_personality_profiles(ev_tuning, truck_tuning)
+  else:
+    base = canonical["profiles"]
+  updated = deepcopy(base)
   updated[personality][category] = validated
   return updated
 
 
 def active_personality_id(traffic_mode: bool, personality) -> str | None:
+  if type(traffic_mode) is not bool:
+    return None
   if traffic_mode:
     return "traffic"
   if isinstance(personality, bool):
     return None
-  if isinstance(personality, numbers.Integral):
-    personality_value = int(personality)
-  else:
-    capnp_module = sys.modules.get("capnp.lib.capnp")
-    capnp_enum_type = getattr(capnp_module, "_DynamicEnum", None)
-    if capnp_enum_type is None or type(personality) is not capnp_enum_type:
-      return None
-    raw_value = getattr(personality, "raw", None)
-    if isinstance(raw_value, bool) or not isinstance(raw_value, numbers.Integral):
-      return None
-    personality_value = int(raw_value)
-  return {0: "aggressive", 1: "standard", 2: "relaxed"}.get(personality_value)
+  raw = getattr(personality, "raw", personality)
+  if isinstance(raw, bool) or not isinstance(raw, numbers.Integral):
+    return None
+  return {0: "aggressive", 1: "standard", 2: "relaxed"}.get(int(raw))
 
 
-def resolve_personality_profile(raw_profiles, traffic_mode: bool, personality) -> dict | None:
-  profiles = strict_personality_profiles(raw_profiles)
+def resolve_personality_profile(raw_document, traffic_mode: bool, personality) -> dict | None:
+  profiles = strict_personality_profiles(raw_document)
   personality_id = active_personality_id(traffic_mode, personality)
   if profiles is None or personality_id is None:
     return None
   return deepcopy(profiles[personality_id])
 
 
-def category_curve(category: str, config: dict, ev_tuning: bool) -> list[float]:
-  if category not in _CATEGORY_SPECS:
-    raise ValueError(f"Unknown profile category: {category}")
+def resolve_personality_category(raw_document, traffic_mode: bool, personality, category: str) -> dict | None:
+  profile = resolve_personality_profile(raw_document, traffic_mode, personality)
+  if profile is None or category not in _CATEGORY_SPECS:
+    return None
+  config = profile[category]
+  return None if config["preset"] == "dom_default" else deepcopy(config)
+
+
+def category_curve(category: str, config: dict, ev_tuning: bool, truck_tuning: bool = False) -> list[float]:
   validated = _validated_category(category, config)
   if validated is None:
-    raise ValueError(f"Invalid {category} profile.")
+    raise ValueError(f"Invalid {category} profile configuration.")
   preset = validated["preset"]
+  if preset == "dom_default":
+    raise ValueError("Dom default resolves through the legacy controller path")
   if preset == "custom":
     return list(validated["curve"])
   if category == "acceleration":
-    return _acceleration_preset_curve(preset, ev_tuning)
+    return _acceleration_preset_curve(preset, ev_tuning, truck_tuning)
   if category == "braking":
     return list(_BRAKING_PRESET_CURVES[preset])
-  if category == "following":
-    return list(FOLLOWING_PRESET_CURVES[preset])
-  raise AssertionError(f"Unhandled profile category: {category}")
+  return list(FOLLOWING_PRESET_CURVES[preset])
 
 
-def _smooth_interp(value: float, breakpoints: tuple[float, ...], values: list[float]) -> float:
+def initial_custom_curve(
+  category: str,
+  current_config: dict,
+  ev_tuning: bool,
+  truck_tuning: bool,
+  *,
+  legacy_curve: list[float] | None = None,
+) -> list[float]:
+  if category not in _CATEGORY_SPECS or not isinstance(current_config, dict):
+    raise ValueError("Unknown or malformed profile category")
+  preset = current_config.get("preset")
+  if preset == "dom_default":
+    candidate = legacy_curve
+  elif preset == "custom":
+    candidate = current_config.get("curve")
+  elif category == "acceleration" and preset in _ACCELERATION_PROFILE_IDS:
+    candidate = _acceleration_preset_curve(preset, ev_tuning, truck_tuning)
+  elif category == "braking" and preset in _BRAKING_PRESET_CURVES:
+    candidate = list(_BRAKING_PRESET_CURVES[preset])
+  elif category == "following" and preset in FOLLOWING_PRESET_CURVES:
+    candidate = list(FOLLOWING_PRESET_CURVES[preset])
+  else:
+    candidate = None
+  validated = _validated_category(category, {"preset": "custom", "curve": candidate})
+  if validated is None:
+    raise ValueError(f"Cannot initialize Custom {category} from the current selection")
+  return validated["curve"]
+
+
+def _linear_interp(value: float, breakpoints: tuple[float, ...], values: list[float]) -> float:
   if value <= breakpoints[0]:
     return float(values[0])
   if value >= breakpoints[-1]:
     return float(values[-1])
-
-  index = next(idx for idx, point in enumerate(breakpoints[1:], start=1) if point >= value) - 1
+  index = next(index for index, point in enumerate(breakpoints[1:], start=1) if point >= value) - 1
   t = (value - breakpoints[index]) / float(breakpoints[index + 1] - breakpoints[index])
-  t2 = t * t
-  t3 = t2 * t
-  t4 = t2 * t2
-  return float(
-    values[index] * (1 - 10 * t3 + 15 * t4 - 6 * t3 * t2)
-    + values[index + 1] * (10 * t3 - 15 * t4 + 6 * t3 * t2)
-  )
+  return float(values[index] + t * (values[index + 1] - values[index]))
 
 
-def _linear_interp(x: float, breakpoints: tuple[float, ...], values: list[float]) -> float:
-  if x <= breakpoints[0]:
-    return float(values[0])
-  if x >= breakpoints[-1]:
-    return float(values[-1])
-  for index in range(1, len(breakpoints)):
-    if x <= breakpoints[index]:
-      start_x = breakpoints[index - 1]
-      fraction = (x - start_x) / (breakpoints[index] - start_x)
-      return float(values[index - 1] + fraction * (values[index] - values[index - 1]))
-  return float(values[-1])
-
-
-def interpolate_category_curve(category: str, v_ego: float, config: dict, ev_tuning: bool) -> float:
-  values = category_curve(category, config, ev_tuning)
-  if category in ("acceleration", "braking"):
-    return _smooth_interp(v_ego, _ACCELERATION_SPEEDS_MS, values)
+def interpolate_category_curve(
+  category: str, v_ego: float, config: dict, ev_tuning: bool, truck_tuning: bool = False,
+) -> float:
+  if not isinstance(v_ego, numbers.Real) or isinstance(v_ego, bool) or not math.isfinite(float(v_ego)):
+    raise ValueError("Vehicle speed must be finite")
+  values = category_curve(category, config, ev_tuning, truck_tuning)
   if category == "following":
-    speed_mph = float(v_ego) / 0.44704
-    return _linear_interp(speed_mph, FOLLOWING_SPEEDS_MPH, values)
-  raise ValueError(f"Unknown profile category: {category}")
+    return _linear_interp(float(v_ego) / 0.44704, FOLLOWING_SPEEDS_MPH, values)
+  return _linear_interp(float(v_ego), _SPEEDS_MS, values)

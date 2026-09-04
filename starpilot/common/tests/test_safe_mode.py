@@ -6,6 +6,12 @@ from openpilot.starpilot.common.safe_mode import (
   restore_safe_mode,
   _apply_value,
 )
+from openpilot.starpilot.common.longitudinal_personality_profiles import (
+  PERSONALITY_PROFILES_PARAM,
+  default_personality_profiles,
+  profile_document,
+  strict_profile_document,
+)
 
 
 class RemovedParamStore:
@@ -67,3 +73,34 @@ def test_safe_mode_restore_ignores_stale_manual_fingerprint_backup():
   restore_safe_mode(params_raw)
 
   assert params_raw.get("ForceFingerprint") is True
+
+
+def test_safe_mode_backs_up_and_enforces_a_valid_disabled_profile_document_repeatedly():
+  profiles = default_personality_profiles(False)
+  profiles["standard"]["acceleration"] = {"preset": "sport", "curve": []}
+  original = profile_document(profiles, enabled=True)
+  params = FakeParamStore()
+  params_raw = FakeParamStore({PERSONALITY_PROFILES_PARAM: original})
+
+  assert apply_safe_mode(params, params_raw)
+  safe_document = strict_profile_document(params_raw.get(PERSONALITY_PROFILES_PARAM))
+  assert safe_document is not None and safe_document["enabled"] is False
+  assert params_raw.get(SAFE_MODE_BACKUP_PARAM)[PERSONALITY_PROFILES_PARAM] == {
+    "present": True, "value": original,
+  }
+
+  params_raw.put(PERSONALITY_PROFILES_PARAM, original)
+  assert apply_safe_mode(params, params_raw)
+  assert strict_profile_document(params_raw.get(PERSONALITY_PROFILES_PARAM))["enabled"] is False
+  assert params_raw.get(SAFE_MODE_BACKUP_PARAM)[PERSONALITY_PROFILES_PARAM]["value"] == original
+
+
+def test_safe_mode_restores_profile_document_exactly():
+  original = profile_document(default_personality_profiles(False), enabled=True)
+  params = FakeParamStore()
+  params_raw = FakeParamStore({PERSONALITY_PROFILES_PARAM: original})
+  apply_safe_mode(params, params_raw)
+
+  assert restore_safe_mode(params_raw)
+  assert params_raw.get(PERSONALITY_PROFILES_PARAM) == original
+  assert params_raw.get(SAFE_MODE_BACKUP_PARAM) is None

@@ -2,48 +2,98 @@ import json
 import subprocess
 from pathlib import Path
 
+
 MODULE_PATH = Path(__file__).resolve().parents[1] / "assets/components/tools/personality_profiles.mjs"
 DEVICE_SETTINGS_PATH = MODULE_PATH.with_name("device_settings.js")
 
 
 def _run_node(script):
   harness = f"""
-    import {{ copyCurve, pasteCurve, valueFromPointer }} from {json.dumps(MODULE_PATH.as_uri())};
+    import {{ PROFILE_CLIPBOARD_SCHEMA_VERSION, copyCurve, formatSpeedMph, pasteCurve, valueFromPointer }} from {json.dumps(MODULE_PATH.as_uri())};
     {script}
   """
-  result = subprocess.run(["node", "--input-type=module"], input=harness, capture_output=True, text=True, timeout=30, check=False)
+  result = subprocess.run(["node", "--input-type=module"], input=harness, capture_output=True, text=True, timeout=30)
   assert result.returncode == 0, result.stderr
   return json.loads(result.stdout)
 
 
-def test_graph_copy_and_paste_are_typed_and_do_not_share_mutable_arrays():
+def test_graph_copy_and_paste_are_versioned_typed_and_isolated():
   result = _run_node("""
     const source = [0.8, 0.9, 1.0];
     const clipboard = copyCurve("braking", source);
     source[0] = 1.8;
     const pasted = pasteCurve(clipboard, "braking", 3);
     pasted[1] = 1.9;
-    console.log(JSON.stringify({ clipboard, pasted, mismatch: pasteCurve(clipboard, "following", 3) }));
+    console.log(JSON.stringify({ version: PROFILE_CLIPBOARD_SCHEMA_VERSION, clipboard, pasted }));
   """)
-
-  assert result["clipboard"] == {"category": "braking", "curve": [0.8, 0.9, 1.0]}
+  assert result["version"] == 1
+  assert result["clipboard"] == {"schemaVersion": 1, "category": "braking", "curve": [0.8, 0.9, 1.0]}
   assert result["pasted"] == [0.8, 1.9, 1.0]
-  assert result["mismatch"] is None
+
+
+def test_paste_rejects_wrong_schema_category_length_or_nonfinite_data():
+  result = _run_node("""
+    const good = copyCurve("acceleration", [1, 2, 3]);
+    console.log(JSON.stringify([
+      pasteCurve({ ...good, schemaVersion: 2 }, "acceleration", 3),
+      pasteCurve(good, "braking", 3),
+      pasteCurve(good, "acceleration", 2),
+      pasteCurve({ ...good, curve: [1, null, 3] }, "acceleration", 3),
+    ]));
+  """)
+  assert result == [None, None, None, None]
 
 
 def test_graph_pointer_values_are_clamped_and_snapped():
   result = _run_node("""
     console.log(JSON.stringify([
-      valueFromPointer(100, { top: 100, height: 200 }, 0.75, 3.0, 0.05),
-      valueFromPointer(200, { top: 100, height: 200 }, 0.75, 3.0, 0.05),
-      valueFromPointer(350, { top: 100, height: 200 }, 0.75, 3.0, 0.05),
+      valueFromPointer(100, { top: 100, height: 200 }, 0.5, 2.0, 0.05),
+      valueFromPointer(200, { top: 100, height: 200 }, 0.5, 2.0, 0.05),
+      valueFromPointer(350, { top: 100, height: 200 }, 0.5, 2.0, 0.05),
     ]));
   """)
+  assert result == [2.0, 1.25, 0.5]
 
-  assert result == [3.0, 1.9, 0.75]
+
+def test_speed_labels_keep_exact_axes_but_render_compact_values():
+  result = _run_node("""
+    console.log(JSON.stringify([formatSpeedMph(0), formatSpeedMph(11.184681), formatSpeedMph(90)]));
+  """)
+  assert result == ["0", "11.2", "90"]
 
 
-def test_personality_ui_explains_drive_mode_mapping_precedence():
+def test_rendered_editor_has_parked_locks_units_and_all_three_profile_categories():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert 'disabled="${() => !!state.values.IsOnroad' in source
+  assert 'aria-disabled="${() => !!state.values.IsOnroad}"' in source
+  assert "Speed axis: mph · Value axis:" in source
+  assert "m/s²" in source
+  for category in ("acceleration", "braking", "following"):
+    assert f'renderPersonalityCategoryField(profile, "{category}"' in source
+  assert 'following: { label: "Following"' in source
+  assert 'param.key === "CustomPersonalities" && state.expanded[param.key]' in source
+  assert 'param.key === "CustomPersonalities" && isParamEnabledForChildren(param)' not in source
+  assert '<button type="button" class="ds-manage-btn"' in source
 
-  assert "Vehicle drive-mode mapping always overrides personality acceleration and braking, including Traffic Mode." in source
+
+def test_profile_errors_are_escaped_before_the_legacy_html_snackbar_sink():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  helper = source.split("function showParamSnackbar", 1)[1].split("}\n", 1)[0]
+  assert "escapeSnackbarText(message)" in helper
+
+
+def test_personality_cards_replace_legacy_follow_rows_without_changing_their_runtime_keys():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  advanced = source.split("const PERSONALITY_ADVANCED_KEYS = {", 1)[1].split("}\n", 1)[0]
+  hidden = source.split("const HIDDEN_SETTING_KEYS = new Set([", 1)[1].split("]);", 1)[0]
+  for key in (
+    "TrafficFollow",
+    "AggressiveFollow",
+    "AggressiveFollowHigh",
+    "StandardFollow",
+    "StandardFollowHigh",
+    "RelaxedFollow",
+    "RelaxedFollowHigh",
+  ):
+    assert f'"{key}"' not in advanced
+    assert f'"{key}"' in hidden

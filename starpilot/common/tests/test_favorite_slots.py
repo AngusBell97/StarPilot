@@ -27,6 +27,7 @@ class FakeParams:
     self.store = {}
     self.types = {
       FAVORITE_SLOTS_PARAM: ParamKeyType.JSON,
+      "LongitudinalPersonalityProfiles": ParamKeyType.JSON,
       "AlphaLongitudinalEnabled": ParamKeyType.BOOL,
       "ForceOffroad": ParamKeyType.BOOL,
       "RedneckCruise": ParamKeyType.BOOL,
@@ -99,6 +100,21 @@ def test_galaxy_only_ford_controls_are_not_available_to_device_favorites():
   options = build_favorite_slot_options(lambda _key: True, alpha_longitudinal_available=True)
 
   assert ford_keys.isdisjoint({option["key"] for option in options})
+
+
+def test_longitudinal_profile_json_is_never_exposed_or_mutated_as_a_favorite():
+  key = "LongitudinalPersonalityProfiles"
+  options = build_favorite_slot_options(lambda _key: True, alpha_longitudinal_available=True)
+  assert key not in {option["key"] for option in options}
+
+  params = FakeParams()
+  original = {"schemaVersion": 1, "enabled": False}
+  params.put(key, original)
+  params.put(FAVORITE_SLOTS_PARAM, [{"enabled": True, "show_onroad": True, "key": key, "label": "Profiles"}])
+  slots = load_favorite_slots(params)
+  assert slots[0]["key"] is None
+  assert toggle_favorite_slot(0, params, FakeParams()) is False
+  assert params.get(key) == original
 
 
 def test_load_favorite_slots_filters_non_bool_keys():

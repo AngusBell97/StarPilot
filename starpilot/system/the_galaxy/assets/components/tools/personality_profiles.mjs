@@ -1,11 +1,24 @@
+export const PROFILE_CLIPBOARD_SCHEMA_VERSION = 1
+
+export function formatSpeedMph(speed) {
+  const numeric = Number(speed)
+  if (!Number.isFinite(numeric)) return ""
+  return numeric.toFixed(Number.isInteger(numeric) ? 0 : 1)
+}
+
 export function copyCurve(category, curve) {
-  if (!category || !Array.isArray(curve)) return null
-  return { category: String(category), curve: curve.map(value => Number(value)) }
+  if (!category || !Array.isArray(curve) || curve.some(value => !Number.isFinite(value))) return null
+  return {
+    schemaVersion: PROFILE_CLIPBOARD_SCHEMA_VERSION,
+    category: String(category),
+    curve: curve.map(value => Number(value)),
+  }
 }
 
 export function pasteCurve(clipboard, category, expectedLength) {
-  if (!clipboard || clipboard.category !== category || !Array.isArray(clipboard.curve)) return null
-  if (clipboard.curve.length !== expectedLength || clipboard.curve.some(value => !Number.isFinite(Number(value)))) return null
+  if (!clipboard || clipboard.schemaVersion !== PROFILE_CLIPBOARD_SCHEMA_VERSION) return null
+  if (clipboard.category !== category || !Array.isArray(clipboard.curve)) return null
+  if (clipboard.curve.length !== expectedLength || clipboard.curve.some(value => typeof value !== "number" || !Number.isFinite(value))) return null
   return clipboard.curve.map(value => Number(value))
 }
 

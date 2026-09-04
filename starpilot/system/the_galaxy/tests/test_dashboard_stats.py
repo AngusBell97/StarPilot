@@ -176,14 +176,33 @@ def _install_server_import_stubs():
   theme_manager.THEME_COMPONENT_PARAMS = {}
 
   def parse_custom_accel_profile_curve(count, breakpoints, values):
-    point_count = int(count)
+    numeric_count = float(count)
+    if not numeric_count.is_integer():
+      raise ValueError("Breakpoint count must be a whole number")
+    point_count = int(numeric_count)
     active_breakpoints = [float(value) for value in breakpoints[:point_count]]
     if any(current <= previous for previous, current in zip(active_breakpoints, active_breakpoints[1:], strict=False)):
       raise ValueError("Breakpoint speeds must be strictly increasing")
-    return active_breakpoints, [float(value) for value in values[:point_count]]
+    return [value * 0.44704 for value in active_breakpoints], [float(value) for value in values[:point_count]]
+
+  def get_accel_profile_curve_values(profile, ev_tuning=False, truck_tuning=False):
+    gas = {
+      0: [2.00, 1.80, 1.55, 1.30, 1.05, 0.85, 0.55],
+      1: [1.50, 1.30, 1.10, 0.90, 0.75, 0.55, 0.35],
+      2: [2.50, 2.25, 1.95, 1.60, 1.30, 1.05, 0.75],
+      3: [3.50, 3.20, 2.80, 2.35, 1.90, 1.55, 1.15],
+    }
+    ev = {
+      0: [2.00, 1.84, 1.64, 1.44, 1.24, 1.08, 0.84],
+      1: [1.50, 1.34, 1.18, 1.02, 0.90, 0.74, 0.58],
+      2: [2.50, 2.30, 2.06, 1.78, 1.54, 1.34, 1.10],
+      3: [3.50, 3.26, 2.94, 2.58, 2.22, 1.94, 1.62],
+    }
+    return list((ev if ev_tuning and not truck_tuning else gas)[int(profile or 0)])
 
   sys.modules["openpilot.starpilot.common.accel_profile"] = _simple_module(
     "openpilot.starpilot.common.accel_profile",
+    A_CRUISE_MAX_BP_CUSTOM=[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0],
     CUSTOM_ACCEL_PROFILE_BREAKPOINT_PARAM_KEYS=[f"CustomAccelProfileBreakpoint{index}MPH" for index in range(1, 13)],
     CUSTOM_ACCEL_PROFILE_BREAKPOINTS_INITIALIZED_KEY="CustomAccelProfileBreakpointsInitialized",
     CUSTOM_ACCEL_PROFILE_CURVE_PARAM_KEYS=[
@@ -194,13 +213,17 @@ def _install_server_import_stubs():
     CUSTOM_ACCEL_PROFILE_DEFAULT_BREAKPOINTS_MPH=[0.0, 11.2, 22.4, 33.6, 44.7, 55.9, 89.5, 100.7, 111.8, 123.0, 134.2, 145.4],
     CUSTOM_ACCEL_PROFILE_DEFAULT_POINT_COUNT=7,
     CUSTOM_ACCEL_PROFILE_INITIALIZED_KEY="CustomAccelProfileInitialized",
-    CUSTOM_ACCEL_PROFILE_PARAM_KEYS=[],
+    CUSTOM_ACCEL_PROFILE_PARAM_KEYS=[f"CustomAccelProfile{mph}MPH" for mph in (0, 11, 22, 34, 45, 56, 89)],
     CUSTOM_ACCEL_PROFILE_POINT_COUNT_KEY="CustomAccelProfilePointCount",
     CUSTOM_ACCEL_PROFILE_POINT_VALUE_PARAM_KEYS=[f"CustomAccelProfilePoint{index}Accel" for index in range(1, 13)],
+    CUSTOM_ACCEL_PROFILE_VALUE_MAX=6.0,
+    CUSTOM_ACCEL_PROFILE_VALUE_MIN=0.0,
     build_custom_accel_profile_defaults=lambda *args, **kwargs: {},
-    custom_accel_profile_is_initialized=lambda *args, **kwargs: False,
+    custom_accel_profile_is_initialized=lambda flag, values: bool(flag) or all(value is not None for value in values.values()),
+    get_accel_profile_curve_values=get_accel_profile_curve_values,
     get_custom_accel_profile_curve_defaults=lambda *args, **kwargs: {},
-    normalize_acceleration_profile=lambda value: value,
+    normalize_acceleration_profile=lambda value: int(value or 0),
+    normalize_deceleration_profile=lambda value: int(value or 0),
     parse_custom_accel_profile_curve=parse_custom_accel_profile_curve,
   )
   sys.modules["openpilot.starpilot.common.maps_catalog"] = _simple_module(
