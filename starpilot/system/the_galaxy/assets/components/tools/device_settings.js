@@ -1857,7 +1857,7 @@ function renderPersonalityAdvanced(profile) {
     <div class="ds-personality-advanced">
       <button
         type="button"
-        aria-expanded="${() => !!state.personalityAdvancedExpanded[profile.id]}"
+        aria-expanded="${() => state.personalityAdvancedExpanded[profile.id] ? "true" : "false"}"
         @click="${() => togglePersonalityAdvanced(profile.id)}">
         Advanced
         <i class="${() => `bi bi-chevron-${state.personalityAdvancedExpanded[profile.id] ? "up" : "down"}`}"></i>

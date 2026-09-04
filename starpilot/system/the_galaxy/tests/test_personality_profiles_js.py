@@ -135,7 +135,7 @@ def test_advanced_disclosure_updates_in_place_without_rerendering_the_card():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
   advanced = source.split("function renderPersonalityAdvanced(profile)", 1)[1].split("\n}", 1)[0]
   assert "const isOpen =" not in advanced
-  assert 'aria-expanded="${() => !!state.personalityAdvancedExpanded[profile.id]}"' in advanced
+  assert 'aria-expanded="${() => state.personalityAdvancedExpanded[profile.id] ? "true" : "false"}"' in advanced
   assert "${renderPersonalityAdvancedRows(profile)}" in advanced
   rows = source.split("function renderPersonalityAdvancedRows(profile)", 1)[1].split("\n}", 1)[0]
   assert 'hidden="${() => !state.personalityAdvancedExpanded[profile.id]}"' in rows
