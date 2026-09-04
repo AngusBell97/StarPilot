@@ -1809,25 +1809,60 @@ function renderPersonalityCategoryField(profile, category, config) {
         id="personality-${profile.id}-${category}"
         disabled="${() => !!state.values.IsOnroad || !!state.personalityUpdating[updateKey]}"
         @change="${event => updatePersonalityPreset(profile.id, category, event)}">
-        ${options.map(option => html`<option value="${option}" selected="${config.preset === option}">${personalityPresetLabel(option)}</option>`)}
+        ${options.map(option => html`<option value="${option}" selected="${() => config.preset === option}">${personalityPresetLabel(option)}</option>`)}
       </select>
     </div>
   `
 }
 
-function renderPersonalityAdvanced(profile) {
-  const isOpen = !!state.personalityAdvancedExpanded[profile.id]
+function renderTrafficModeToggle(profile) {
+  if (profile.id !== "traffic") return ""
+  const param = state.paramMetaByKey.TrafficPersonalityProfile
+  if (!param) return ""
+  const lockReason = () => getSettingLockReason(param)
+  return html`
+    <div class="ds-row ds-personality-traffic-toggle">
+      <div class="ds-row-info">
+        <div class="ds-row-text">
+          <div class="ds-row-heading"><span class="ds-row-label">${param.label}</span></div>
+          <div class="ds-row-desc">${param.description}</div>
+          ${() => {
+            const reason = lockReason()
+            return reason ? html`<div class="ds-row-desc"><strong>Locked:</strong> ${reason}</div>` : ""
+          }}
+        </div>
+      </div>
+      <input
+        type="checkbox"
+        class="ds-toggle"
+        id="ds-TrafficPersonalityProfile"
+        aria-label="${param.label}"
+        checked="${() => !!state.values.TrafficPersonalityProfile}"
+        disabled="${() => lockReason() !== ""}"
+        @change="${() => updateParam("TrafficPersonalityProfile", "checkbox")}" />
+    </div>
+  `
+}
+
+function renderPersonalityAdvancedRows(profile) {
   const rows = (PERSONALITY_ADVANCED_KEYS[profile.id] || [])
     .map(key => state.paramMetaByKey[key])
     .filter(Boolean)
     .map(param => renderSettingRow({ ...param, parent_key: null, is_parent_toggle: false }))
+  return html`<div class="ds-personality-advanced-rows" hidden="${() => !state.personalityAdvancedExpanded[profile.id]}">${rows}</div>`
+}
+
+function renderPersonalityAdvanced(profile) {
   return html`
     <div class="ds-personality-advanced">
-      <button type="button" @click="${() => togglePersonalityAdvanced(profile.id)}">
-        ${isOpen ? "Hide" : "Show"} existing smoothness & response controls
-        <i class="bi bi-chevron-${isOpen ? "up" : "down"}"></i>
+      <button
+        type="button"
+        aria-expanded="${() => !!state.personalityAdvancedExpanded[profile.id]}"
+        @click="${() => togglePersonalityAdvanced(profile.id)}">
+        Advanced
+        <i class="${() => `bi bi-chevron-${state.personalityAdvancedExpanded[profile.id] ? "up" : "down"}`}"></i>
       </button>
-      ${isOpen ? html`<div class="ds-personality-advanced-rows">${rows}</div>` : ""}
+      ${renderPersonalityAdvancedRows(profile)}
     </div>
   `
 }
@@ -1836,6 +1871,7 @@ function renderPersonalityCardSnapshot(profile) {
   const config = state.personalityProfiles?.[profile.id]
   if (!config) return ""
   const isOpen = !!state.personalityExpanded[profile.id]
+  const settingsVisible = profile.id !== "traffic" || !!state.values.TrafficPersonalityProfile
   return html`
     <article class="ds-personality-card ${isOpen ? "open" : ""}">
       <button type="button" class="ds-personality-summary" aria-expanded="${isOpen}" @click="${() => togglePersonalityCard(profile.id)}">
@@ -1849,15 +1885,18 @@ function renderPersonalityCardSnapshot(profile) {
       </button>
       ${isOpen ? html`
         <div class="ds-personality-body">
-          <div class="ds-personality-fields">
-            ${renderPersonalityCategoryField(profile, "acceleration", config.acceleration)}
-            ${renderPersonalityCategoryField(profile, "braking", config.braking)}
-            ${renderPersonalityCategoryField(profile, "following", config.following)}
-          </div>
-          ${config.acceleration.preset === "custom" ? renderPersonalityCurve(profile, "acceleration", config.acceleration) : ""}
-          ${config.braking.preset === "custom" ? renderPersonalityCurve(profile, "braking", config.braking) : ""}
-          ${config.following.preset === "custom" ? renderPersonalityCurve(profile, "following", config.following) : ""}
-          ${renderPersonalityAdvanced(profile)}
+          ${renderTrafficModeToggle(profile)}
+          ${settingsVisible ? html`
+            <div class="ds-personality-fields">
+              ${renderPersonalityCategoryField(profile, "acceleration", config.acceleration)}
+              ${renderPersonalityCategoryField(profile, "braking", config.braking)}
+              ${renderPersonalityCategoryField(profile, "following", config.following)}
+            </div>
+            ${config.acceleration.preset === "custom" ? renderPersonalityCurve(profile, "acceleration", config.acceleration) : ""}
+            ${config.braking.preset === "custom" ? renderPersonalityCurve(profile, "braking", config.braking) : ""}
+            ${config.following.preset === "custom" ? renderPersonalityCurve(profile, "following", config.following) : ""}
+            ${renderPersonalityAdvanced(profile)}
+          ` : html`<div class="ds-personality-curve-note">Turn on Traffic Mode to configure its profile.</div>`}
         </div>
       ` : ""}
     </article>

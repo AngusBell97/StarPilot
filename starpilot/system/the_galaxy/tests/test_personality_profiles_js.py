@@ -97,3 +97,47 @@ def test_personality_cards_replace_legacy_follow_rows_without_changing_their_run
   ):
     assert f'"{key}"' not in advanced
     assert f'"{key}"' in hidden
+
+
+def test_traffic_card_restores_the_base_dom_traffic_mode_toggle():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert "function renderTrafficModeToggle" in source
+  toggle = source.split("function renderTrafficModeToggle", 1)[1].split("\n}", 1)[0]
+  assert "TrafficPersonalityProfile" in toggle
+  assert 'aria-label="${param.label}"' in toggle
+  assert 'updateParam("TrafficPersonalityProfile", "checkbox")' in toggle
+  card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
+  assert "renderTrafficModeToggle(profile)" in card
+
+
+def test_traffic_mode_toggle_controls_traffic_editor_visibility():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
+  assert 'const settingsVisible = profile.id !== "traffic" || !!state.values.TrafficPersonalityProfile' in card
+  assert '${settingsVisible ? html`' in card
+
+
+def test_profile_preset_select_binds_the_selected_dom_property():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  field = source.split("function renderPersonalityCategoryField", 1)[1].split("\n}", 1)[0]
+  assert ' selected="${() => config.preset === option}"' in field
+  assert ' selected="${config.preset === option}"' not in field
+
+
+def test_advanced_disclosure_uses_the_concise_advanced_label():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  advanced = source.split("function renderPersonalityAdvanced(profile)", 1)[1].split("\n}", 1)[0]
+  assert "${isOpen ? \"Hide\" : \"Show\"} existing smoothness & response controls" not in advanced
+  assert "\n        Advanced\n" in advanced
+
+
+def test_advanced_disclosure_updates_in_place_without_rerendering_the_card():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  advanced = source.split("function renderPersonalityAdvanced(profile)", 1)[1].split("\n}", 1)[0]
+  assert "const isOpen =" not in advanced
+  assert 'aria-expanded="${() => !!state.personalityAdvancedExpanded[profile.id]}"' in advanced
+  assert "${renderPersonalityAdvancedRows(profile)}" in advanced
+  rows = source.split("function renderPersonalityAdvancedRows(profile)", 1)[1].split("\n}", 1)[0]
+  assert 'hidden="${() => !state.personalityAdvancedExpanded[profile.id]}"' in rows
+  assert "PERSONALITY_ADVANCED_KEYS[profile.id]" in rows
+  assert "renderSettingRow" in rows
