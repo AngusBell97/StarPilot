@@ -7,11 +7,13 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "assets/components/tools/per
 DEVICE_SETTINGS_PATH = MODULE_PATH.with_name("device_settings.js")
 DEVICE_SETTINGS_CSS_PATH = MODULE_PATH.with_name("device_settings.css")
 DEVICE_SETTINGS_LAYOUT_PATH = MODULE_PATH.parents[5] / "common/assets/device_settings_layout.json"
+SNACKBAR_PATH = MODULE_PATH.parents[2] / "js/snackbar.js"
 
 
 def _run_node(script):
   harness = f"""
-    import {{ formatProfileSpeed, profileSpeedUnit, valueFromPointer }} from {json.dumps(MODULE_PATH.as_uri())};
+    import * as profiles from {json.dumps(MODULE_PATH.as_uri())};
+    const {{ formatProfileSpeed, profileSpeedUnit, valueFromPointer }} = profiles;
     {script}
   """
   result = subprocess.run(["node", "--input-type=module"], input=harness, capture_output=True, text=True, timeout=30)
@@ -54,6 +56,12 @@ def test_rendered_editor_has_parked_locks_units_and_all_three_profile_categories
   assert 'param.key === "CustomPersonalities" && state.expanded[param.key]' in source
   assert 'param.key === "CustomPersonalities" && isParamEnabledForChildren(param)' not in source
   assert '<button type="button" class="ds-manage-btn"' in source
+
+
+def test_acceleration_and_braking_presets_render_from_weakest_to_strongest():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert 'acceleration: ["eco", "standard", "sport", "sport_plus", "custom"]' in source
+  assert 'braking: ["eco", "standard", "sport", "custom"]' in source
 
 
 def test_profile_master_and_advanced_controls_declare_parked_only_metadata():
@@ -101,24 +109,57 @@ def test_personality_cards_replace_legacy_follow_rows_without_changing_their_run
     assert f'"{key}"' in hidden
 
 
-def test_traffic_card_restores_the_base_dom_traffic_mode_toggle():
+def test_each_personality_card_maps_to_its_persisted_enable_toggle():
+  result = _run_node("""
+    const paramKey = profiles.personalityProfileParamKey;
+    console.log(JSON.stringify(typeof paramKey === "function" ?
+      ["traffic", "aggressive", "standard", "relaxed"].map(paramKey) : ["missing helper"]));
+  """)
+  assert result == [
+    "TrafficPersonalityProfile",
+    "AggressivePersonalityProfile",
+    "StandardPersonalityProfile",
+    "RelaxedPersonalityProfile",
+  ]
+
+
+def test_each_personality_card_exposes_an_accessible_parked_only_enable_toggle():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
-  assert "function renderTrafficModeToggle" in source
-  toggle = source.split("function renderTrafficModeToggle", 1)[1].split("\n}", 1)[0]
-  assert "TrafficPersonalityProfile" in toggle
+  assert "function renderPersonalityProfileToggle" in source
+  toggle = source.split("function renderPersonalityProfileToggle", 1)[1].split("\n}", 1)[0]
+  assert "personalityProfileParamKey(profile.id)" in toggle
   assert 'aria-label="${param.label}"' in toggle
-  assert 'updateParam("TrafficPersonalityProfile", "checkbox")' in toggle
+  assert 'checked="${() => !!state.values[param.key]}"' in toggle
+  assert 'disabled="${() => lockReason() !== ""}"' in toggle
+  assert 'updateParam(param.key, "checkbox")' in toggle
   card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
-  assert "renderTrafficModeToggle(profile)" in card
+  assert "renderPersonalityProfileToggle(profile)" in card
 
 
-def test_traffic_mode_toggle_controls_traffic_editor_visibility():
+def test_each_profile_enable_toggle_controls_only_its_card_editor_visibility():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
   card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
   assert 'class="ds-personality-settings"' in card
-  assert 'hidden="${() => profile.id === "traffic" && !state.values.TrafficPersonalityProfile}"' in card
-  assert 'hidden="${() => profile.id !== "traffic" || !!state.values.TrafficPersonalityProfile}"' in card
+  assert 'hidden="${() => !state.values[personalityProfileParamKey(profile.id)]}"' in card
+  assert 'hidden="${() => !!state.values[personalityProfileParamKey(profile.id)]}"' in card
+  assert "Turn on ${profile.label} to configure its profile." in card
   assert "settingsVisible ? html`" not in card
+
+
+def test_profile_enable_toggles_remain_suppressed_from_the_generic_setting_list():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  marker = "const PROFILE_HIDDEN_LAYOUT_KEYS = new Set(["
+  assert marker in source
+  hidden = source.split(marker, 1)[1].split("]);", 1)[0]
+  for key in (
+    "TrafficPersonalityProfile",
+    "AggressivePersonalityProfile",
+    "StandardPersonalityProfile",
+    "RelaxedPersonalityProfile",
+  ):
+    assert f'"{key}"' in hidden
+  visibility = source.split("function isSettingVisible", 1)[1].split("\n}", 1)[0]
+  assert "PROFILE_HIDDEN_LAYOUT_KEYS.has(param.key)" in visibility
 
 
 def test_profile_presets_are_direct_neutral_buttons_not_dropdowns():
@@ -129,11 +170,90 @@ def test_profile_presets_are_direct_neutral_buttons_not_dropdowns():
   assert "updatePersonalityPreset(profile.id, category, option)" in field
 
 
+def test_reselecting_custom_preset_is_a_noop_but_changed_presets_submit():
+  result = _run_node("""
+    const shouldSubmit = profiles.shouldSubmitPersonalityPreset;
+    console.log(JSON.stringify(typeof shouldSubmit === "function" ? [
+      shouldSubmit("custom", "custom"),
+      shouldSubmit("standard", "custom"),
+    ] : ["missing helper"]));
+  """)
+  assert result == [False, True]
+
+
+def test_graph_edits_still_submit_custom_curve_writes():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  drag = source.split("function beginPersonalityCurveDrag", 1)[1].split("\n}\n\nfunction setPersonalityCurveError", 1)[0]
+  adjust = source.split("function adjustPersonalityCurvePoint", 1)[1].split("\n}\n\nfunction renderPersonalityCurve", 1)[0]
+  assert 'savePersonalityCategory(profileId, category, "custom", curve' in drag
+  assert 'savePersonalityCategory(profileId, category, "custom", curve' in adjust
+
+
+def test_successful_profile_save_updates_existing_reactive_category():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  saver = source.split("async function savePersonalityCategory", 1)[1].split("\n}", 1)[0]
+  assert "currentConfig.preset = savedConfig.preset" in saver
+  assert "currentConfig.curve = [...savedConfig.curve]" in saver
+  assert "state.personalityProfiles = data.profiles" not in saver
+
+
+def test_first_successful_switch_to_custom_opens_the_profile_advanced_panel():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  saver = source.split("async function savePersonalityCategory", 1)[1].split("\n}", 1)[0]
+
+  assert 'const wasCustom = currentConfig.preset === "custom"' in saver
+  assert 'if (!wasCustom && savedConfig.preset === "custom")' in saver
+  assert "state.personalityAdvancedExpanded = {" in saver
+  assert "[profileId]: true" in saver
+
+
+def test_personality_selectors_are_visible_without_profile_level_disclosure():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
+
+  assert "function renderPersonalitySummaryMeter" not in source
+  assert "function togglePersonalityCard" not in source
+  assert "ds-personality-pills" not in card
+  assert "ds-personality-manage" not in card
+  assert "${isOpen ? html`" not in card
+  for category in ("acceleration", "braking", "following"):
+    assert f'renderPersonalityCategoryField(profile, "{category}"' in card
+
+
+def test_custom_graphs_render_only_inside_the_advanced_panel():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
+  advanced_rows = source.split("function renderPersonalityAdvancedRows", 1)[1].split("\n}", 1)[0]
+  advanced = source.split("function renderPersonalityAdvanced(profile", 1)[1].split("\n}", 1)[0]
+
+  assert "renderPersonalityCurve" not in card
+  assert "renderPersonalityAdvanced(profile, config)" in card
+  assert "renderPersonalityAdvancedRows(profile, config)" in advanced
+  for category in ("acceleration", "braking", "following"):
+    assert f'${{() => config.{category}.preset === "custom" ? renderPersonalityCurve(profile, "{category}", config.{category}) : ""}}' in advanced_rows
+
+
+def test_personality_cards_remove_segmented_summary_and_manage_layout():
+  css = DEVICE_SETTINGS_CSS_PATH.read_text(encoding="utf-8")
+  summary = css.split(".ds-personality-summary {", 1)[1].split("}", 1)[0]
+
+  for selector in (
+    ".ds-personality-card.open",
+    ".ds-personality-manage",
+    ".ds-personality-pills",
+    ".ds-personality-summary-meter",
+    ".ds-personality-summary-bar",
+  ):
+    assert selector not in css
+  assert "display: flex" in summary
+  assert "grid-template" not in summary
+
+
 def test_personality_controls_have_visible_keyboard_focus_styles():
   css = DEVICE_SETTINGS_CSS_PATH.read_text(encoding="utf-8")
   for selector in (
-    ".ds-personality-summary:focus-visible",
     ".ds-personality-option:focus-visible",
+    ".ds-personality-advanced > button:focus-visible",
     ".ds-personality-advanced-choice:focus-visible",
     ".ds-personality-value input:focus-visible",
     ".ds-personality-custom-number input:focus-visible",
@@ -146,7 +266,11 @@ def test_custom_graph_has_reference_line_and_only_reset_action():
   curve = source.split("function renderPersonalityCurve", 1)[1].split("\n}", 1)[0]
   draw = source.split("function drawPersonalityCurve", 1)[1].split("\n}", 1)[0]
   assert "referenceCurve" in curve
-  assert 'aria-label="${profile.label} ${definition.label} at ${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ${profileSpeedUnit(!!state.values.IsMetric)}"' in curve
+  expected_label = "".join([
+    'aria-label="${profile.label} ${definition.label} at ${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ',
+    '${profileSpeedUnit(!!state.values.IsMetric)}, ${definition.valueUnit}"',
+  ])
+  assert expected_label in curve
   assert "referenceCurve" in draw
   assert "context.setLineDash([" in draw
   assert 'class="ds-personality-reference-key"' in curve
@@ -163,11 +287,14 @@ def test_advanced_values_use_supported_presets_and_warn_before_custom():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
   advanced_rows = source.split("function renderPersonalityAdvancedRows", 1)[1].split("\n}", 1)[0]
   value_editor = source.split("function renderPersonalityAdvancedValue", 1)[1].split("\n}", 1)[0]
-  advanced = advanced_rows + value_editor
+  option_resolver = source.split("function personalityAdvancedOptions", 1)[1].split("\n}", 1)[0]
+  advanced = advanced_rows + value_editor + option_resolver
   assert "Custom values are untested" in advanced
   assert "Chill" in advanced
   assert "Standard" in advanced
   assert "Custom" in advanced
+  assert 'key.endsWith("JerkDanger")' in option_resolver
+  assert '[["standard", "Standard"], ["custom", "Custom"]]' in option_resolver
   assert "renderSettingRow" not in advanced
   assert "updatePersonalityAdvancedPreset" in source
   assert "ds-personality-advanced-choice" in value_editor
@@ -187,18 +314,18 @@ def test_profile_descriptions_are_removed():
 
 def test_advanced_disclosure_uses_the_concise_advanced_label():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
-  advanced = source.split("function renderPersonalityAdvanced(profile)", 1)[1].split("\n}", 1)[0]
+  advanced = source.split("function renderPersonalityAdvanced(profile, config)", 1)[1].split("\n}", 1)[0]
   assert "${isOpen ? \"Hide\" : \"Show\"} existing smoothness & response controls" not in advanced
   assert "\n        Advanced\n" in advanced
 
 
 def test_advanced_disclosure_updates_in_place_without_rerendering_the_card():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
-  advanced = source.split("function renderPersonalityAdvanced(profile)", 1)[1].split("\n}", 1)[0]
+  advanced = source.split("function renderPersonalityAdvanced(profile, config)", 1)[1].split("\n}", 1)[0]
   assert "const isOpen =" not in advanced
   assert 'aria-expanded="${() => state.personalityAdvancedExpanded[profile.id] ? "true" : "false"}"' in advanced
-  assert "${renderPersonalityAdvancedRows(profile)}" in advanced
-  rows = source.split("function renderPersonalityAdvancedRows(profile)", 1)[1].split("\n}", 1)[0]
+  assert "${renderPersonalityAdvancedRows(profile, config)}" in advanced
+  rows = source.split("function renderPersonalityAdvancedRows(profile, config)", 1)[1].split("\n}", 1)[0]
   assert 'hidden="${() => !state.personalityAdvancedExpanded[profile.id]}"' in rows
   assert "PERSONALITY_ADVANCED_KEYS[profile.id]" in rows
   assert "renderPersonalityAdvancedValue" in rows
@@ -226,6 +353,11 @@ def test_schema_migration_state_is_visible_and_blocks_profile_writes():
   assert "This profile data requires a verified migration before it can be edited." in source
   assert "!!state.personalityMigrationRequired" in source
   assert 'param?.key === "CustomPersonalities" && state.personalityMigrationRequired' in source
+  assert 'fetch("/api/personality_profiles/migrate", { method: "POST" })' in source
+  assert "Migrate profiles" in source
+  migration_warning = source.split('class="ds-personality-migration-warning"', 1)[1].split("</div>", 1)[0]
+  assert '!state.values.IsOffroad' not in migration_warning
+  assert '!!state.values.IsOnroad || state.personalityMigrationInProgress' in migration_warning
   css = DEVICE_SETTINGS_CSS_PATH.read_text(encoding="utf-8")
   assert ".ds-personality-migration-warning" in css
 
@@ -252,3 +384,119 @@ def test_personality_cards_keep_distinct_symbols_but_selectors_are_not_profile_c
   assert '<i class="${profile.icon}" aria-hidden="true"></i>' in source
   assert ".ds-personality-option[aria-pressed=\"true\"]" in css
   assert ".ds-personality-option[data-profile=" not in css
+
+
+def test_custom_personalities_panel_excludes_its_legacy_subtree_from_rendering_and_search():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  sections = source.split("function getSectionsWithSlug()", 1)[1].split("\n}", 1)[0]
+  tree = source.split("function renderSettingTree", 1)[1].split("\n}", 1)[0]
+  assert "personalityLegacySubtreeKeys" in sections
+  assert "!personalityLegacySubtreeKeys.has(param.key)" in sections
+  assert 'if (param.key === "CustomPersonalities") continue' in tree
+
+
+def test_device_settings_polls_driving_state_and_units_while_visible():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert "function ensureUiContextPolling" in source
+  refresh = source.split("async function refreshUiContextValues", 1)[1].split("\n}", 1)[0]
+  assert '["IsOnroad", "IsMetric"]' in refresh
+  assert '`/api/params?key=${encodeURIComponent(key)}`' in refresh
+  polling = source.split("function ensureUiContextPolling", 1)[1].split("\n}", 1)[0]
+  assert 'document.visibilityState === "visible"' in polling
+  component = source.split("export function DeviceSettings", 1)[1]
+  assert "ensureUiContextPolling()" in component
+
+
+def test_profile_load_errors_are_accurate_persistent_and_do_not_clear_migration_block():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  fetcher = source.split("async function fetchPersonalityProfiles", 1)[1].split("\n}", 1)[0]
+  assert "personalityProfilesError" in fetcher
+  assert "returned malformed data" in fetcher
+  assert "state.personalityMigrationRequired = false" not in fetcher
+  panel = source.split("function renderPersonalityProfilesPanel", 1)[1].split("\n}", 1)[0]
+  assert "state.personalityProfilesError" in panel
+  assert 'role="alert"' in panel
+  assert 'aria-live="assertive"' in panel
+
+
+def test_personality_cards_and_advanced_disclosures_have_unique_accessible_relationships():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  card = source.split("function renderPersonalityCardSnapshot", 1)[1].split("\n}", 1)[0]
+  assert 'aria-labelledby="personality-heading-${profile.id}"' in card
+  assert '<strong id="personality-heading-${profile.id}">${profile.label}</strong>' in card
+  assert 'aria-controls="personality-body-${profile.id}"' not in card
+  assert 'id="personality-body-${profile.id}"' in card
+  assert "ds-personality-manage" not in card
+  advanced = source.split("function renderPersonalityAdvanced(profile, config)", 1)[1].split("\n}", 1)[0]
+  assert 'aria-controls="personality-advanced-${profile.id}"' in advanced
+  assert 'id="personality-advanced-${profile.id}"' in source
+  assert 'aria-hidden="true"' in advanced
+  manage = source.split('${() => p.is_parent_toggle', 1)[1].split("` : \"\"}", 1)[0]
+  assert 'aria-controls="${p.key === "CustomPersonalities" ? "personality-profiles-panel"' in manage
+  assert 'aria-expanded="${() => state.expanded[p.key] ? "true" : "false"}"' in manage
+
+
+def test_nested_manage_panels_render_through_a_reactive_child_expression():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  tree = source.split("function renderSettingTree(paramsList, parentKey = null)", 1)[1].split("\n}", 1)[0]
+
+  assert "${() => renderSettingTree(paramsList, param.key)}" in tree
+
+
+def test_personality_control_names_include_profile_category_and_units():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  curve = source.split("function renderPersonalityCurve", 1)[1].split("\n}", 1)[0]
+  assert 'aria-label="Reset ${profile.label} ${definition.label} graph to Dom default"' in curve
+  assert '${definition.valueUnit}' in curve.split('aria-label="${profile.label} ${definition.label} at', 1)[1].split('"', 1)[0]
+  advanced = source.split("function renderPersonalityAdvancedValue", 1)[1].split("\n}", 1)[0]
+  assert "profile.label" in advanced
+  assert "percentage" in advanced
+  assert 'aria-label="${profile.label} ${param.label} custom percentage"' in advanced
+
+
+def test_snackbars_expose_polite_status_and_assertive_error_live_regions():
+  source = SNACKBAR_PATH.read_text(encoding="utf-8")
+  assert 'level === "error" ? "alert" : "status"' in source
+  assert 'level === "error" ? "assertive" : "polite"' in source
+
+
+def test_graph_number_edits_use_native_validity_and_keep_persistent_inline_errors():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  adjust = source.split("function adjustPersonalityCurvePoint", 1)[1].split("\n}", 1)[0]
+  assert "input.valueAsNumber" in adjust
+  assert "input.validity.valid" in adjust
+  assert "Number.isFinite" in adjust
+  invalid_branch = adjust.split("if (!raw || !input.validity.valid || !Number.isFinite(parsed)) {", 1)[1].split("return\n  }", 1)[0]
+  assert "savePersonalityCategory" not in invalid_branch
+  assert "setPersonalityCurveError" in invalid_branch
+  curve = source.split("function renderPersonalityCurve", 1)[1].split("\n}", 1)[0]
+  assert "state.personalityCurveErrors[updateKey]" in curve
+  assert 'role="alert"' in curve
+  assert 'aria-live="assertive"' in curve
+  assert '@change="${event => adjustPersonalityCurvePoint(profile.id, category, index, event.currentTarget)}"' in curve
+
+
+def test_failed_graph_put_restores_persisted_curve_inputs_and_canvas_for_edit_and_drag():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert "function restorePersonalityCurveVisual" in source
+  restore = source.split("function restorePersonalityCurveVisual", 1)[1].split("\n}", 1)[0]
+  assert "drawPersonalityCurve" in restore
+  assert "personality-input-${profileId}-${category}-${index}" in restore
+  assert "personality-value-${profileId}-${category}-${index}" in restore
+  drag = source.split("function beginPersonalityCurveDrag", 1)[1].split("\n}\n\nfunction setPersonalityCurveError", 1)[0]
+  assert "if (!saved) restorePersonalityCurveVisual" in drag
+  adjust = source.split("function adjustPersonalityCurvePoint", 1)[1].split("\n}\n\nfunction renderPersonalityCurve", 1)[0]
+  assert "if (!saved) restorePersonalityCurveVisual" in adjust
+
+
+def test_personality_jerk_layout_metadata_matches_stored_percentage_range():
+  layout = json.loads(DEVICE_SETTINGS_LAYOUT_PATH.read_text(encoding="utf-8"))
+  jerk_params = [
+    param
+    for section in layout
+    for param in section.get("params", [])
+    if any(param.get("key", "").startswith(profile) for profile in ("Traffic", "Aggressive", "Standard", "Relaxed"))
+    and "Jerk" in param.get("key", "")
+  ]
+  assert len(jerk_params) == 20
+  assert all((param.get("min"), param.get("max"), param.get("step")) == (25, 200, 1) for param in jerk_params)

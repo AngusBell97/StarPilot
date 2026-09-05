@@ -38,6 +38,11 @@ ACCELERATION_PRESETS = ("dom_default", "standard", "eco", "sport", "sport_plus",
 BRAKING_PRESETS = ("dom_default", "standard", "eco", "sport", "custom")
 FOLLOWING_PRESETS = ("dom_default", "close", "medium", "far", "custom")
 CURVE_BOUNDS = {
+  "acceleration": (0.0, 3.5),
+  "braking": (0.5, 2.0),
+  "following": (0.75, 3.0),
+}
+_V1_CURVE_BOUNDS = {
   "acceleration": (0.0, 6.0),
   "braking": (0.5, 2.0),
   "following": (0.75, 3.0),
@@ -53,16 +58,28 @@ PERSONALITY_FOLLOW_PARAM_KEYS = frozenset({
   "StandardFollow", "StandardFollowHigh",
   "RelaxedFollow", "RelaxedFollowHigh",
 })
-PERSONALITY_PROFILE_ENABLE_PARAM_KEYS = frozenset({
-  "TrafficPersonalityProfile", "AggressivePersonalityProfile",
-  "StandardPersonalityProfile", "RelaxedPersonalityProfile",
-})
+PERSONALITY_PROFILE_ENABLE_RUNTIME_KEYS = (
+  ("traffic_personality_profile", "TrafficPersonalityProfile"),
+  ("aggressive_personality_profile", "AggressivePersonalityProfile"),
+  ("standard_personality_profile", "StandardPersonalityProfile"),
+  ("relaxed_personality_profile", "RelaxedPersonalityProfile"),
+)
+PERSONALITY_PROFILE_ENABLE_PARAM_KEYS = frozenset(
+  param_key for _runtime_key, param_key in PERSONALITY_PROFILE_ENABLE_RUNTIME_KEYS
+)
 PERSONALITY_PARKED_PARAM_KEYS = (
   PERSONALITY_ADVANCED_PARAM_KEYS
   | PERSONALITY_FOLLOW_PARAM_KEYS
   | PERSONALITY_PROFILE_ENABLE_PARAM_KEYS
   | {"CustomPersonalities"}
 )
+
+
+def load_personality_profile_enable_values(get_value) -> dict[str, bool]:
+  return {
+    runtime_key: get_value(param_key)
+    for runtime_key, param_key in PERSONALITY_PROFILE_ENABLE_RUNTIME_KEYS
+  }
 
 
 def validate_personality_follow_value(raw_value) -> float:
@@ -196,7 +213,13 @@ def _decode_json(raw):
   return raw
 
 
-def _validated_category_with_length(category: str, raw_category, expected_length: int) -> dict | None:
+def _validated_category_with_length(
+  category: str,
+  raw_category,
+  expected_length: int,
+  curve_bounds: dict[str, tuple[float, float]],
+  legacy_curve_bounds: dict[str, tuple[float, float]] | None = None,
+) -> dict | None:
   if category not in _CATEGORY_SPECS or not isinstance(raw_category, dict):
     return None
   keys = set(raw_category)
@@ -213,7 +236,7 @@ def _validated_category_with_length(category: str, raw_category, expected_length
   if len(curve) != expected_length:
     return None
 
-  minimum, maximum = CURVE_BOUNDS[category]
+  minimum, maximum = curve_bounds[category]
   values = []
   for raw_value in curve:
     if isinstance(raw_value, bool) or not isinstance(raw_value, numbers.Real):
@@ -229,12 +252,13 @@ def _validated_category_with_length(category: str, raw_category, expected_length
       return None
     if len(legacy_curve) != len(_V1_ACCELERATION_SPEEDS_MPH):
       return None
+    legacy_minimum, legacy_maximum = (legacy_curve_bounds or curve_bounds)[category]
     legacy_values = []
     for raw_value in legacy_curve:
       if isinstance(raw_value, bool) or not isinstance(raw_value, numbers.Real):
         return None
       value = float(raw_value)
-      if not math.isfinite(value) or not minimum <= value <= maximum:
+      if not math.isfinite(value) or not legacy_minimum <= value <= legacy_maximum:
         return None
       legacy_values.append(round(value, 4))
     validated["legacyCurve"] = legacy_values
@@ -243,7 +267,7 @@ def _validated_category_with_length(category: str, raw_category, expected_length
 
 def _validated_category(category: str, raw_category) -> dict | None:
   expected_length = _CATEGORY_SPECS.get(category, ((), 0))[1]
-  return _validated_category_with_length(category, raw_category, expected_length)
+  return _validated_category_with_length(category, raw_category, expected_length, CURVE_BOUNDS, _V1_CURVE_BOUNDS)
 
 
 def _schema_values_equal(actual, expected) -> bool:
@@ -256,7 +280,14 @@ def _schema_values_equal(actual, expected) -> bool:
   return actual == expected
 
 
-def _strict_document(raw_document, schema_version: int, axes: dict, category_lengths: dict[str, int]) -> dict | None:
+def _strict_document(
+  raw_document,
+  schema_version: int,
+  axes: dict,
+  category_lengths: dict[str, int],
+  curve_bounds: dict[str, tuple[float, float]],
+  legacy_curve_bounds: dict[str, tuple[float, float]] | None = None,
+) -> dict | None:
   decoded = _decode_json(raw_document)
   if not isinstance(decoded, dict) or set(decoded) != {"schemaVersion", "enabled", "axes", "profiles"}:
     return None
@@ -275,7 +306,9 @@ def _strict_document(raw_document, schema_version: int, axes: dict, category_len
       return None
     profile = {}
     for category in _CATEGORY_SPECS:
-      validated = _validated_category_with_length(category, raw_profile.get(category), category_lengths[category])
+      validated = _validated_category_with_length(
+        category, raw_profile.get(category), category_lengths[category], curve_bounds, legacy_curve_bounds,
+      )
       if validated is None:
         return None
       profile[category] = validated
@@ -294,6 +327,8 @@ def strict_profile_document(raw_document) -> dict | None:
     PROFILE_SCHEMA_VERSION,
     PROFILE_AXES,
     {category: expected_length for category, (_, expected_length) in _CATEGORY_SPECS.items()},
+    CURVE_BOUNDS,
+    _V1_CURVE_BOUNDS,
   )
 
 
@@ -307,6 +342,7 @@ def migrate_profile_document(raw_document) -> dict | None:
     1,
     _V1_PROFILE_AXES,
     {"acceleration": len(_V1_ACCELERATION_SPEEDS_MPH), "braking": len(_V1_ACCELERATION_SPEEDS_MPH), "following": len(FOLLOWING_SPEEDS_MPH)},
+    _V1_CURVE_BOUNDS,
   )
   if legacy is None:
     return None
@@ -318,8 +354,9 @@ def migrate_profile_document(raw_document) -> dict | None:
       if config["preset"] != "custom":
         continue
       legacy_curve = list(config["curve"])
+      minimum, maximum = CURVE_BOUNDS[category]
       config["curve"] = [
-        round(_linear_interp(float(speed_mph), _V1_ACCELERATION_SPEEDS_MPH, config["curve"]), 4)
+        round(min(max(_linear_interp(float(speed_mph), _V1_ACCELERATION_SPEEDS_MPH, config["curve"]), minimum), maximum), 4)
         for speed_mph in ACCELERATION_SPEEDS_MPH
       ]
       config["legacyCurve"] = legacy_curve
@@ -478,6 +515,8 @@ def initial_custom_curve(
     candidate = current_config.get("curve")
   elif isinstance(preset, str):
     candidate = _sample_config_on_custom_axis(category, {"preset": preset, "curve": []}, ev_tuning, truck_tuning)
+    minimum, maximum = CURVE_BOUNDS[category]
+    candidate = [round(min(max(value, minimum), maximum), 4) for value in candidate]
   else:
     candidate = None
   validated = _validated_category(category, {"preset": "custom", "curve": candidate})

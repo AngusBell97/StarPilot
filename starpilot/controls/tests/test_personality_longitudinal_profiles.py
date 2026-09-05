@@ -105,16 +105,27 @@ def _document(*, enabled=True):
   return profile_document(default_personality_profiles(False), enabled=enabled)
 
 
-def test_real_enum_shaped_personality_selects_explicit_standard_overrides():
+@pytest.mark.parametrize(
+  ("profile", "personality", "traffic_mode", "acceleration", "braking"),
+  [
+    ("aggressive", Personality.aggressive, False, 1.10, 0.60),
+    ("standard", Personality.standard, False, 1.25, 0.75),
+    ("relaxed", Personality.relaxed, False, 1.40, 0.90),
+    ("traffic", Personality.aggressive, True, 1.55, 1.05),
+  ],
+)
+def test_real_enum_shaped_personality_selects_each_explicit_profile_override(
+  profile, personality, traffic_mode, acceleration, braking,
+):
   document = _document()
-  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.25] * 10}
-  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [0.75] * 10}
+  document["profiles"][profile]["acceleration"] = {"preset": "custom", "curve": [acceleration] * 10}
+  document["profiles"][profile]["braking"] = {"preset": "custom", "curve": [braking] * 10}
   controller = StarPilotAcceleration(_planner(v_cruise=5.0))
 
-  controller.update(10.0, _sm(personality=Personality.standard), _toggles(document))
+  controller.update(10.0, _sm(traffic=traffic_mode, personality=personality), _toggles(document))
 
-  assert controller.max_accel == pytest.approx(1.25)
-  assert controller.min_accel == pytest.approx(-0.75)
+  assert controller.max_accel == pytest.approx(acceleration)
+  assert controller.min_accel == pytest.approx(-braking)
 
 
 def test_master_toggle_disables_profile_document_overrides():
@@ -127,6 +138,31 @@ def test_master_toggle_disables_profile_document_overrides():
   controller.update(0.0, _sm(personality=Personality.standard), toggles)
 
   assert controller.max_accel == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize(
+  ("profile", "personality", "traffic_mode", "legacy_max_accel", "legacy_min_accel"),
+  [
+    ("traffic", Personality.aggressive, True, 1.1, -0.35),
+    ("aggressive", Personality.aggressive, False, 2.0, -1.0),
+    ("standard", Personality.standard, False, 2.0, -1.0),
+    ("relaxed", Personality.relaxed, False, 2.0, -1.0),
+  ],
+)
+def test_disabled_active_profile_keeps_legacy_acceleration_path(
+  profile, personality, traffic_mode, legacy_max_accel, legacy_min_accel,
+):
+  document = _document()
+  document["profiles"][profile]["acceleration"] = {"preset": "custom", "curve": [1.25] * 10}
+  document["profiles"][profile]["braking"] = {"preset": "custom", "curve": [0.75] * 10}
+  toggles = _toggles(document)
+  setattr(toggles, f"{profile}_personality_profile", False)
+  controller = StarPilotAcceleration(_planner())
+
+  controller.update(0.0, _sm(traffic=traffic_mode, personality=personality), toggles)
+
+  assert controller.max_accel == pytest.approx(legacy_max_accel)
+  assert controller.min_accel == pytest.approx(legacy_min_accel)
 
 
 def test_detected_truck_curve_is_used_without_enabling_legacy_truck_tuning():
@@ -176,7 +212,7 @@ def test_absent_disabled_malformed_partial_wrong_version_and_nonfinite_use_legac
 
 def test_map_gear_force_coast_and_weather_precedence_remains_explicit():
   document = _document()
-  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [4.0] * 10}
+  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [3.5] * 10}
   document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [2.0] * 10}
   toggles = _toggles(document)
   toggles.map_acceleration = True

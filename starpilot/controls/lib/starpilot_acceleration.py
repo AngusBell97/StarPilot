@@ -19,7 +19,7 @@ from openpilot.starpilot.common.accel_profile import (
   interpolate_accel_profile,
   normalize_deceleration_profile,
 )
-from openpilot.starpilot.common.longitudinal_personality_profiles import interpolate_category_curve, resolve_personality_category
+from openpilot.starpilot.common.longitudinal_personality_profiles import active_personality_id, interpolate_category_curve, resolve_personality_category
 from openpilot.starpilot.controls.lib.starpilot_vcruise import get_active_slc_control_target
 
 def cubic_interp(x, xp, fp):
@@ -360,7 +360,11 @@ class StarPilotAcceleration:
     personality_document = getattr(starpilot_toggles, "longitudinal_personality_profiles", {})
     personality_acceleration = None
     personality_braking = None
-    if getattr(starpilot_toggles, "custom_personalities", False):
+    personality_id = active_personality_id(traffic_mode, sm["selfdriveState"].personality)
+    profile_enabled = personality_id is not None and getattr(
+      starpilot_toggles, f"{personality_id}_personality_profile", True
+    )
+    if getattr(starpilot_toggles, "custom_personalities", False) and profile_enabled:
       personality_acceleration = resolve_personality_category(
         personality_document, traffic_mode, sm["selfdriveState"].personality, "acceleration"
       )

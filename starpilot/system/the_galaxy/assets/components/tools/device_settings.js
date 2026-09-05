@@ -1,5 +1,11 @@
 import { html, reactive } from "/assets/vendor/arrow-core.js"
-import { formatProfileSpeed, profileSpeedUnit, valueFromPointer } from "/assets/components/tools/personality_profiles.mjs"
+import {
+  formatProfileSpeed,
+  personalityProfileParamKey,
+  profileSpeedUnit,
+  shouldSubmitPersonalityPreset,
+  valueFromPointer,
+} from "/assets/components/tools/personality_profiles.mjs"
 
 const endpointOptionsCache = {}
 const endpointOptionsInflight = {}
@@ -12,11 +18,16 @@ const FAVORITE_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, s
 const FAVORITE_ACTION_PREFIX = "__starpilot_favorite_action__:"
 const GALAXY_DEVELOPER_MODE_KEY = "GalaxyDeveloperMode"
 const HIDDEN_SECTION_NAMES = new Set(["Model & Customization"])
+const PROFILE_HIDDEN_LAYOUT_KEYS = new Set([
+  "TrafficPersonalityProfile",
+  "AggressivePersonalityProfile",
+  "StandardPersonalityProfile",
+  "RelaxedPersonalityProfile",
+])
 const HIDDEN_SETTING_KEYS = new Set([
   "AccelerationProfile",
   "AggressiveFollow",
   "AggressiveFollowHigh",
-  "AggressivePersonalityProfile",
   "CustomAccelProfile",
   "CustomAccelProfile0MPH",
   "CustomAccelProfile11MPH",
@@ -30,12 +41,9 @@ const HIDDEN_SETTING_KEYS = new Set([
   "HumanAcceleration",
   "RelaxedFollow",
   "RelaxedFollowHigh",
-  "RelaxedPersonalityProfile",
   "StandardFollow",
   "StandardFollowHigh",
-  "StandardPersonalityProfile",
   "TrafficFollow",
-  "TrafficPersonalityProfile",
   "TruckTuning",
 ])
 const GM_MAKES = ["Buick", "Cadillac", "Chevrolet", "GMC", "Holden"]
@@ -82,6 +90,8 @@ let favoritePollInflight = null
 let favoritePollTimer = null
 let cscCalibrationPollInflight = null
 let cscCalibrationPollTimer = null
+let uiContextPollInflight = null
+let uiContextPollTimer = null
 const DYNAMIC_DEFAULT_DEP_KEYS = new Set(["AccelerationProfile", "EVTuning", "TruckTuning"])
 const PERSONALITY_DEFINITIONS = [
   { id: "traffic", label: "Traffic Mode", icon: "bi bi-stoplights-fill" },
@@ -93,6 +103,11 @@ const PERSONALITY_CATEGORY_DEFINITIONS = {
   acceleration: { label: "Acceleration", title: "Custom acceleration", description: "maximum acceleration", fieldDescription: "How quickly StarPilot speeds up", unit: "m/s² requested", valueUnit: "m/s²", step: 0.05 },
   braking: { label: "Braking", title: "Custom braking", description: "braking strength", fieldDescription: "Cruise and speed-limit deceleration floor", unit: "m/s² braking", valueUnit: "m/s²", step: 0.05 },
   following: { label: "Following", title: "Custom following", description: "base following time", fieldDescription: "Base time headway before existing dynamic modifiers", unit: "seconds", valueUnit: "s", step: 0.05 },
+}
+const PERSONALITY_OPTION_ORDER = {
+  acceleration: ["eco", "standard", "sport", "sport_plus", "custom"],
+  braking: ["eco", "standard", "sport", "custom"],
+  following: ["close", "medium", "far", "custom"],
 }
 const PERSONALITY_ADVANCED_KEYS = {
   traffic: ["TrafficJerkAcceleration", "TrafficJerkDeceleration", "TrafficJerkDanger", "TrafficJerkSpeedDecrease", "TrafficJerkSpeed"],
@@ -131,6 +146,7 @@ const state = reactive({
   favoriteValues: {},
   personalityAdvancedCustomOpen: {},
   personalityAdvancedExpanded: {},
+  personalityCurveErrors: {},
   personalityConfigured: false,
   personalityDefaults: {},
   personalityEnabled: false,
@@ -138,7 +154,9 @@ const state = reactive({
   personalityMeta: null,
   personalityProfiles: {},
   personalityMigrationRequired: false,
+  personalityMigrationInProgress: false,
   personalityReferenceCurves: {},
+  personalityProfilesError: "",
   personalityProfilesLoading: true,
   personalityUpdating: {},
 })
@@ -170,7 +188,8 @@ function matchesSettingValueCondition(param) {
 
 function isSettingVisible(section, param) {
   // This policy controls Galaxy rendering only; hidden params retain their stored values.
-  if (HIDDEN_SETTING_KEYS.has(param.key) || !isVehicleSettingVisible(section, param) || !matchesSettingValueCondition(param)) return false
+  if (PROFILE_HIDDEN_LAYOUT_KEYS.has(param.key) || HIDDEN_SETTING_KEYS.has(param.key) ||
+      !isVehicleSettingVisible(section, param) || !matchesSettingValueCondition(param)) return false
   if (param.requires_capability && !state.values[param.requires_capability]) return false
   if (RADAR_REQUIRED_KEYS.has(param.key) && !state.values.HasRadar) return false
   if (param.key === "AlphaLongitudinalEnabled" && !state.values.AlphaLongitudinalAvailable) return false
@@ -178,14 +197,31 @@ function isSettingVisible(section, param) {
   return section.name === "Favorites" || param.settings_tier === "simple"
 }
 
+function collectDescendantKeys(params, parentKey) {
+  const descendants = new Set()
+  const pending = [parentKey]
+  while (pending.length) {
+    const currentParent = pending.pop()
+    for (const param of params || []) {
+      if (param.parent_key !== currentParent || descendants.has(param.key)) continue
+      descendants.add(param.key)
+      pending.push(param.key)
+    }
+  }
+  return descendants
+}
+
 function getSectionsWithSlug() {
   return state.layout
     .filter(section => !HIDDEN_SECTION_NAMES.has(section.name))
-    .map(section => ({
-      ...section,
-      params: (section.params || []).filter(param => isSettingVisible(section, param)),
-      slug: slugifySectionName(section.name),
-    }))
+    .map(section => {
+      const personalityLegacySubtreeKeys = collectDescendantKeys(section.params, "CustomPersonalities")
+      return {
+        ...section,
+        params: (section.params || []).filter(param => !personalityLegacySubtreeKeys.has(param.key) && isSettingVisible(section, param)),
+        slug: slugifySectionName(section.name),
+      }
+    })
     .filter(section => section.params.length > 0)
 }
 
@@ -448,27 +484,56 @@ async function refreshParamsAndDefaults() {
 
 async function fetchPersonalityProfiles() {
   state.personalityProfilesLoading = true
+  state.personalityProfilesError = ""
   try {
     const response = await fetch("/api/personality_profiles", { cache: "no-store" })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.error || response.statusText || "Failed to load driving personalities")
-    state.personalityProfiles = data.profiles || {}
+    let data
+    try {
+      data = await response.json()
+    } catch (_error) {
+      throw new Error(response.ok
+        ? "Driving personalities returned malformed data. Refresh the page to retry."
+        : `Driving personalities could not be loaded (HTTP ${response.status}). Refresh the page to retry.`)
+    }
+    if (!response.ok) throw new Error(data?.error || response.statusText || "Failed to load driving personalities")
+    if (!data || typeof data !== "object" || !data.profiles || typeof data.profiles !== "object" ||
+        !data.bounds || typeof data.bounds !== "object" || !data.options || typeof data.options !== "object" ||
+        !data.speed_breakpoints_mph || typeof data.speed_breakpoints_mph !== "object") {
+      throw new Error("Driving personalities returned malformed data. Refresh the page to retry.")
+    }
+    state.personalityProfiles = data.profiles
     state.personalityConfigured = !!data.configured
     state.personalityEnabled = !!data.enabled
     state.personalityDefaults = data.default_profiles || {}
     state.personalityMigrationRequired = !!data.migration_required
     state.personalityReferenceCurves = data.reference_curves || {}
     state.personalityMeta = {
-      bounds: data.bounds || {},
-      options: data.options || {},
-      speedBreakpointsMph: data.speed_breakpoints_mph || {},
+      bounds: data.bounds,
+      options: data.options,
+      speedBreakpointsMph: data.speed_breakpoints_mph,
     }
   } catch (error) {
     console.error("Failed to load longitudinal personality profiles:", error)
-    state.personalityMigrationRequired = false
-    state.personalityMeta = null
+    state.personalityProfilesError = error?.message || "Driving personalities could not be loaded. Refresh the page to retry."
   } finally {
     state.personalityProfilesLoading = false
+  }
+}
+
+async function migratePersonalityProfiles() {
+  if (!state.personalityMigrationRequired || state.personalityMigrationInProgress) return
+  state.personalityMigrationInProgress = true
+  try {
+    const response = await fetch("/api/personality_profiles/migrate", { method: "POST" })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.error || response.statusText || "Failed to migrate driving personalities")
+    await fetchPersonalityProfiles()
+    showParamSnackbar(data?.message || "Driving personalities migrated.", "success", 3500)
+  } catch (error) {
+    console.error("Failed to migrate longitudinal personality profiles:", error)
+    showParamSnackbar(error?.message || "Driving personalities could not be migrated.", "error", 5000)
+  } finally {
+    state.personalityMigrationInProgress = false
   }
 }
 
@@ -810,6 +875,50 @@ function ensureCscCalibrationPolling() {
     if (document.visibilityState === "visible") {
       refreshCscCalibrationValues()
     }
+  }, 1000)
+}
+
+async function refreshUiContextValues() {
+  if (uiContextPollInflight || state.loadingValues) return uiContextPollInflight
+
+  uiContextPollInflight = Promise.all(
+    ["IsOnroad", "IsMetric"].map(async key => {
+      const response = await fetch(`/api/params?key=${encodeURIComponent(key)}`, { cache: "no-store" })
+      if (!response.ok) return [key, null]
+      const raw = (await response.text()).trim().toLowerCase()
+      if (!["0", "1", "false", "true"].includes(raw)) return [key, null]
+      return [key, raw === "1" || raw === "true"]
+    }),
+  ).then(entries => {
+    const nextValues = { ...state.values }
+    let changed = false
+    for (const [key, value] of entries) {
+      if (value === null || nextValues[key] === value) continue
+      nextValues[key] = value
+      changed = true
+    }
+    if (changed) {
+      state.values = nextValues
+      scheduleSyncInputs()
+    }
+  }).catch(() => {}).finally(() => {
+    uiContextPollInflight = null
+  })
+
+  return uiContextPollInflight
+}
+
+function ensureUiContextPolling() {
+  if (uiContextPollTimer !== null) return
+
+  refreshUiContextValues()
+  uiContextPollTimer = setInterval(() => {
+    if (!window.location.pathname.startsWith("/device_settings")) {
+      clearInterval(uiContextPollTimer)
+      uiContextPollTimer = null
+      return
+    }
+    if (document.visibilityState === "visible") refreshUiContextValues()
   }, 1000)
 }
 
@@ -1494,10 +1603,6 @@ function personalityUpdateKey(profileId, category) {
   return `${profileId}:${category}`
 }
 
-function togglePersonalityCard(profileId) {
-  state.personalityExpanded = { ...state.personalityExpanded, [profileId]: !state.personalityExpanded[profileId] }
-}
-
 function togglePersonalityAdvanced(profileId) {
   state.personalityAdvancedExpanded = {
     ...state.personalityAdvancedExpanded,
@@ -1521,7 +1626,20 @@ async function savePersonalityCategory(profileId, category, preset, curve, succe
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error || response.statusText || "Failed to save driving personality")
-    state.personalityProfiles = data.profiles || state.personalityProfiles
+    const currentConfig = state.personalityProfiles?.[profileId]?.[category]
+    const savedConfig = data.profiles?.[profileId]?.[category]
+    if (!currentConfig || !savedConfig || !Array.isArray(savedConfig.curve)) {
+      throw new Error("Driving personalities returned malformed data. Refresh the page to retry.")
+    }
+    const wasCustom = currentConfig.preset === "custom"
+    currentConfig.preset = savedConfig.preset
+    currentConfig.curve = [...savedConfig.curve]
+    if (!wasCustom && savedConfig.preset === "custom") {
+      state.personalityAdvancedExpanded = {
+        ...state.personalityAdvancedExpanded,
+        [profileId]: true,
+      }
+    }
     state.personalityConfigured = !!data.configured
     state.personalityEnabled = !!data.enabled
     showParamSnackbar(successMessage || `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} updated.`)
@@ -1540,9 +1658,9 @@ function updatePersonalityPreset(profileId, category, preset) {
   const config = state.personalityProfiles?.[profileId]?.[category]
   if (!config) return
   const selectedPreset = String(preset || "")
-  const curve = selectedPreset === "custom" && config.preset === "custom" ? [...config.curve] : []
+  if (!shouldSubmitPersonalityPreset(config.preset, selectedPreset)) return
   savePersonalityCategory(
-    profileId, category, selectedPreset, curve,
+    profileId, category, selectedPreset, [],
     `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} set to ${personalityPresetLabel(selectedPreset)}.`,
   )
 }
@@ -1560,10 +1678,10 @@ function resetPersonalityCurve(profileId, category) {
 }
 
 function graphGeometry(category, curve) {
-  const speeds = state.personalityMeta?.speedBreakpointsMph?.[category] || []
-  const bounds = state.personalityMeta?.bounds?.[category] || [0, 1]
   const width = 660
   const height = 240
+  const speeds = state.personalityMeta?.speedBreakpointsMph?.[category] || []
+  const bounds = state.personalityMeta?.bounds?.[category] || [0, 1]
   const left = 46
   const right = 22
   const top = 18
@@ -1611,6 +1729,11 @@ function drawPersonalityCurve(canvas, category, curve, referenceCurve = []) {
     context.textAlign = "center"
     context.fillText(formatProfileSpeed(speed, !!state.values.IsMetric), x, geometry.height - 13)
   })
+  context.font = "bold 9px sans-serif"
+  context.textAlign = "left"
+  context.fillText(definition.valueUnit, 5, 10)
+  context.textAlign = "right"
+  context.fillText(profileSpeedUnit(!!state.values.IsMetric), geometry.width - geometry.right, geometry.height - 2)
   context.textAlign = "start"
 
   context.beginPath()
@@ -1669,6 +1792,19 @@ function updateDraggedCurveVisual(canvas, profileId, category, curve) {
   })
 }
 
+function restorePersonalityCurveVisual(profileId, category, curve) {
+  const canvas = document.getElementById(`personality-chart-${profileId}-${category}`)
+  const valueUnit = PERSONALITY_CATEGORY_DEFINITIONS[category]?.valueUnit || ""
+  drawPersonalityCurve(canvas, category, curve, state.personalityReferenceCurves?.[profileId]?.[category] || [])
+  curve.forEach((value, index) => {
+    const formatted = Number(value).toFixed(2)
+    const input = document.getElementById(`personality-input-${profileId}-${category}-${index}`)
+    const valueNode = document.getElementById(`personality-value-${profileId}-${category}-${index}`)
+    if (input) input.value = formatted
+    if (valueNode) valueNode.textContent = `${formatted} ${valueUnit}`
+  })
+}
+
 function beginPersonalityCurveDrag(event, profileId, category) {
   const canvas = event?.currentTarget
   const config = state.personalityProfiles?.[profileId]?.[category]
@@ -1699,9 +1835,10 @@ function beginPersonalityCurveDrag(event, profileId, category) {
     canvas.removeEventListener("pointercancel", cancel)
     if (canvas.hasPointerCapture(pointerEvent.pointerId)) canvas.releasePointerCapture(pointerEvent.pointerId)
   }
-  const finish = pointerEvent => {
+  const finish = async pointerEvent => {
     removeListeners(pointerEvent)
-    savePersonalityCategory(profileId, category, "custom", curve, `${definition.label} graph updated.`)
+    const saved = await savePersonalityCategory(profileId, category, "custom", curve, `${definition.label} graph updated.`)
+    if (!saved) restorePersonalityCurveVisual(profileId, category, config.curve)
   }
   const cancel = pointerEvent => {
     removeListeners(pointerEvent)
@@ -1716,17 +1853,39 @@ function beginPersonalityCurveDrag(event, profileId, category) {
   update(event.clientY)
 }
 
-function adjustPersonalityCurvePoint(profileId, category, index, value, input = null) {
+function setPersonalityCurveError(profileId, category, message) {
+  const updateKey = personalityUpdateKey(profileId, category)
+  const nextErrors = { ...state.personalityCurveErrors }
+  if (message) nextErrors[updateKey] = message
+  else delete nextErrors[updateKey]
+  state.personalityCurveErrors = nextErrors
+}
+
+async function adjustPersonalityCurvePoint(profileId, category, index, input) {
   const config = state.personalityProfiles?.[profileId]?.[category]
   const bounds = state.personalityMeta?.bounds?.[category]
-  if (!config || !bounds) return
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return
-  const roundedValue = Number(Math.min(Number(bounds[1]), Math.max(Number(bounds[0]), parsed)).toFixed(2))
-  if (input) input.value = roundedValue.toFixed(2)
+  const definition = PERSONALITY_CATEGORY_DEFINITIONS[category]
+  if (!config || !bounds || !definition || !input) return
+
+  const raw = String(input.value ?? "").trim()
+  const parsed = input.valueAsNumber
+  if (!raw || !input.validity.valid || !Number.isFinite(parsed)) {
+    let message = `Enter a valid ${definition.label.toLowerCase()} value.`
+    if (!raw) message = `${definition.label} value is required.`
+    else if (input.validity.rangeUnderflow || input.validity.rangeOverflow) {
+      message = `${definition.label} must be from ${bounds[0]} to ${bounds[1]} ${definition.valueUnit}.`
+    } else if (input.validity.stepMismatch) {
+      message = `${definition.label} must use ${definition.step} ${definition.valueUnit} increments.`
+    }
+    setPersonalityCurveError(profileId, category, message)
+    return
+  }
+
+  setPersonalityCurveError(profileId, category, "")
   const curve = [...config.curve]
-  curve[index] = roundedValue
-  savePersonalityCategory(profileId, category, "custom", curve, `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} graph updated.`)
+  curve[index] = Number(parsed.toFixed(2))
+  const saved = await savePersonalityCategory(profileId, category, "custom", curve, `${definition.label} graph updated.`)
+  if (!saved) restorePersonalityCurveVisual(profileId, category, config.curve)
 }
 
 function renderPersonalityCurve(profile, category, config) {
@@ -1743,11 +1902,10 @@ function renderPersonalityCurve(profile, category, config) {
     <div class="ds-personality-curve" data-profile="${profile.id}" data-category="${category}">
       <div class="ds-personality-curve-head">
         <div>
-          <h4>${definition.title} · ${profile.label}</h4>
-          <p>Drag points to shape ${definition.description} across speed. The faint dashed line is the ${profile.label} reference.</p>
+          <h4>Custom ${definition.label}</h4>
         </div>
         <div class="ds-personality-curve-actions">
-          <button type="button" class="ds-reset-btn" disabled="${() => !!state.values.IsOnroad || !!state.personalityMigrationRequired || !!state.personalityUpdating[updateKey]}" @click="${() => resetPersonalityCurve(profile.id, category)}">Reset</button>
+          <button type="button" class="ds-reset-btn" aria-label="Reset ${profile.label} ${definition.label} graph to Dom default" disabled="${() => !!state.values.IsOnroad || !!state.personalityMigrationRequired || !!state.personalityUpdating[updateKey]}" @click="${() => resetPersonalityCurve(profile.id, category)}">Reset</button>
         </div>
       </div>
       <div class="ds-personality-graph-layout">
@@ -1765,33 +1923,41 @@ function renderPersonalityCurve(profile, category, config) {
             <label class="ds-personality-value">
               <span>${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ${profileSpeedUnit(!!state.values.IsMetric)}</span>
               <input
+                id="personality-input-${profile.id}-${category}-${index}"
                 type="number"
                 min="${geometry.bounds[0]}"
                 max="${geometry.bounds[1]}"
                 step="${definition.step}"
-                aria-label="${profile.label} ${definition.label} at ${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ${profileSpeedUnit(!!state.values.IsMetric)}"
+                aria-label="${profile.label} ${definition.label} at ${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ${profileSpeedUnit(!!state.values.IsMetric)}, ${definition.valueUnit}"
+                aria-describedby="personality-curve-error-${profile.id}-${category}"
+                aria-invalid="${() => state.personalityCurveErrors[updateKey] ? "true" : "false"}"
                 value="${Number(value).toFixed(2)}"
                 disabled="${() => !!state.values.IsOnroad || !!state.personalityMigrationRequired || !!state.personalityUpdating[updateKey]}"
-                @change="${event => adjustPersonalityCurvePoint(profile.id, category, index, event.currentTarget.value, event.currentTarget)}" />
+                @change="${event => adjustPersonalityCurvePoint(profile.id, category, index, event.currentTarget)}" />
               <b id="personality-value-${profile.id}-${category}-${index}">${Number(value).toFixed(2)} ${definition.valueUnit}</b>
             </label>
           `)}
         </div>
       </div>
-      <div class="ds-personality-reference-key"><span aria-hidden="true"></span>${profile.label} Dom default</div>
-      <div class="ds-personality-curve-note">Speed axis: ${profileSpeedUnit(!!state.values.IsMetric)} · Value axis: ${definition.unit}.</div>
+      <div
+        id="personality-curve-error-${profile.id}-${category}"
+        class="ds-personality-error"
+        role="alert"
+        aria-live="assertive"
+        hidden="${() => !state.personalityCurveErrors[updateKey]}">${() => state.personalityCurveErrors[updateKey] || ""}</div>
+      <div class="ds-personality-reference-key"><span aria-hidden="true"></span>Default</div>
     </div>
   `
 }
 
 function renderPersonalityCategoryField(profile, category, config) {
   const definition = PERSONALITY_CATEGORY_DEFINITIONS[category]
-  const options = (state.personalityMeta?.options?.[category] || []).filter(option => option !== "dom_default")
+  const availableOptions = new Set((state.personalityMeta?.options?.[category] || []).filter(option => option !== "dom_default"))
+  const options = (PERSONALITY_OPTION_ORDER[category] || []).filter(option => availableOptions.has(option))
   const updateKey = personalityUpdateKey(profile.id, category)
   return html`
-    <fieldset class="ds-personality-field">
-      <legend>${definition.label}</legend>
-      <p>${definition.fieldDescription} in ${profile.label}.</p>
+    <section class="ds-personality-field" aria-labelledby="personality-field-${profile.id}-${category}">
+      <h4 id="personality-field-${profile.id}-${category}">${definition.label}</h4>
       <div class="ds-personality-options" role="group" aria-label="${profile.label} ${definition.label}">
         ${options.map(option => html`
           <button
@@ -1804,17 +1970,16 @@ function renderPersonalityCategoryField(profile, category, config) {
           </button>
         `)}
       </div>
-    </fieldset>
+    </section>
   `
 }
 
-function renderTrafficModeToggle(profile) {
-  if (profile.id !== "traffic") return ""
-  const param = state.paramMetaByKey.TrafficPersonalityProfile
+function renderPersonalityProfileToggle(profile) {
+  const param = state.paramMetaByKey[personalityProfileParamKey(profile.id)]
   if (!param) return ""
   const lockReason = () => getSettingLockReason(param)
   return html`
-    <div class="ds-row ds-personality-traffic-toggle">
+    <div class="ds-row ds-personality-profile-toggle">
       <div class="ds-row-info">
         <div class="ds-row-text">
           <div class="ds-row-heading"><span class="ds-row-label">${param.label}</span></div>
@@ -1827,11 +1992,11 @@ function renderTrafficModeToggle(profile) {
       <input
         type="checkbox"
         class="ds-toggle"
-        id="ds-TrafficPersonalityProfile"
+        id="ds-${param.key}"
         aria-label="${param.label}"
-        checked="${() => !!state.values.TrafficPersonalityProfile}"
+        checked="${() => !!state.values[param.key]}"
         disabled="${() => lockReason() !== ""}"
-        @change="${() => updateParam("TrafficPersonalityProfile", "checkbox")}" />
+        @change="${() => updateParam(param.key, "checkbox")}" />
     </div>
   `
 }
@@ -1839,9 +2004,16 @@ function renderTrafficModeToggle(profile) {
 function personalityAdvancedMode(key) {
   if (state.personalityAdvancedCustomOpen[key]) return "custom"
   const value = Number(state.values[key])
-  if (value === 50) return "chill"
   if (value === 100) return "standard"
+  if (!key.endsWith("JerkDanger") && value === 50) return "chill"
   return "custom"
+}
+
+function personalityAdvancedOptions(key) {
+  if (key.endsWith("JerkDanger")) {
+    return [["standard", "Standard"], ["custom", "Custom"]]
+  }
+  return [["chill", "Chill"], ["standard", "Standard"], ["custom", "Custom"]]
 }
 
 function updatePersonalityAdvancedPreset(param, mode) {
@@ -1856,7 +2028,7 @@ function updatePersonalityAdvancedPreset(param, mode) {
   updateNumericParam(param, mode === "chill" ? 50 : 100)
 }
 
-function renderPersonalityAdvancedValue(param) {
+function renderPersonalityAdvancedValue(profile, param) {
   const bounds = numericBounds(param)
   return html`
     <div class="ds-personality-advanced-value">
@@ -1865,60 +2037,63 @@ function renderPersonalityAdvancedValue(param) {
         ${param.description ? html`<small>${param.description}</small>` : ""}
       </div>
       <div class="ds-personality-advanced-control">
-        <div class="ds-personality-options ds-personality-advanced-options" role="group" aria-label="${param.label}">
-          ${[
-            ["chill", "Chill"],
-            ["standard", "Standard"],
-            ["custom", "Custom"],
-          ].map(([mode, label]) => html`
+        <div class="ds-personality-options ds-personality-advanced-options" role="group" aria-label="${profile.label} advanced ${param.label} percentage">
+          ${personalityAdvancedOptions(param.key).map(([mode, label]) => html`
             <button
               type="button"
               class="ds-personality-option ds-personality-advanced-choice"
+              aria-label="${profile.label} ${param.label} ${label} percentage preset"
               aria-pressed="${() => personalityAdvancedMode(param.key) === mode ? "true" : "false"}"
               disabled="${() => !!state.values.IsOnroad || !!state.numericUpdating[param.key]}"
               @click="${() => updatePersonalityAdvancedPreset(param, mode)}">${label}</button>
           `)}
         </div>
         <label class="ds-personality-custom-number" hidden="${() => personalityAdvancedMode(param.key) !== "custom"}">
-          <span>Custom value</span>
           <input
             type="number"
             min="${bounds.min}"
             max="${bounds.max}"
             step="${bounds.step}"
+            aria-label="${profile.label} ${param.label} custom percentage"
             value="${() => resolveCurrentNumericValue(param, bounds)}"
             disabled="${() => !!state.values.IsOnroad || !!state.numericUpdating[param.key]}"
             @change="${event => updateNumericParam(param, event.currentTarget.value, event.currentTarget)}" />
+          <span>${bounds.min}–${bounds.max}</span>
         </label>
       </div>
     </div>
   `
 }
 
-function renderPersonalityAdvancedRows(profile) {
+function renderPersonalityAdvancedRows(profile, config) {
   const rows = (PERSONALITY_ADVANCED_KEYS[profile.id] || [])
     .map(key => state.paramMetaByKey[key])
     .filter(Boolean)
-    .map(renderPersonalityAdvancedValue)
+    .map(param => renderPersonalityAdvancedValue(profile, param))
   return html`
-    <div class="ds-personality-advanced-rows" hidden="${() => !state.personalityAdvancedExpanded[profile.id]}">
+    <div id="personality-advanced-${profile.id}" class="ds-personality-advanced-rows" hidden="${() => !state.personalityAdvancedExpanded[profile.id]}">
+      ${() => config.acceleration.preset === "custom" ? renderPersonalityCurve(profile, "acceleration", config.acceleration) : ""}
+      ${() => config.braking.preset === "custom" ? renderPersonalityCurve(profile, "braking", config.braking) : ""}
+      ${() => config.following.preset === "custom" ? renderPersonalityCurve(profile, "following", config.following) : ""}
       <div class="ds-personality-warning" role="note"><strong>Warning:</strong> Custom values are untested and may not be supported by the developer.</div>
       ${rows}
     </div>
   `
 }
 
-function renderPersonalityAdvanced(profile) {
+function renderPersonalityAdvanced(profile, config) {
   return html`
     <div class="ds-personality-advanced">
       <button
         type="button"
+        class="ds-manage-btn ds-personality-advanced-toggle"
+        aria-controls="personality-advanced-${profile.id}"
         aria-expanded="${() => state.personalityAdvancedExpanded[profile.id] ? "true" : "false"}"
         @click="${() => togglePersonalityAdvanced(profile.id)}">
         Advanced
-        <i class="${() => `bi bi-chevron-${state.personalityAdvancedExpanded[profile.id] ? "up" : "down"}`}"></i>
+        <i class="${() => `bi bi-chevron-${state.personalityAdvancedExpanded[profile.id] ? "up" : "down"}`}" aria-hidden="true"></i>
       </button>
-      ${renderPersonalityAdvancedRows(profile)}
+      ${renderPersonalityAdvancedRows(profile, config)}
     </div>
   `
 }
@@ -1926,35 +2101,26 @@ function renderPersonalityAdvanced(profile) {
 function renderPersonalityCardSnapshot(profile) {
   const config = state.personalityProfiles?.[profile.id]
   if (!config) return ""
-  const isOpen = !!state.personalityExpanded[profile.id]
   return html`
-    <article class="ds-personality-card ${isOpen ? "open" : ""}" data-profile="${profile.id}">
-      <button type="button" class="ds-personality-summary" aria-expanded="${isOpen}" @click="${() => togglePersonalityCard(profile.id)}">
-        <span class="ds-personality-name"><span class="ds-personality-badge"><i class="${profile.icon}" aria-hidden="true"></i></span><strong>${profile.label}</strong></span>
-        <span class="ds-personality-pills">
-          <span>Acceleration <b>${personalityPresetLabel(config.acceleration.preset)}</b></span>
-          <span>Braking <b>${personalityPresetLabel(config.braking.preset)}</b></span>
-          <span>Following <b>${personalityPresetLabel(config.following.preset)}</b></span>
+    <article class="ds-personality-card" data-profile="${profile.id}" aria-labelledby="personality-heading-${profile.id}">
+      <div class="ds-personality-summary">
+        <span class="ds-personality-name">
+          <span class="ds-personality-badge"><i class="${profile.icon}" aria-hidden="true"></i></span>
+          <strong id="personality-heading-${profile.id}">${profile.label}</strong>
         </span>
-        <i class="bi bi-chevron-down ds-personality-chevron"></i>
-      </button>
-      ${isOpen ? html`
-        <div class="ds-personality-body">
-          ${renderTrafficModeToggle(profile)}
-          <div class="ds-personality-settings" hidden="${() => profile.id === "traffic" && !state.values.TrafficPersonalityProfile}">
-            <div class="ds-personality-fields">
-              ${renderPersonalityCategoryField(profile, "acceleration", config.acceleration)}
-              ${renderPersonalityCategoryField(profile, "braking", config.braking)}
-              ${renderPersonalityCategoryField(profile, "following", config.following)}
-            </div>
-            ${config.acceleration.preset === "custom" ? renderPersonalityCurve(profile, "acceleration", config.acceleration) : ""}
-            ${config.braking.preset === "custom" ? renderPersonalityCurve(profile, "braking", config.braking) : ""}
-            ${config.following.preset === "custom" ? renderPersonalityCurve(profile, "following", config.following) : ""}
-            ${renderPersonalityAdvanced(profile)}
+      </div>
+      <div class="ds-personality-body" id="personality-body-${profile.id}">
+        ${renderPersonalityProfileToggle(profile)}
+        <div class="ds-personality-settings" hidden="${() => !state.values[personalityProfileParamKey(profile.id)]}">
+          <div class="ds-personality-fields">
+            ${renderPersonalityCategoryField(profile, "acceleration", config.acceleration)}
+            ${renderPersonalityCategoryField(profile, "braking", config.braking)}
+            ${renderPersonalityCategoryField(profile, "following", config.following)}
           </div>
-          <div class="ds-personality-curve-note ds-personality-traffic-note" hidden="${() => profile.id !== "traffic" || !!state.values.TrafficPersonalityProfile}">Turn on Traffic Mode to configure its profile.</div>
+          ${renderPersonalityAdvanced(profile, config)}
         </div>
-      ` : ""}
+        <div class="ds-personality-curve-note ds-personality-disabled-note" hidden="${() => !!state.values[personalityProfileParamKey(profile.id)]}">Turn on ${profile.label} to configure its profile.</div>
+      </div>
     </article>
   `
 }
@@ -1964,13 +2130,17 @@ function renderPersonalityCard(profile) {
 }
 
 function renderPersonalityProfilesPanel() {
-  if (state.personalityProfilesLoading) return html`<div class="ds-loading">Loading driving personalities...</div>`
-  if (!state.personalityMeta) return html`<div class="ds-personality-error">Driving personalities could not be loaded. Refresh the page to retry.</div>`
+  if (state.personalityProfilesLoading) return html`<div class="ds-loading" role="status" aria-live="polite">Loading driving personalities...</div>`
+  if (state.personalityProfilesError) return html`<div class="ds-personality-error" role="alert" aria-live="assertive">${state.personalityProfilesError}</div>`
+  if (!state.personalityMeta) return html`<div class="ds-personality-error" role="alert" aria-live="assertive">Driving personalities could not be loaded. Refresh the page to retry.</div>`
   return html`
-    <div class="ds-personality-profiles">
+    <div class="ds-personality-profiles" id="personality-profiles-panel">
       ${() => state.personalityMigrationRequired ? html`
-        <div class="ds-personality-migration-warning" role="alert">
-          This profile data requires a verified migration before it can be edited. Install the migration while parked, then refresh this page.
+        <div class="ds-personality-migration-warning" role="alert" aria-live="assertive">
+          <span>This profile data requires a verified migration before it can be edited.</span>
+          <button type="button" class="ds-reset-btn" disabled="${() => !!state.values.IsOnroad || state.personalityMigrationInProgress}" @click="${migratePersonalityProfiles}">
+            ${() => state.personalityMigrationInProgress ? "Migrating..." : "Migrate profiles"}
+          </button>
         </div>
       ` : ""}
       ${PERSONALITY_DEFINITIONS.map(renderPersonalityCard)}
@@ -2351,9 +2521,12 @@ function renderSettingRow(p) {
           ` : ""}
 
           ${() => p.is_parent_toggle && (p.key === "CustomPersonalities" || isParamEnabledForChildren(p)) ? html`
-            <button type="button" class="ds-manage-btn" @click="${() => toggleManage(p.key)}">
+            <button type="button" class="ds-manage-btn"
+              aria-controls="${p.key === "CustomPersonalities" ? "personality-profiles-panel" : `ds-${p.key}-children`}"
+              aria-expanded="${() => state.expanded[p.key] ? "true" : "false"}"
+              @click="${() => toggleManage(p.key)}">
               ${state.expanded[p.key] ? "Close" : "Manage"}
-              <i class="bi bi-chevron-${state.expanded[p.key] ? "up" : "down"}"></i>
+              <i class="bi bi-chevron-${state.expanded[p.key] ? "up" : "down"}" aria-hidden="true"></i>
             </button>
           ` : ""}
         </div>
@@ -2386,11 +2559,12 @@ function renderSettingTree(paramsList, parentKey = null) {
     if (param.key === "CustomPersonalities" && state.expanded[param.key]) {
       rendered.push(renderPersonalityProfilesPanel())
     }
+    if (param.key === "CustomPersonalities") continue
 
     if (!hasChildParams(paramsList, param.key)) continue
     if (!isParamEnabledForChildren(param) || !state.expanded[param.key]) continue
 
-    rendered.push(...renderSettingTree(paramsList, param.key))
+    rendered.push(html`<div id="ds-${param.key}-children" class="ds-setting-children">${() => renderSettingTree(paramsList, param.key)}</div>`)
   }
 
   return rendered
@@ -2419,6 +2593,7 @@ export function DeviceSettings({ params }) {
   fetchFlmWorkspace()
   ensureFavoriteValuePolling()
   ensureCscCalibrationPolling()
+  ensureUiContextPolling()
 
   if (!state.fetched) {
     state.fetched = true

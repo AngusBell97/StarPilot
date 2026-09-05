@@ -9,6 +9,21 @@ export function profileSpeedUnit(isMetric) {
   return isMetric ? "km/h" : "mph";
 }
 
+const PERSONALITY_PROFILE_PARAM_KEYS = Object.freeze({
+  traffic: "TrafficPersonalityProfile",
+  aggressive: "AggressivePersonalityProfile",
+  standard: "StandardPersonalityProfile",
+  relaxed: "RelaxedPersonalityProfile",
+});
+
+export function personalityProfileParamKey(profileId) {
+  return PERSONALITY_PROFILE_PARAM_KEYS[String(profileId || "")] || "";
+}
+
+export function shouldSubmitPersonalityPreset(currentPreset, selectedPreset) {
+  return String(currentPreset || "") !== String(selectedPreset || "");
+}
+
 export function valueFromPointer(clientY, rect, minimum, maximum, step) {
   const height = Number(rect?.height);
   const top = Number(rect?.top);

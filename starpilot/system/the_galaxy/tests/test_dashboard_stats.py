@@ -2082,7 +2082,11 @@ def test_toggle_backup_restore_round_trip_filters_non_settings(monkeypatch):
   assert update_calls == [True]
 
 
-def test_toggle_restore_rejects_onroad_backup_with_parked_personality_key_without_mutation(monkeypatch):
+@pytest.mark.parametrize("device_state", [
+  {"IsOnroad": True, "IsOffroad": False},
+  {"IsOnroad": False, "IsOffroad": False},
+])
+def test_toggle_restore_rejects_without_confirmed_offroad_for_parked_personality_key_without_mutation(monkeypatch, device_state):
   server = _load_server_module()
   assert server._import_galaxy_web_symbols()
 
@@ -2094,7 +2098,7 @@ def test_toggle_restore_rejects_onroad_backup_with_parked_personality_key_withou
 
   class ToggleParams:
     def __init__(self):
-      self.values = {"IsOnroad": True, parked_key: 1.45, "EnabledSetting": False}
+      self.values = {**device_state, parked_key: 1.45, "EnabledSetting": False}
 
     def get(self, key, block=False):
       del block
@@ -2140,6 +2144,136 @@ def test_toggle_restore_rejects_onroad_backup_with_parked_personality_key_withou
   assert response.status_code == 403
   assert "parked" in response.get_json()["message"].lower()
   assert raw_params.values == before
+
+
+@pytest.mark.parametrize("invalid_value", [99.0, "false"])
+def test_toggle_restore_rejects_invalid_personality_value_without_mutation(monkeypatch, invalid_value):
+  server = _load_server_module()
+  assert server._import_galaxy_web_symbols()
+
+  parked_key = "StandardFollow" if isinstance(invalid_value, float) else "CustomPersonalities"
+  definitions = {
+    parked_key: (1.45, server.ParamKeyType.FLOAT, server.ParamKeyFlag.PERSISTENT),
+    "EnabledSetting": (False, server.ParamKeyType.BOOL, server.ParamKeyFlag.PERSISTENT),
+  }
+  if parked_key == "CustomPersonalities":
+    definitions[parked_key] = (False, server.ParamKeyType.BOOL, server.ParamKeyFlag.PERSISTENT)
+
+  class ToggleParams:
+    def __init__(self):
+      self.values = {"IsOnroad": False, "IsOffroad": True, parked_key: 1.45, "EnabledSetting": False}
+
+    def get(self, key, block=False):
+      del block
+      return self.values.get(key)
+
+    def get_bool(self, key):
+      return bool(self.values.get(key, False))
+
+    def get_default_value(self, key):
+      return definitions[key][0]
+
+    def get_key_flag(self, key):
+      return definitions[key][2]
+
+    def get_type(self, key):
+      return definitions[key][1]
+
+    def put(self, key, value):
+      self.values[key] = value
+
+  raw_params = ToggleParams()
+  server.starpilot_default_params = [
+    (key, default, value_type, 0)
+    for key, (default, value_type, _) in definitions.items()
+  ]
+  monkeypatch.setattr(server, "_params_raw", raw_params)
+  monkeypatch.setattr(server, "params", server.ParamsCompat(raw_params))
+  monkeypatch.setattr(server, "EXCLUDED_KEYS", set())
+  monkeypatch.setattr(server, "update_starpilot_toggles", lambda: pytest.fail("restore side effect ran"))
+
+  app = server.Flask(
+    "toggle_restore_personality_bounds_test",
+    template_folder=str(MODULE_DIR / "templates"),
+    static_folder=str(MODULE_DIR / "assets"),
+  )
+  server.setup(app)
+  client = app.test_client()
+  before = dict(raw_params.values)
+
+  encoded_data = utilities.encode_parameters({"EnabledSetting": True, parked_key: invalid_value})
+  response = client.post("/api/toggles/restore", json={"data": encoded_data})
+
+  assert response.status_code == 400
+  assert "invalid" in response.get_json()["message"].lower()
+  assert raw_params.values == before
+
+
+def test_toggle_restore_enables_master_only_after_installing_a_strict_profile_document(monkeypatch):
+  server = _load_server_module()
+  assert server._import_galaxy_web_symbols()
+
+  definitions = {
+    "CustomPersonalities": (False, server.ParamKeyType.BOOL, server.ParamKeyFlag.PERSISTENT),
+    server.PERSONALITY_PROFILES_PARAM: (
+      {}, server.ParamKeyType.JSON, server.ParamKeyFlag.PERSISTENT | server.ParamKeyFlag.DONT_LOG,
+    ),
+  }
+
+  class ToggleParams:
+    def __init__(self):
+      self.values = {"IsOnroad": False, "IsOffroad": True, "CustomPersonalities": False}
+      self.writes = []
+
+    def get(self, key, block=False):
+      del block
+      return self.values.get(key)
+
+    def get_bool(self, key):
+      return bool(self.values.get(key, False))
+
+    def get_default_value(self, key):
+      return definitions[key][0]
+
+    def get_key_flag(self, key):
+      return definitions[key][2]
+
+    def get_type(self, key):
+      return definitions[key][1]
+
+    def put(self, key, value):
+      self.values[key] = value
+      self.writes.append((key, value))
+
+    def put_bool(self, key, value):
+      self.put(key, bool(value))
+
+  raw_params = ToggleParams()
+  server.starpilot_default_params = [
+    (key, default, value_type, 0)
+    for key, (default, value_type, _) in definitions.items()
+  ]
+  monkeypatch.setattr(server, "_params_raw", raw_params)
+  monkeypatch.setattr(server, "params", server.ParamsCompat(raw_params))
+  monkeypatch.setattr(server, "EXCLUDED_KEYS", set())
+  monkeypatch.setattr(server, "update_starpilot_toggles", lambda: None)
+
+  app = server.Flask(
+    "toggle_restore_personality_master_test",
+    template_folder=str(MODULE_DIR / "templates"),
+    static_folder=str(MODULE_DIR / "assets"),
+  )
+  server.setup(app)
+  response = app.test_client().post(
+    "/api/toggles/restore",
+    json={"data": utilities.encode_parameters({"CustomPersonalities": True})},
+  )
+
+  assert response.status_code == 200, response.get_json()
+  document = server.strict_profile_document(raw_params.values[server.PERSONALITY_PROFILES_PARAM])
+  assert document is not None and document["enabled"] is True
+  assert raw_params.values["CustomPersonalities"] is True
+  assert [key for key, _ in raw_params.writes] == [server.PERSONALITY_PROFILES_PARAM, "CustomPersonalities"]
 
 
 def test_toggle_restore_reports_invalid_and_unavailable_settings(monkeypatch):

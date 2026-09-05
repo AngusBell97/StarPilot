@@ -7,7 +7,7 @@ from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.controls.lib.lead_behavior import should_disable_far_lead_throttle
 from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import COMFORT_BRAKE, LEAD_DANGER_FACTOR, desired_follow_distance, get_jerk_factor, get_T_FOLLOW
 
-from openpilot.starpilot.common.longitudinal_personality_profiles import interpolate_category_curve, resolve_personality_category
+from openpilot.starpilot.common.longitudinal_personality_profiles import active_personality_id, interpolate_category_curve, resolve_personality_category
 from openpilot.starpilot.common.starpilot_variables import CITY_SPEED_LIMIT, MAX_T_FOLLOW
 
 TRAFFIC_MODE_BP = [0., CITY_SPEED_LIMIT]
@@ -56,7 +56,11 @@ class StarPilotFollowing:
     personality = get_longitudinal_personality(sm)
     traffic_mode = sm["starpilotCarState"].trafficModeEnabled
     personality_following = None
-    if getattr(starpilot_toggles, "custom_personalities", False):
+    personality_id = active_personality_id(traffic_mode, personality)
+    profile_enabled = personality_id is not None and getattr(
+      starpilot_toggles, f"{personality_id}_personality_profile", True
+    )
+    if getattr(starpilot_toggles, "custom_personalities", False) and profile_enabled:
       personality_following = resolve_personality_category(
         getattr(starpilot_toggles, "longitudinal_personality_profiles", {}),
         traffic_mode,

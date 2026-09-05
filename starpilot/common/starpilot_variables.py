@@ -49,7 +49,12 @@ from openpilot.starpilot.common.accel_profile import (
   normalize_deceleration_profile,
   parse_custom_accel_profile_curve,
 )
-from openpilot.starpilot.common.longitudinal_personality_profiles import PERSONALITY_PROFILES_PARAM, is_truck_fingerprint, migrate_profile_document
+from openpilot.starpilot.common.longitudinal_personality_profiles import (
+  PERSONALITY_PROFILES_PARAM,
+  is_truck_fingerprint,
+  load_personality_profile_enable_values,
+  migrate_profile_document,
+)
 from openpilot.system.hardware import HARDWARE
 from openpilot.system.hardware.hw import Paths
 from openpilot.system.hardware.power_monitoring import VBATT_PAUSE_CHARGING
@@ -896,6 +901,8 @@ class StarPilotVariables:
     toggle.speed_limit_changed_alert = self.get_value("SpeedLimitChangedAlert")
 
     toggle.custom_personalities = toggle.openpilot_longitudinal and self.get_value("CustomPersonalities")
+    for runtime_key, enabled in load_personality_profile_enable_values(self.get_value).items():
+      setattr(toggle, runtime_key, enabled)
     profile_settings_raw = self.params_raw.get(PERSONALITY_PROFILES_PARAM)
     toggle.longitudinal_personality_profiles = migrate_profile_document(profile_settings_raw) or {}
     toggle.aggressive_jerk_acceleration = self.get_value("AggressiveJerkAcceleration", cast=float, condition=toggle.custom_personalities, conversion=0.01, min=0.25, max=2.0)

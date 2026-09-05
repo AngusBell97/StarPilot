@@ -336,6 +336,14 @@ def apply_safe_mode(params: Params, params_raw: Params, params_memory: Params | 
 
 def restore_safe_mode(params_raw: Params, params_memory: Params | None = None) -> bool:
   changed = False
+  if params_raw.get(SAFE_MODE_BACKUP_PARAM) is not None:
+    try:
+      confirmed_offroad = not params_raw.get_bool("IsOnroad") and params_raw.get_bool("IsOffroad")
+    except Exception:
+      return False
+    if not confirmed_offroad:
+      return False
+
   backup = _load_backup(params_raw)
 
   if not backup:

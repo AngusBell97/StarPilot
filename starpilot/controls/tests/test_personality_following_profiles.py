@@ -1,6 +1,8 @@
+import ast
 import sys
 from enum import IntEnum
-from types import ModuleType, SimpleNamespace
+from pathlib import Path
+from types import CodeType, FunctionType, ModuleType, SimpleNamespace
 
 import pytest
 
@@ -12,6 +14,15 @@ def _module(name, **attributes):
   for key, value in attributes.items():
     setattr(module, key, value)
   return module
+
+
+def _faithful_get_t_follow(
+  aggressive_follow=1.25, standard_follow=1.45, relaxed_follow=1.75,
+  custom_personalities=False, personality=1,
+):
+  configured = (aggressive_follow, standard_follow, relaxed_follow)
+  defaults = (1.25, 1.45, 1.75)
+  return (configured if custom_personalities else defaults)[int(personality)]
 
 
 class LaneChangeState(IntEnum):
@@ -44,19 +55,32 @@ sys.modules["openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc"] = 
   LEAD_DANGER_FACTOR=0.8,
   desired_follow_distance=lambda v_ego, _v_lead, t_follow: v_ego * t_follow,
   get_jerk_factor=lambda *_args: (1.0, 1.0, 1.0),
-  get_T_FOLLOW=lambda *_args: 1.45,
+  get_T_FOLLOW=_faithful_get_t_follow,
 )
 sys.modules["openpilot.starpilot.common.starpilot_variables"] = _module(
   "openpilot.starpilot.common.starpilot_variables", CITY_SPEED_LIMIT=11.176, MAX_T_FOLLOW=3.0,
 )
 
-from openpilot.starpilot.controls.lib.starpilot_following import StarPilotFollowing
+import openpilot.starpilot.controls.lib.starpilot_following as following_module
+
+StarPilotFollowing = following_module.StarPilotFollowing
 
 
 class Personality(IntEnum):
   aggressive = 0
   standard = 1
   relaxed = 2
+
+
+def _real_get_jerk_factor():
+  source_path = Path(__file__).resolve().parents[3] / "selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py"
+  tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+  function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "get_jerk_factor")
+  module = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
+  module_code = compile(module, str(source_path), "exec")
+  function_code = next(code for code in module_code.co_consts if isinstance(code, CodeType) and code.co_name == function.name)
+  np_stub = SimpleNamespace(interp=lambda value, breakpoints, values: values[0] if value <= breakpoints[0] else values[-1])
+  return FunctionType(function_code, {"log": SimpleNamespace(LongitudinalPersonality=Personality), "np": np_stub})
 
 
 def _planner(*, weather_id=0, weather_increase=0.0):
@@ -130,6 +154,25 @@ def test_explicit_following_curve_selects_active_personality_and_linear_speed_po
   assert controller.base_acceleration_jerk == 1.0
 
 
+@pytest.mark.parametrize(
+  ("profile", "personality", "traffic_mode", "following"),
+  [
+    ("aggressive", Personality.aggressive, False, 0.90),
+    ("standard", Personality.standard, False, 1.20),
+    ("relaxed", Personality.relaxed, False, 1.50),
+    ("traffic", Personality.aggressive, True, 1.80),
+  ],
+)
+def test_each_explicit_profile_following_override_reaches_runtime(profile, personality, traffic_mode, following):
+  document = _document()
+  document["profiles"][profile]["following"] = {"preset": "custom", "curve": [following] * 10}
+  controller = StarPilotFollowing(_planner())
+
+  controller.update(True, 10.0, _sm(traffic=traffic_mode, personality=personality), _toggles(document))
+
+  assert controller.t_follow == pytest.approx(following)
+
+
 def test_master_toggle_disables_following_document_override():
   document = _document()
   document["profiles"]["standard"]["following"] = {"preset": "custom", "curve": [0.9] * 10}
@@ -140,6 +183,27 @@ def test_master_toggle_disables_following_document_override():
   controller.update(True, 10.0, _sm(), toggles)
 
   assert controller.t_follow == pytest.approx(1.45)
+
+
+@pytest.mark.parametrize(
+  ("profile", "personality", "traffic_mode", "legacy_follow"),
+  [
+    ("traffic", Personality.aggressive, True, 0.75),
+    ("aggressive", Personality.aggressive, False, 1.25),
+    ("standard", Personality.standard, False, 1.45),
+    ("relaxed", Personality.relaxed, False, 1.6),
+  ],
+)
+def test_disabled_active_profile_keeps_legacy_following_path(profile, personality, traffic_mode, legacy_follow):
+  document = _document()
+  document["profiles"][profile]["following"] = {"preset": "custom", "curve": [0.9] * 10}
+  toggles = _toggles(document)
+  setattr(toggles, f"{profile}_personality_profile", False)
+  controller = StarPilotFollowing(_planner())
+
+  controller.update(True, 0.0, _sm(traffic=traffic_mode, personality=personality), toggles)
+
+  assert controller.t_follow == pytest.approx(legacy_follow)
 
 
 def test_traffic_profile_wins_over_cereal_personality_without_changing_jerk():
@@ -180,3 +244,106 @@ def test_existing_weather_modifier_runs_after_profile_and_retains_maximum_bound(
   controller.update(True, 10.0, _sm(personality=Personality.relaxed), _toggles(document))
 
   assert controller.t_follow == pytest.approx(3.0)
+
+
+@pytest.mark.parametrize(
+  ("personality", "prefix"),
+  [
+    (Personality.aggressive, "aggressive"),
+    (Personality.standard, "standard"),
+    (Personality.relaxed, "relaxed"),
+  ],
+)
+@pytest.mark.parametrize(
+  ("a_ego", "expected_suffix"),
+  [(1.0, "acceleration"), (-1.0, "deceleration")],
+)
+def test_every_nontraffic_advanced_jerk_value_reaches_runtime(monkeypatch, personality, prefix, a_ego, expected_suffix):
+  toggles = _toggles(_document())
+  values = {
+    "acceleration": 0.31,
+    "deceleration": 0.47,
+    "danger": 0.63,
+    "speed": 0.79,
+    "speed_decrease": 0.95,
+  }
+  for suffix, value in values.items():
+    setattr(toggles, f"{prefix}_jerk_{suffix}", value)
+
+  monkeypatch.setattr(following_module, "get_jerk_factor", _real_get_jerk_factor())
+  sm = _sm(personality=personality)
+  sm["carState"].aEgo = a_ego
+  controller = StarPilotFollowing(_planner())
+  controller.update(True, 10.0, sm, toggles)
+
+  assert controller.base_acceleration_jerk == pytest.approx(values[expected_suffix])
+  assert controller.base_danger_jerk == pytest.approx(values["danger"])
+  assert controller.base_speed_jerk == pytest.approx(values["speed" if a_ego >= 0 else "speed_decrease"])
+
+
+@pytest.mark.parametrize(
+  ("a_ego", "expected_suffix"),
+  [(1.0, "acceleration"), (-1.0, "deceleration")],
+)
+def test_every_traffic_advanced_jerk_value_reaches_low_speed_runtime(monkeypatch, a_ego, expected_suffix):
+  toggles = _toggles(_document())
+  values = {
+    "acceleration": 0.31,
+    "deceleration": 0.47,
+    "danger": 0.63,
+    "speed": 0.79,
+    "speed_decrease": 0.95,
+  }
+  for suffix, value in values.items():
+    setattr(toggles, f"traffic_mode_jerk_{suffix}", [value, 1.75])
+
+  monkeypatch.setattr(following_module, "get_jerk_factor", _real_get_jerk_factor())
+  sm = _sm(traffic=True, personality=Personality.standard)
+  sm["carState"].aEgo = a_ego
+  controller = StarPilotFollowing(_planner())
+  controller.update(True, 0.0, sm, toggles)
+
+  assert controller.base_acceleration_jerk == pytest.approx(values[expected_suffix])
+  assert controller.base_danger_jerk == pytest.approx(values["danger"])
+  assert controller.base_speed_jerk == pytest.approx(values["speed" if a_ego >= 0 else "speed_decrease"])
+
+
+def test_every_advanced_param_maps_to_runtime_attribute_with_hundredth_conversion():
+  source_path = Path(__file__).resolve().parents[2] / "common/starpilot_variables.py"
+  tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+  expected = {
+    f"{profile}Jerk{suffix}": f"{attribute_prefix}_jerk_{attribute_suffix}"
+    for profile, attribute_prefix in (
+      ("Aggressive", "aggressive"),
+      ("Standard", "standard"),
+      ("Relaxed", "relaxed"),
+      ("Traffic", "traffic_mode"),
+    )
+    for suffix, attribute_suffix in (
+      ("Acceleration", "acceleration"),
+      ("Deceleration", "deceleration"),
+      ("Danger", "danger"),
+      ("Speed", "speed"),
+      ("SpeedDecrease", "speed_decrease"),
+    )
+  }
+  discovered = {}
+  for assignment in (node for node in ast.walk(tree) if isinstance(node, ast.Assign)):
+    if len(assignment.targets) != 1 or not isinstance(assignment.targets[0], ast.Attribute):
+      continue
+    target = assignment.targets[0].attr
+    for call in (node for node in ast.walk(assignment.value) if isinstance(node, ast.Call)):
+      if not call.args or not isinstance(call.args[0], ast.Constant) or call.args[0].value not in expected:
+        continue
+      discovered[call.args[0].value] = (
+        target,
+        {keyword.arg: ast.literal_eval(keyword.value) for keyword in call.keywords if keyword.arg in {"conversion", "min", "max"}},
+      )
+
+  assert set(discovered) == set(expected)
+  for key, expected_attribute in expected.items():
+    attribute, keywords = discovered[key]
+    assert attribute == expected_attribute
+    assert keywords["conversion"] == 0.01
+    assert keywords["min"] == 0.25
+    assert keywords["max"] == 2.0

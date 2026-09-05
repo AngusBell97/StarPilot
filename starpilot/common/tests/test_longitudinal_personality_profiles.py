@@ -15,6 +15,7 @@ from openpilot.starpilot.common.accel_profile import (
 from openpilot.starpilot.common.longitudinal_personality_profiles import (
   ACCELERATION_SPEEDS_MPH,
   BRAKING_SPEEDS_MPH,
+  CURVE_BOUNDS,
   FOLLOWING_PRESET_CURVES,
   FOLLOWING_SPEEDS_MPH,
   PERSONALITY_IDS,
@@ -126,6 +127,30 @@ def test_runtime_loader_uses_detected_truck_curve_without_changing_legacy_truck_
   assert "toggle.truck_tuning = truck_tuning_param" in source
 
 
+def test_runtime_loader_maps_each_personality_enable_param_to_the_exact_runtime_boolean():
+  loader = getattr(lpp, "load_personality_profile_enable_values", None)
+  assert callable(loader)
+  persisted = {
+    "TrafficPersonalityProfile": True,
+    "AggressivePersonalityProfile": False,
+    "StandardPersonalityProfile": True,
+    "RelaxedPersonalityProfile": False,
+  }
+  requested = []
+
+  def get_value(key):
+    requested.append(key)
+    return persisted[key]
+
+  assert loader(get_value) == {
+    "traffic_personality_profile": True,
+    "aggressive_personality_profile": False,
+    "standard_personality_profile": True,
+    "relaxed_personality_profile": False,
+  }
+  assert requested == list(persisted)
+
+
 def test_acceleration_presets_select_truck_automatically_and_ev_wins_if_both_are_true():
   config = {"preset": "sport", "curve": []}
   assert category_curve("acceleration", config, False, True) == get_accel_profile_curve_values(2, False, True)
@@ -172,6 +197,21 @@ def test_strict_document_rejects_boolean_non_finite_fractional_and_out_of_range_
     invalid["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.0] * 10}
     invalid["profiles"]["standard"]["acceleration"]["curve"][0] = value
     assert strict_personality_profiles(invalid) is None
+
+
+def test_custom_curve_bounds_preserve_low_acceleration_and_enforce_requested_ceilings():
+  valid = profile_document(default_personality_profiles(False), enabled=True)
+  valid["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [0.35] + [3.5] * 9}
+  valid["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [2.0] * 10}
+  assert strict_personality_profiles(valid) == valid["profiles"]
+
+  invalid_acceleration = json.loads(json.dumps(valid))
+  invalid_acceleration["profiles"]["standard"]["acceleration"]["curve"][0] = 3.51
+  assert strict_personality_profiles(invalid_acceleration) is None
+
+  invalid_braking = json.loads(json.dumps(valid))
+  invalid_braking["profiles"]["standard"]["braking"]["curve"][0] = 2.01
+  assert strict_personality_profiles(invalid_braking) is None
 
 
 def test_disabled_document_never_resolves_an_override():
@@ -223,8 +263,12 @@ def test_custom_initialisation_seeds_from_selected_acceleration_preset():
   current = {"preset": "sport", "curve": []}
   assert initial_custom_curve("acceleration", current, ev_tuning=False, truck_tuning=False) == \
     lpp._sample_config_on_custom_axis("acceleration", current, False, False)
-  assert initial_custom_curve("acceleration", current, ev_tuning=False, truck_tuning=True) == \
-    lpp._sample_config_on_custom_axis("acceleration", current, False, True)
+  truck_curve = lpp._sample_config_on_custom_axis("acceleration", current, False, True)
+  assert max(truck_curve) > CURVE_BOUNDS["acceleration"][1]
+  assert initial_custom_curve("acceleration", current, ev_tuning=False, truck_tuning=True) == [
+    min(max(value, CURVE_BOUNDS["acceleration"][0]), CURVE_BOUNDS["acceleration"][1])
+    for value in truck_curve
+  ]
 
 
 def test_custom_initialisation_uses_ev_over_truck_when_both_flags_are_set():
@@ -435,7 +479,9 @@ def test_exact_v1_document_migrates_whole_or_not_at_all():
   migrated_acceleration = migrated["profiles"]["aggressive"]["acceleration"]
   assert migrated_acceleration["preset"] == "custom"
   assert len(migrated_acceleration["curve"]) == 10
+  assert max(migrated_acceleration["curve"]) == CURVE_BOUNDS["acceleration"][1]
   assert migrated_acceleration["legacyCurve"] == legacy_profiles["aggressive"]["acceleration"]["curve"]
+  assert interpolate_category_curve("acceleration", 40.0, migrated_acceleration, False, False) == 4.0
   assert migrated["profiles"]["standard"] == legacy_profiles["standard"]
 
   malformed = json.loads(json.dumps(legacy))
