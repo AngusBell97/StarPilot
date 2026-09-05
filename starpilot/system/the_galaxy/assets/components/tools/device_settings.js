@@ -1659,8 +1659,20 @@ function updatePersonalityPreset(profileId, category, preset) {
   if (!config) return
   const selectedPreset = String(preset || "")
   if (!shouldSubmitPersonalityPreset(config.preset, selectedPreset)) return
+
+  let curve = []
+  if (selectedPreset === "custom") {
+    const referenceCurve = state.personalityReferenceCurves?.[profileId]?.[category]
+    const expectedLength = state.personalityMeta?.speedBreakpointsMph?.[category]?.length || 0
+    if (!Array.isArray(referenceCurve) || referenceCurve.length !== expectedLength) {
+      showParamSnackbar("Profile reference graph is unavailable.", "error")
+      return
+    }
+    curve = [...referenceCurve]
+  }
+
   savePersonalityCategory(
-    profileId, category, selectedPreset, [],
+    profileId, category, selectedPreset, curve,
     `${PERSONALITY_CATEGORY_DEFINITIONS[category].label} set to ${personalityPresetLabel(selectedPreset)}.`,
   )
 }

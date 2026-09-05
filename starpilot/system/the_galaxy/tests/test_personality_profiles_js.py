@@ -181,6 +181,14 @@ def test_reselecting_custom_preset_is_a_noop_but_changed_presets_submit():
   assert result == [False, True]
 
 
+def test_switching_to_custom_seeds_a_complete_reference_curve():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  update = source.split("function updatePersonalityPreset", 1)[1].split("\n}\n\nfunction resetPersonalityCurve", 1)[0]
+  assert "state.personalityReferenceCurves?.[profileId]?.[category]" in update
+  assert "Array.isArray(referenceCurve)" in update
+  assert "selectedPreset, curve" in update
+
+
 def test_graph_edits_still_submit_custom_curve_writes():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
   drag = source.split("function beginPersonalityCurveDrag", 1)[1].split("\n}\n\nfunction setPersonalityCurveError", 1)[0]
