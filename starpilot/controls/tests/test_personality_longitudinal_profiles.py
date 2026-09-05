@@ -107,8 +107,8 @@ def _document(*, enabled=True):
 
 def test_real_enum_shaped_personality_selects_explicit_standard_overrides():
   document = _document()
-  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.25] * 7}
-  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [0.75] * 7}
+  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.25] * 10}
+  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [0.75] * 10}
   controller = StarPilotAcceleration(_planner(v_cruise=5.0))
 
   controller.update(10.0, _sm(personality=Personality.standard), _toggles(document))
@@ -117,16 +117,16 @@ def test_real_enum_shaped_personality_selects_explicit_standard_overrides():
   assert controller.min_accel == pytest.approx(-0.75)
 
 
-def test_enabled_document_is_independent_of_legacy_custom_personalities_toggle():
+def test_master_toggle_disables_profile_document_overrides():
   document = _document()
-  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.25] * 7}
+  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.25] * 10}
   toggles = _toggles(document)
   toggles.custom_personalities = False
 
   controller = StarPilotAcceleration(_planner())
   controller.update(0.0, _sm(personality=Personality.standard), toggles)
 
-  assert controller.max_accel == pytest.approx(1.25)
+  assert controller.max_accel == pytest.approx(2.0)
 
 
 def test_detected_truck_curve_is_used_without_enabling_legacy_truck_tuning():
@@ -142,20 +142,19 @@ def test_detected_truck_curve_is_used_without_enabling_legacy_truck_tuning():
   assert controller.max_accel == pytest.approx(expected)
 
 
-def test_first_save_leaves_untouched_contexts_on_complete_legacy_path():
+def test_fresh_profile_defaults_select_standard_acceleration_and_braking():
   document = _document()
-  document["profiles"]["standard"]["braking"] = {"preset": "sport", "curve": [2.0] * 7}
   toggles = _toggles(document)
   toggles.custom_accel_profile = True
   toggles.custom_accel_profile_values = [3.0] * 7
   controller = StarPilotAcceleration(_planner())
 
   controller.update(0.0, _sm(personality=Personality.aggressive), toggles)
-  assert controller.max_accel == pytest.approx(3.0)
+  assert controller.max_accel == pytest.approx(2.0)
   assert controller.min_accel == pytest.approx(-1.0)
 
   controller.update(0.0, _sm(traffic=True), toggles)
-  assert controller.max_accel == pytest.approx(1.1)
+  assert controller.max_accel == pytest.approx(2.0)
   assert controller.min_accel == pytest.approx(-0.35)
 
 
@@ -163,7 +162,7 @@ def test_absent_disabled_malformed_partial_wrong_version_and_nonfinite_use_legac
   candidates = [None, {}, _document(enabled=False), _document(), _document(), _document()]
   candidates[3]["schemaVersion"] = 99
   del candidates[4]["profiles"]["standard"]["braking"]
-  candidates[5]["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [math.nan] * 7}
+  candidates[5]["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [math.nan] * 10}
 
   for candidate in candidates:
     toggles = _toggles(candidate)
@@ -177,8 +176,8 @@ def test_absent_disabled_malformed_partial_wrong_version_and_nonfinite_use_legac
 
 def test_map_gear_force_coast_and_weather_precedence_remains_explicit():
   document = _document()
-  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [4.0] * 7}
-  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [2.0] * 7}
+  document["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [4.0] * 10}
+  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [2.0] * 10}
   toggles = _toggles(document)
   toggles.map_acceleration = True
   toggles.map_deceleration = True
@@ -199,9 +198,25 @@ def test_map_gear_force_coast_and_weather_precedence_remains_explicit():
   assert controller.min_accel == pytest.approx(-0.5)
 
 
+def test_custom_acceleration_and_braking_use_the_selected_twenty_mph_point():
+  document = _document()
+  document["profiles"]["standard"]["acceleration"] = {
+    "preset": "custom", "curve": [1.0 + 0.1 * index for index in range(10)],
+  }
+  document["profiles"]["standard"]["braking"] = {
+    "preset": "custom", "curve": [0.75 + 0.1 * index for index in range(10)],
+  }
+  controller = StarPilotAcceleration(_planner(v_cruise=5.0))
+
+  controller.update(20.0 * 0.44704, _sm(), _toggles(document))
+
+  assert controller.max_accel == pytest.approx(1.2)
+  assert controller.min_accel == pytest.approx(-0.95)
+
+
 def test_custom_braking_only_shapes_explicit_cruise_deceleration_and_never_reduces_hazard_authority():
   document = _document()
-  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [0.5] * 7}
+  document["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [0.5] * 10}
   toggles = _toggles(document)
   controller = StarPilotAcceleration(_planner(v_cruise=30.0))
 

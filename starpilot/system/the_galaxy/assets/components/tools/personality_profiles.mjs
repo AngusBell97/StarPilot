@@ -1,34 +1,22 @@
-export const PROFILE_CLIPBOARD_SCHEMA_VERSION = 1
-
-export function formatSpeedMph(speed) {
-  const numeric = Number(speed)
-  if (!Number.isFinite(numeric)) return ""
-  return numeric.toFixed(Number.isInteger(numeric) ? 0 : 1)
+export function formatProfileSpeed(speedMph, isMetric) {
+  const numeric = Number(speedMph);
+  if (!Number.isFinite(numeric)) return "—";
+  if (!isMetric) return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, "");
+  return (numeric * 1.609344).toFixed(1).replace(/\.0$/, "");
 }
 
-export function copyCurve(category, curve) {
-  if (!category || !Array.isArray(curve) || curve.some(value => !Number.isFinite(value))) return null
-  return {
-    schemaVersion: PROFILE_CLIPBOARD_SCHEMA_VERSION,
-    category: String(category),
-    curve: curve.map(value => Number(value)),
-  }
-}
-
-export function pasteCurve(clipboard, category, expectedLength) {
-  if (!clipboard || clipboard.schemaVersion !== PROFILE_CLIPBOARD_SCHEMA_VERSION) return null
-  if (clipboard.category !== category || !Array.isArray(clipboard.curve)) return null
-  if (clipboard.curve.length !== expectedLength || clipboard.curve.some(value => typeof value !== "number" || !Number.isFinite(value))) return null
-  return clipboard.curve.map(value => Number(value))
+export function profileSpeedUnit(isMetric) {
+  return isMetric ? "km/h" : "mph";
 }
 
 export function valueFromPointer(clientY, rect, minimum, maximum, step) {
-  const height = Number(rect?.height)
-  if (!Number.isFinite(height) || height <= 0) return Number(minimum)
-
-  const fraction = Math.min(1, Math.max(0, (Number(clientY) - Number(rect.top)) / height))
-  const raw = Number(maximum) - fraction * (Number(maximum) - Number(minimum))
-  const snapped = Number(minimum) + Math.round((raw - Number(minimum)) / Number(step)) * Number(step)
-  const precision = Math.max(0, String(step).split(".")[1]?.length || 0)
-  return Number(Math.min(Number(maximum), Math.max(Number(minimum), snapped)).toFixed(precision))
+  const height = Number(rect?.height);
+  const top = Number(rect?.top);
+  if (!Number.isFinite(clientY) || !Number.isFinite(height) || height <= 0 || !Number.isFinite(top)) {
+    return Number(minimum);
+  }
+  const ratio = Math.max(0, Math.min(1, 1 - ((clientY - top) / height)));
+  const raw = Number(minimum) + ratio * (Number(maximum) - Number(minimum));
+  const snapped = Math.round(raw / Number(step)) * Number(step);
+  return Number(Math.max(Number(minimum), Math.min(Number(maximum), snapped)).toFixed(4));
 }

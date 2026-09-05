@@ -130,7 +130,7 @@ def test_explicit_following_curve_selects_active_personality_and_linear_speed_po
   assert controller.base_acceleration_jerk == 1.0
 
 
-def test_enabled_following_document_is_independent_of_legacy_custom_personalities_toggle():
+def test_master_toggle_disables_following_document_override():
   document = _document()
   document["profiles"]["standard"]["following"] = {"preset": "custom", "curve": [0.9] * 10}
   toggles = _toggles(document)
@@ -139,7 +139,7 @@ def test_enabled_following_document_is_independent_of_legacy_custom_personalitie
   controller = StarPilotFollowing(_planner())
   controller.update(True, 10.0, _sm(), toggles)
 
-  assert controller.t_follow == pytest.approx(0.9)
+  assert controller.t_follow == pytest.approx(1.45)
 
 
 def test_traffic_profile_wins_over_cereal_personality_without_changing_jerk():
@@ -149,7 +149,7 @@ def test_traffic_profile_wins_over_cereal_personality_without_changing_jerk():
 
   controller.update(True, 0.0, _sm(traffic=True, personality=Personality.aggressive), _toggles(document))
 
-  assert controller.t_follow == pytest.approx(1.55)
+  assert controller.t_follow == pytest.approx(1.75)
   assert controller.base_acceleration_jerk == 1.0
 
 
@@ -163,9 +163,11 @@ def test_absent_malformed_or_disabled_document_keeps_legacy_standard_follow(docu
 
 
 def test_dom_default_category_keeps_legacy_traffic_follow():
+  document = _document()
+  document["profiles"]["traffic"]["following"] = {"preset": "dom_default", "curve": []}
   controller = StarPilotFollowing(_planner())
 
-  controller.update(True, 0.0, _sm(traffic=True), _toggles(_document()))
+  controller.update(True, 0.0, _sm(traffic=True), _toggles(document))
 
   assert controller.t_follow == pytest.approx(0.75)
 

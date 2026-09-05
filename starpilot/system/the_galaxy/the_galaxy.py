@@ -77,6 +77,7 @@ from openpilot.starpilot.common.accel_profile import (
   custom_accel_profile_is_initialized,
   get_accel_profile_curve_values,
   get_custom_accel_profile_curve_defaults,
+  interpolate_accel_profile,
   normalize_acceleration_profile,
   normalize_deceleration_profile,
   parse_custom_accel_profile_curve,
@@ -117,13 +118,21 @@ from openpilot.starpilot.common.longitudinal_personality_profiles import (
   FOLLOWING_PRESETS,
   FOLLOWING_SPEEDS_MPH,
   PERSONALITY_PROFILES_PARAM,
+  PERSONALITY_ADVANCED_PARAM_KEYS,
+  PERSONALITY_FOLLOW_PARAM_KEYS,
+  PERSONALITY_PARKED_PARAM_KEYS,
   PROFILE_SCHEMA_VERSION,
   default_personality_profiles,
   initial_custom_curve,
   is_truck_fingerprint,
+  migrate_profile_document,
+  personality_reference_curves,
   profile_document,
   strict_profile_document,
+  synchronise_profile_document_enabled,
   update_personality_profile,
+  validate_personality_advanced_value,
+  validate_personality_follow_value,
 )
 from openpilot.starpilot.common.starpilot_utilities import delete_file, get_lock_status, run_cmd
 from openpilot.starpilot.common.starpilot_variables import ACTIVE_THEME_PATH, BUTTON_FUNCTIONS, ERROR_LOGS_PATH, EXCLUDED_KEYS, LEGACY_STARPILOT_PARAM_RENAMES, MAPS_PATH, MODELS_PATH, RESOURCES_REPO, SCREEN_RECORDINGS_PATH, STOCK_THEME_PATH, THEME_SAVE_PATH,\
@@ -3629,13 +3638,18 @@ def _get_detected_truck_tuning():
 
 
 def _get_effective_legacy_custom_accel_curve(ev_tuning: bool, truck_tuning: bool) -> list[float]:
+  target_axis = np.array(ACCELERATION_SPEEDS_MPH, dtype=float) * 0.44704
+
+  def sample(values, breakpoints):
+    return [round(interpolate_accel_profile(float(speed), values, breakpoints), 4) for speed in target_axis]
+
   preset_curve = get_accel_profile_curve_values(
     normalize_acceleration_profile(_safe_params_get_live_raw("AccelerationProfile")),
     ev_tuning,
     truck_tuning,
   )
   if not _safe_params_get_bool("CustomAccelProfile"):
-    return preset_curve
+    return sample(preset_curve, A_CRUISE_MAX_BP_CUSTOM)
 
   raw_legacy = {key: _safe_params_get_live_raw(key) for key in CUSTOM_ACCEL_PROFILE_PARAM_KEYS}
   if custom_accel_profile_is_initialized(_safe_params_get_live_raw(CUSTOM_ACCEL_PROFILE_INITIALIZED_KEY), raw_legacy):
@@ -3653,10 +3667,10 @@ def _get_effective_legacy_custom_accel_curve(ev_tuning: bool, truck_tuning: bool
         [_safe_params_get_live_raw(key) for key in CUSTOM_ACCEL_PROFILE_BREAKPOINT_PARAM_KEYS],
         [_safe_params_get_live_raw(key) for key in CUSTOM_ACCEL_PROFILE_POINT_VALUE_PARAM_KEYS],
       )
-      return [float(value) for value in np.interp(A_CRUISE_MAX_BP_CUSTOM, breakpoints, values)]
+      return sample(values, breakpoints)
     except (TypeError, ValueError):
       pass
-  return preset_curve
+  return sample(preset_curve, A_CRUISE_MAX_BP_CUSTOM)
 
 
 def _get_effective_legacy_following_curve(profile_id: str) -> list[float]:
@@ -4476,7 +4490,9 @@ def _reset_troubleshoot_section(section_id):
   allowed_keys, _ = _get_param_type_info()
   default_values = _get_default_param_values()
   is_onroad = params.get_bool("IsOnroad")
-  blocked_onroad_keys = {"Model", "AlwaysOnLateral", "ForceTorqueController", "NNFF", "NNFFLite"}
+  blocked_onroad_keys = {
+    "Model", "AlwaysOnLateral", "ForceTorqueController", "NNFF", "NNFFLite",
+  } | PERSONALITY_PARKED_PARAM_KEYS
 
   updated_keys = []
   skipped_keys = []
@@ -5725,30 +5741,21 @@ def setup(app):
     ev_tuning = _get_detected_ev_tuning()
     truck_tuning = (_get_detected_truck_tuning() or params.get_bool("TruckTuning")) and not ev_tuning
     raw_profiles = _safe_params_get_live_raw(PERSONALITY_PROFILES_PARAM)
-    stored_document = strict_profile_document(raw_profiles)
+    current_document = strict_profile_document(raw_profiles)
+    stored_document = migrate_profile_document(raw_profiles)
     configured = stored_document is not None
-    enabled = stored_document["enabled"] if configured else False
+    migration_required = configured and current_document is None
+    enabled = params.get_bool("CustomPersonalities")
+    if raw_profiles is not None and stored_document is None:
+      return jsonify({"error": "Stored longitudinal personality profiles are malformed and were not overwritten."}), 409
     profiles = stored_document["profiles"] if configured else default_personality_profiles(ev_tuning, truck_tuning)
 
     if request.method == "PUT":
       if params.get_bool("IsOnroad"):
         return jsonify({"error": "Longitudinal personality profiles can only be changed while off-road."}), 403
-
+      if current_document is None and stored_document is not None:
+        return jsonify({"error": "Stored longitudinal personality profiles require a verified migration before editing."}), 409
       data = request.get_json(silent=True)
-      if isinstance(data, dict) and set(data) == {"enabled"}:
-        if type(data["enabled"]) is not bool:
-          return jsonify({"error": "enabled must be a JSON boolean."}), 400
-        enabled = data["enabled"]
-        params.put(PERSONALITY_PROFILES_PARAM, profile_document(profiles, enabled=enabled))
-        configured = True
-        update_starpilot_toggles()
-        return jsonify({
-          "configured": configured,
-          "enabled": enabled,
-          "profiles": profiles,
-          "schema_version": PROFILE_SCHEMA_VERSION,
-        }), 200
-
       required_fields = {"profile", "category", "preset", "curve"}
       if not isinstance(data, dict) or set(data) != required_fields:
         return jsonify({"error": "Expected exactly profile, category, preset, and curve."}), 400
@@ -5792,6 +5799,7 @@ def setup(app):
 
       params.put(PERSONALITY_PROFILES_PARAM, profile_document(profiles, enabled=enabled))
       configured = True
+      migration_required = False
       update_starpilot_toggles()
 
     return jsonify({
@@ -5799,12 +5807,14 @@ def setup(app):
       "configured": configured,
       "default_profiles": default_personality_profiles(ev_tuning, truck_tuning),
       "enabled": enabled,
+      "migration_required": migration_required,
       "options": {
         "acceleration": list(ACCELERATION_PRESETS),
         "braking": list(BRAKING_PRESETS),
         "following": list(FOLLOWING_PRESETS),
       },
       "profiles": profiles,
+      "reference_curves": personality_reference_curves(ev_tuning, truck_tuning),
       "schema_version": PROFILE_SCHEMA_VERSION,
       "speed_breakpoints_mph": {
         "acceleration": list(ACCELERATION_SPEEDS_MPH),
@@ -5823,8 +5833,8 @@ def setup(app):
       key = str(data["key"]).strip()
       if key.lower() == PERSONALITY_PROFILES_PARAM.lower():
         return jsonify({"error": "Longitudinal personality profiles must be changed with the Driving Personalities editor."}), 403
-      if key.lower() == "custompersonalities" and params.get_bool("IsOnroad"):
-        return jsonify({"error": "Driving personalities can only be enabled or disabled while parked."}), 403
+      if key in PERSONALITY_PARKED_PARAM_KEYS and params.get_bool("IsOnroad"):
+        return jsonify({"error": "Driving personality settings can only be changed while parked."}), 403
       if key.lower() == FAVORITE_SLOTS_PARAM.lower():
         key = FAVORITE_SLOTS_PARAM
         raw_slots = data["value"]
@@ -5865,6 +5875,16 @@ def setup(app):
         if not math.isfinite(numeric) or numeric < 0.005 or numeric > 2.0:
           return jsonify({"error": f"{key} must be between 0.005 and 2.0 seconds."}), 400
         data["value"] = round(numeric / 0.005) * 0.005
+      if key in PERSONALITY_ADVANCED_PARAM_KEYS:
+        try:
+          data["value"] = validate_personality_advanced_value(data["value"])
+        except ValueError as error:
+          return jsonify({"error": str(error)}), 400
+      elif key in PERSONALITY_FOLLOW_PARAM_KEYS:
+        try:
+          data["value"] = validate_personality_follow_value(data["value"])
+        except ValueError as error:
+          return jsonify({"error": str(error)}), 400
       val = data["value"]
       selected_label_input = str(data.get("label") or "").strip()
 
@@ -5877,6 +5897,30 @@ def setup(app):
       allowed_keys, _ = _get_param_type_info()
       if key not in allowed_keys:
         return jsonify({"error": f"Parameter '{key}' is not editable."}), 403
+
+      if key == "CustomPersonalities":
+        if type(data["value"]) is not bool:
+          return jsonify({"error": "CustomPersonalities must be a JSON boolean."}), 400
+        enabled = data["value"]
+        with _PERSONALITY_PROFILES_WRITE_LOCK:
+          ev_tuning = _get_detected_ev_tuning()
+          truck_tuning = (_get_detected_truck_tuning() or params.get_bool("TruckTuning")) and not ev_tuning
+          raw_document = _safe_params_get_live_raw(PERSONALITY_PROFILES_PARAM)
+          if raw_document is not None and strict_profile_document(raw_document) is None:
+            return jsonify({"error": "Stored longitudinal personality profiles require a verified migration before changing the master control."}), 409
+          document = synchronise_profile_document_enabled(
+            raw_document, enabled, ev_tuning, truck_tuning,
+          )
+          params.put_bool("CustomPersonalities", enabled)
+          updated = {"CustomPersonalities": enabled}
+          if document is not None:
+            params.put(PERSONALITY_PROFILES_PARAM, document)
+            updated[PERSONALITY_PROFILES_PARAM] = document
+        update_starpilot_toggles()
+        return jsonify({
+          "message": "Driving personalities updated.",
+          "updated": updated,
+        }), 200
 
       if key == "PulseGlideSpeedDelta" or (key in PULSE_GLIDE_BUTTON_KEYS and str_val.strip() == str(BUTTON_FUNCTIONS["PULSE_AND_GLIDE"])):
         if not params.get_bool("GalaxyDeveloperMode"):
@@ -9516,6 +9560,17 @@ def setup(app):
     if not isinstance(toggle_values, dict):
       return jsonify({"success": False, "message": "Toggle backup does not contain settings."}), 400
 
+    parked_personality_keys = {
+      LEGACY_STARPILOT_PARAM_RENAMES.get(key, key)
+      for key in toggle_values
+      if isinstance(key, str)
+    } & PERSONALITY_PARKED_PARAM_KEYS
+    if parked_personality_keys and params.get_bool("IsOnroad"):
+      return jsonify({
+        "success": False,
+        "message": "Driving personality settings can only be restored while parked.",
+      }), 403
+
     allowed_keys = _get_toggle_backup_keys()
     restored_count = 0
     skipped_count = 0
@@ -9551,6 +9606,12 @@ def setup(app):
 
   @app.route("/api/toggles/reset_default", methods=["POST"])
   def reset_toggle_values():
+    if params.get_bool("IsOnroad"):
+      return jsonify({
+        "success": False,
+        "message": "Toggles can only be reset while parked.",
+      }), 403
+
     for raw_key in _params_raw.all_keys():
       key = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
       if key in EXCLUDED_KEYS:

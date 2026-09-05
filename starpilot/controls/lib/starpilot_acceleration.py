@@ -360,12 +360,13 @@ class StarPilotAcceleration:
     personality_document = getattr(starpilot_toggles, "longitudinal_personality_profiles", {})
     personality_acceleration = None
     personality_braking = None
-    personality_acceleration = resolve_personality_category(
-      personality_document, traffic_mode, sm["selfdriveState"].personality, "acceleration"
-    )
-    personality_braking = resolve_personality_category(
-      personality_document, traffic_mode, sm["selfdriveState"].personality, "braking"
-    )
+    if getattr(starpilot_toggles, "custom_personalities", False):
+      personality_acceleration = resolve_personality_category(
+        personality_document, traffic_mode, sm["selfdriveState"].personality, "acceleration"
+      )
+      personality_braking = resolve_personality_category(
+        personality_document, traffic_mode, sm["selfdriveState"].personality, "braking"
+      )
 
     if personality_acceleration is not None and (traffic_mode or not starpilot_toggles.map_acceleration):
       self.max_accel = interpolate_category_curve(

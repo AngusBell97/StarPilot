@@ -55,12 +55,14 @@ class StarPilotFollowing:
   def update(self, long_control_active, v_ego, sm, starpilot_toggles):
     personality = get_longitudinal_personality(sm)
     traffic_mode = sm["starpilotCarState"].trafficModeEnabled
-    personality_following = resolve_personality_category(
-      getattr(starpilot_toggles, "longitudinal_personality_profiles", {}),
-      traffic_mode,
-      personality,
-      "following",
-    )
+    personality_following = None
+    if getattr(starpilot_toggles, "custom_personalities", False):
+      personality_following = resolve_personality_category(
+        getattr(starpilot_toggles, "longitudinal_personality_profiles", {}),
+        traffic_mode,
+        personality,
+        "following",
+      )
 
     if long_control_active and traffic_mode:
       if sm["carState"].aEgo >= 0:

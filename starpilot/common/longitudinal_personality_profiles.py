@@ -8,7 +8,7 @@ import math
 import numbers
 
 PERSONALITY_PROFILES_PARAM = "LongitudinalPersonalityProfiles"
-PROFILE_SCHEMA_VERSION = 1
+PROFILE_SCHEMA_VERSION = 2
 PERSONALITY_IDS = ("traffic", "aggressive", "standard", "relaxed")
 TRUCK_FINGERPRINT_TOKENS = (
   " RAM 1500 ",
@@ -21,10 +21,11 @@ TRUCK_FINGERPRINT_TOKENS = (
   " SANTA CRUZ ",
 )
 
-ACCELERATION_SPEEDS_MPH = (0.0, 11.184681, 22.369363, 33.554044, 44.738726, 55.923407, 89.477452)
+ACCELERATION_SPEEDS_MPH = tuple(range(0, 91, 10))
 BRAKING_SPEEDS_MPH = ACCELERATION_SPEEDS_MPH
-FOLLOWING_SPEEDS_MPH = tuple(range(0, 91, 10))
-_SPEEDS_MS = (0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0)
+FOLLOWING_SPEEDS_MPH = ACCELERATION_SPEEDS_MPH
+_NATIVE_ACCELERATION_SPEEDS_MS = (0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0)
+_V1_ACCELERATION_SPEEDS_MPH = (0.0, 11.184681, 22.369363, 33.554044, 44.738726, 55.923407, 89.477452)
 
 
 def is_truck_fingerprint(fingerprint: object) -> bool:
@@ -41,6 +42,47 @@ CURVE_BOUNDS = {
   "braking": (0.5, 2.0),
   "following": (0.75, 3.0),
 }
+PERSONALITY_ADVANCED_PARAM_KEYS = frozenset(
+  f"{profile}{suffix}"
+  for profile in ("Traffic", "Aggressive", "Standard", "Relaxed")
+  for suffix in ("JerkAcceleration", "JerkDeceleration", "JerkDanger", "JerkSpeedDecrease", "JerkSpeed")
+)
+PERSONALITY_FOLLOW_PARAM_KEYS = frozenset({
+  "TrafficFollow",
+  "AggressiveFollow", "AggressiveFollowHigh",
+  "StandardFollow", "StandardFollowHigh",
+  "RelaxedFollow", "RelaxedFollowHigh",
+})
+PERSONALITY_PROFILE_ENABLE_PARAM_KEYS = frozenset({
+  "TrafficPersonalityProfile", "AggressivePersonalityProfile",
+  "StandardPersonalityProfile", "RelaxedPersonalityProfile",
+})
+PERSONALITY_PARKED_PARAM_KEYS = (
+  PERSONALITY_ADVANCED_PARAM_KEYS
+  | PERSONALITY_FOLLOW_PARAM_KEYS
+  | PERSONALITY_PROFILE_ENABLE_PARAM_KEYS
+  | {"CustomPersonalities"}
+)
+
+
+def validate_personality_follow_value(raw_value) -> float:
+  if not isinstance(raw_value, numbers.Real) or isinstance(raw_value, bool):
+    raise ValueError("Following values must be JSON numbers.")
+  value = float(raw_value)
+  if not math.isfinite(value) or value < 0.5 or value > 3.0:
+    raise ValueError("Following values must be between 0.5 and 3.0.")
+  return round(value, 4)
+
+
+def validate_personality_advanced_value(raw_value) -> float:
+  if not isinstance(raw_value, numbers.Real) or isinstance(raw_value, bool):
+    raise ValueError("Advanced personality values must be JSON numbers.")
+  value = float(raw_value)
+  if not math.isfinite(value) or value < 25.0 or value > 200.0:
+    raise ValueError("Advanced personality values must be between 25 and 200.")
+  return round(value, 4)
+
+
 _CATEGORY_SPECS = {
   "acceleration": (ACCELERATION_PRESETS, len(ACCELERATION_SPEEDS_MPH)),
   "braking": (BRAKING_PRESETS, len(BRAKING_SPEEDS_MPH)),
@@ -53,9 +95,9 @@ _BRAKING_PRESET_CURVES = {
   "sport": (2.0,) * len(BRAKING_SPEEDS_MPH),
 }
 FOLLOWING_PRESET_CURVES = {
-  "close": (0.90, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.25, 1.30),
-  "medium": (1.20, 1.20, 1.25, 1.30, 1.35, 1.40, 1.45, 1.50, 1.55, 1.60),
-  "far": (1.55, 1.55, 1.60, 1.70, 1.80, 1.90, 2.00, 2.10, 2.20, 2.30),
+  "close": (1.25,) * len(FOLLOWING_SPEEDS_MPH),
+  "medium": (1.45,) * len(FOLLOWING_SPEEDS_MPH),
+  "far": (1.75,) * len(FOLLOWING_SPEEDS_MPH),
 }
 PROFILE_AXES = {
   "acceleration": {
@@ -71,12 +113,39 @@ PROFILE_AXES = {
     "value": {"unit": "s", "meaning": "base_time_headway"},
   },
 }
+_CATEGORY_SPEEDS_MPH = {
+  "acceleration": ACCELERATION_SPEEDS_MPH,
+  "braking": BRAKING_SPEEDS_MPH,
+  "following": FOLLOWING_SPEEDS_MPH,
+}
 
 _ACCELERATION_PROFILE_IDS = {
   "standard": 0,
   "eco": 1,
   "sport": 2,
   "sport_plus": 3,
+}
+
+_PERSONALITY_REFERENCE_PRESETS = {
+  "traffic": {"acceleration": "eco", "braking": "standard", "following": "close"},
+  "aggressive": {"acceleration": "sport_plus", "braking": "sport", "following": "close"},
+  "standard": {"acceleration": "standard", "braking": "standard", "following": "medium"},
+  "relaxed": {"acceleration": "eco", "braking": "eco", "following": "far"},
+}
+
+_V1_PROFILE_AXES = {
+  "acceleration": {
+    "speed": {"unit": "mph", "values": list(_V1_ACCELERATION_SPEEDS_MPH)},
+    "value": {"unit": "m/s^2", "meaning": "maximum_requested_acceleration"},
+  },
+  "braking": {
+    "speed": {"unit": "mph", "values": list(_V1_ACCELERATION_SPEEDS_MPH)},
+    "value": {"unit": "m/s^2", "meaning": "cruise_slc_deceleration_magnitude"},
+  },
+  "following": {
+    "speed": {"unit": "mph", "values": list(FOLLOWING_SPEEDS_MPH)},
+    "value": {"unit": "s", "meaning": "base_time_headway"},
+  },
 }
 
 
@@ -94,9 +163,9 @@ def default_personality_profiles(ev_tuning: bool, truck_tuning: bool = False) ->
   del ev_tuning, truck_tuning
   return {
     personality: {
-      "acceleration": {"preset": "dom_default", "curve": []},
-      "braking": {"preset": "dom_default", "curve": []},
-      "following": {"preset": "dom_default", "curve": []},
+      "acceleration": {"preset": "standard", "curve": []},
+      "braking": {"preset": "standard", "curve": []},
+      "following": {"preset": "medium", "curve": []},
     }
     for personality in PERSONALITY_IDS
   }
@@ -127,18 +196,20 @@ def _decode_json(raw):
   return raw
 
 
-def _validated_category(category: str, raw_category) -> dict | None:
-  if category not in _CATEGORY_SPECS or not isinstance(raw_category, dict) or set(raw_category) != {"preset", "curve"}:
+def _validated_category_with_length(category: str, raw_category, expected_length: int) -> dict | None:
+  if category not in _CATEGORY_SPECS or not isinstance(raw_category, dict):
     return None
-  presets, expected_length = _CATEGORY_SPECS[category]
+  keys = set(raw_category)
+  has_legacy_curve = "legacyCurve" in keys
+  if keys != ({"preset", "curve", "legacyCurve"} if has_legacy_curve else {"preset", "curve"}):
+    return None
+  presets, _ = _CATEGORY_SPECS[category]
   preset = raw_category.get("preset")
   curve = raw_category.get("curve")
   if not isinstance(preset, str) or preset not in presets or not isinstance(curve, list):
     return None
-  if preset == "dom_default":
-    return {"preset": preset, "curve": []} if not curve else None
   if preset != "custom":
-    return {"preset": preset, "curve": []} if not curve else None
+    return {"preset": preset, "curve": []} if not curve and not has_legacy_curve else None
   if len(curve) != expected_length:
     return None
 
@@ -151,16 +222,47 @@ def _validated_category(category: str, raw_category) -> dict | None:
     if not math.isfinite(value) or not minimum <= value <= maximum:
       return None
     values.append(round(value, 4))
-  return {"preset": preset, "curve": values}
+  validated = {"preset": preset, "curve": values}
+  if has_legacy_curve:
+    legacy_curve = raw_category.get("legacyCurve")
+    if category not in ("acceleration", "braking") or expected_length != len(ACCELERATION_SPEEDS_MPH) or not isinstance(legacy_curve, list):
+      return None
+    if len(legacy_curve) != len(_V1_ACCELERATION_SPEEDS_MPH):
+      return None
+    legacy_values = []
+    for raw_value in legacy_curve:
+      if isinstance(raw_value, bool) or not isinstance(raw_value, numbers.Real):
+        return None
+      value = float(raw_value)
+      if not math.isfinite(value) or not minimum <= value <= maximum:
+        return None
+      legacy_values.append(round(value, 4))
+    validated["legacyCurve"] = legacy_values
+  return validated
 
 
-def strict_profile_document(raw_document) -> dict | None:
+def _validated_category(category: str, raw_category) -> dict | None:
+  expected_length = _CATEGORY_SPECS.get(category, ((), 0))[1]
+  return _validated_category_with_length(category, raw_category, expected_length)
+
+
+def _schema_values_equal(actual, expected) -> bool:
+  if type(actual) is not type(expected):
+    return False
+  if isinstance(expected, dict):
+    return set(actual) == set(expected) and all(_schema_values_equal(actual[key], expected[key]) for key in expected)
+  if isinstance(expected, list):
+    return len(actual) == len(expected) and all(_schema_values_equal(value, reference) for value, reference in zip(actual, expected, strict=True))
+  return actual == expected
+
+
+def _strict_document(raw_document, schema_version: int, axes: dict, category_lengths: dict[str, int]) -> dict | None:
   decoded = _decode_json(raw_document)
   if not isinstance(decoded, dict) or set(decoded) != {"schemaVersion", "enabled", "axes", "profiles"}:
     return None
-  if type(decoded["schemaVersion"]) is not int or decoded["schemaVersion"] != PROFILE_SCHEMA_VERSION:
+  if type(decoded["schemaVersion"]) is not int or decoded["schemaVersion"] != schema_version:
     return None
-  if type(decoded["enabled"]) is not bool or decoded["axes"] != PROFILE_AXES:
+  if type(decoded["enabled"]) is not bool or not _schema_values_equal(decoded["axes"], axes):
     return None
 
   raw_profiles = decoded["profiles"]
@@ -173,23 +275,80 @@ def strict_profile_document(raw_document) -> dict | None:
       return None
     profile = {}
     for category in _CATEGORY_SPECS:
-      validated = _validated_category(category, raw_profile.get(category))
+      validated = _validated_category_with_length(category, raw_profile.get(category), category_lengths[category])
       if validated is None:
         return None
       profile[category] = validated
     profiles[personality] = profile
-  return profile_document(profiles, enabled=decoded["enabled"])
+  return {
+    "schemaVersion": schema_version,
+    "enabled": decoded["enabled"],
+    "axes": deepcopy(axes),
+    "profiles": profiles,
+  }
+
+
+def strict_profile_document(raw_document) -> dict | None:
+  return _strict_document(
+    raw_document,
+    PROFILE_SCHEMA_VERSION,
+    PROFILE_AXES,
+    {category: expected_length for category, (_, expected_length) in _CATEGORY_SPECS.items()},
+  )
+
+
+def migrate_profile_document(raw_document) -> dict | None:
+  current = strict_profile_document(raw_document)
+  if current is not None:
+    return current
+
+  legacy = _strict_document(
+    raw_document,
+    1,
+    _V1_PROFILE_AXES,
+    {"acceleration": len(_V1_ACCELERATION_SPEEDS_MPH), "braking": len(_V1_ACCELERATION_SPEEDS_MPH), "following": len(FOLLOWING_SPEEDS_MPH)},
+  )
+  if legacy is None:
+    return None
+
+  migrated_profiles = deepcopy(legacy["profiles"])
+  for profile in migrated_profiles.values():
+    for category in ("acceleration", "braking"):
+      config = profile[category]
+      if config["preset"] != "custom":
+        continue
+      legacy_curve = list(config["curve"])
+      config["curve"] = [
+        round(_linear_interp(float(speed_mph), _V1_ACCELERATION_SPEEDS_MPH, config["curve"]), 4)
+        for speed_mph in ACCELERATION_SPEEDS_MPH
+      ]
+      config["legacyCurve"] = legacy_curve
+  return strict_profile_document(profile_document(migrated_profiles, enabled=legacy["enabled"]))
+
+
+def synchronise_profile_document_enabled(
+  raw_document, enabled: bool, ev_tuning: bool, truck_tuning: bool = False,
+) -> dict | None:
+  if type(enabled) is not bool:
+    raise ValueError("enabled must be a JSON boolean")
+  document = migrate_profile_document(raw_document)
+  if document is None:
+    if raw_document is not None or not enabled:
+      return None
+    return profile_document(default_personality_profiles(ev_tuning, truck_tuning), enabled=True)
+  document["enabled"] = enabled
+  return strict_profile_document(document)
 
 
 def strict_personality_profiles(raw_document) -> dict[str, dict] | None:
-  document = strict_profile_document(raw_document)
+  document = migrate_profile_document(raw_document)
   if document is None or not document["enabled"]:
     return None
   return deepcopy(document["profiles"])
 
 
 def load_personality_profiles(raw_document, ev_tuning: bool, truck_tuning: bool = False) -> dict[str, dict]:
-  document = strict_profile_document(raw_document)
+  document = migrate_profile_document(raw_document)
   return deepcopy(document["profiles"]) if document is not None else default_personality_profiles(ev_tuning, truck_tuning)
 
 
@@ -273,6 +432,30 @@ def category_curve(category: str, config: dict, ev_tuning: bool, truck_tuning: b
   return list(FOLLOWING_PRESET_CURVES[preset])
 
 
+def _sample_config_on_custom_axis(
+  category: str, config: dict, ev_tuning: bool, truck_tuning: bool,
+) -> list[float]:
+  return [
+    round(interpolate_category_curve(category, speed_mph * 0.44704, config, ev_tuning, truck_tuning), 4)
+    for speed_mph in _CATEGORY_SPEEDS_MPH[category]
+  ]
+
+
+def personality_reference_curves(ev_tuning: bool, truck_tuning: bool = False) -> dict[str, dict[str, list[float]]]:
+  return {
+    personality: {
+      category: _sample_config_on_custom_axis(
+        category,
+        {"preset": preset, "curve": []},
+        ev_tuning,
+        truck_tuning,
+      )
+      for category, preset in presets.items()
+    }
+    for personality, presets in _PERSONALITY_REFERENCE_PRESETS.items()
+  }
+
+
 def initial_custom_curve(
   category: str,
   current_config: dict,
@@ -286,14 +469,15 @@ def initial_custom_curve(
   preset = current_config.get("preset")
   if preset == "dom_default":
     candidate = legacy_curve
+    if category in ("acceleration", "braking") and isinstance(candidate, list) and len(candidate) == len(_V1_ACCELERATION_SPEEDS_MPH):
+      candidate = [
+        round(_linear_interp(float(speed_mph), _V1_ACCELERATION_SPEEDS_MPH, candidate), 4)
+        for speed_mph in _CATEGORY_SPEEDS_MPH[category]
+      ]
   elif preset == "custom":
     candidate = current_config.get("curve")
-  elif category == "acceleration" and preset in _ACCELERATION_PROFILE_IDS:
-    candidate = _acceleration_preset_curve(preset, ev_tuning, truck_tuning)
-  elif category == "braking" and preset in _BRAKING_PRESET_CURVES:
-    candidate = list(_BRAKING_PRESET_CURVES[preset])
-  elif category == "following" and preset in FOLLOWING_PRESET_CURVES:
-    candidate = list(FOLLOWING_PRESET_CURVES[preset])
+  elif isinstance(preset, str):
+    candidate = _sample_config_on_custom_axis(category, {"preset": preset, "curve": []}, ev_tuning, truck_tuning)
   else:
     candidate = None
   validated = _validated_category(category, {"preset": "custom", "curve": candidate})
@@ -317,7 +501,16 @@ def interpolate_category_curve(
 ) -> float:
   if not isinstance(v_ego, numbers.Real) or isinstance(v_ego, bool) or not math.isfinite(float(v_ego)):
     raise ValueError("Vehicle speed must be finite")
-  values = category_curve(category, config, ev_tuning, truck_tuning)
-  if category == "following":
-    return _linear_interp(float(v_ego) / 0.44704, FOLLOWING_SPEEDS_MPH, values)
-  return _linear_interp(float(v_ego), _SPEEDS_MS, values)
+  validated = _validated_category(category, config)
+  if validated is None:
+    raise ValueError(f"Invalid {category} profile configuration.")
+  values = category_curve(category, validated, ev_tuning, truck_tuning)
+  if "legacyCurve" in validated:
+    return _linear_interp(float(v_ego), _NATIVE_ACCELERATION_SPEEDS_MS, validated["legacyCurve"])
+  if category == "acceleration":
+    from openpilot.starpilot.common.accel_profile import interpolate_accel_profile
+    breakpoints = _NATIVE_ACCELERATION_SPEEDS_MS if validated["preset"] != "custom" else tuple(
+      speed * 0.44704 for speed in ACCELERATION_SPEEDS_MPH
+    )
+    return interpolate_accel_profile(float(v_ego), values, breakpoints)
+  return _linear_interp(float(v_ego) / 0.44704, _CATEGORY_SPEEDS_MPH[category], values)

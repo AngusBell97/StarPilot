@@ -200,6 +200,21 @@ def _install_server_import_stubs():
     }
     return list((ev if ev_tuning and not truck_tuning else gas)[int(profile or 0)])
 
+  def interpolate_accel_profile(v_ego, accel_curve, breakpoints=None):
+    curve_breakpoints = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0] if breakpoints is None else list(breakpoints)
+    speed = float(v_ego)
+    if speed <= curve_breakpoints[0]:
+      return float(accel_curve[0])
+    if speed >= curve_breakpoints[-1]:
+      return float(accel_curve[-1])
+    for index, upper in enumerate(curve_breakpoints[1:], start=1):
+      if speed <= upper:
+        lower = curve_breakpoints[index - 1]
+        ratio = (speed - lower) / (upper - lower)
+        smooth_ratio = ratio ** 3 * (10.0 - 15.0 * ratio + 6.0 * ratio * ratio)
+        return float(accel_curve[index - 1] + (accel_curve[index] - accel_curve[index - 1]) * smooth_ratio)
+    raise AssertionError("unreachable")
+
   sys.modules["openpilot.starpilot.common.accel_profile"] = _simple_module(
     "openpilot.starpilot.common.accel_profile",
     A_CRUISE_MAX_BP_CUSTOM=[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0],
@@ -221,6 +236,7 @@ def _install_server_import_stubs():
     build_custom_accel_profile_defaults=lambda *args, **kwargs: {},
     custom_accel_profile_is_initialized=lambda flag, values: bool(flag) or all(value is not None for value in values.values()),
     get_accel_profile_curve_values=get_accel_profile_curve_values,
+    interpolate_accel_profile=interpolate_accel_profile,
     get_custom_accel_profile_curve_defaults=lambda *args, **kwargs: {},
     normalize_acceleration_profile=lambda value: int(value or 0),
     normalize_deceleration_profile=lambda value: int(value or 0),
@@ -2064,6 +2080,66 @@ def test_toggle_backup_restore_round_trip_filters_non_settings(monkeypatch):
   assert raw_params.values["NoDefaultSetting"] == "new-runtime"
   assert raw_params.values["StatsSetting"] == {"drives": 99}
   assert update_calls == [True]
+
+
+def test_toggle_restore_rejects_onroad_backup_with_parked_personality_key_without_mutation(monkeypatch):
+  server = _load_server_module()
+  assert server._import_galaxy_web_symbols()
+
+  parked_key = "StandardFollow"
+  definitions = {
+    parked_key: (1.45, server.ParamKeyType.FLOAT, server.ParamKeyFlag.PERSISTENT),
+    "EnabledSetting": (False, server.ParamKeyType.BOOL, server.ParamKeyFlag.PERSISTENT),
+  }
+
+  class ToggleParams:
+    def __init__(self):
+      self.values = {"IsOnroad": True, parked_key: 1.45, "EnabledSetting": False}
+
+    def get(self, key, block=False):
+      del block
+      return self.values.get(key)
+
+    def get_bool(self, key):
+      return bool(self.values.get(key, False))
+
+    def get_default_value(self, key):
+      return definitions[key][0]
+
+    def get_key_flag(self, key):
+      return definitions[key][2]
+
+    def get_type(self, key):
+      return definitions[key][1]
+
+    def put(self, key, value):
+      self.values[key] = value
+
+  raw_params = ToggleParams()
+  server.starpilot_default_params = [
+    (key, default, value_type, 0)
+    for key, (default, value_type, _) in definitions.items()
+  ]
+  monkeypatch.setattr(server, "_params_raw", raw_params)
+  monkeypatch.setattr(server, "params", server.ParamsCompat(raw_params))
+  monkeypatch.setattr(server, "EXCLUDED_KEYS", set())
+  monkeypatch.setattr(server, "update_starpilot_toggles", lambda: pytest.fail("restore side effect ran"))
+
+  app = server.Flask(
+    "toggle_restore_onroad_test",
+    template_folder=str(MODULE_DIR / "templates"),
+    static_folder=str(MODULE_DIR / "assets"),
+  )
+  server.setup(app)
+  client = app.test_client()
+  before = dict(raw_params.values)
+
+  encoded_data = utilities.encode_parameters({"EnabledSetting": True, parked_key: 1.25})
+  response = client.post("/api/toggles/restore", json={"data": encoded_data})
+
+  assert response.status_code == 403
+  assert "parked" in response.get_json()["message"].lower()
+  assert raw_params.values == before
 
 
 def test_toggle_restore_reports_invalid_and_unavailable_settings(monkeypatch):

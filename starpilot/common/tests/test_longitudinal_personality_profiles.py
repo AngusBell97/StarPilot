@@ -2,11 +2,15 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
+
+import openpilot.starpilot.common.longitudinal_personality_profiles as lpp
 
 from openpilot.starpilot.common.accel_profile import (
   ACCELERATION_PROFILES,
   get_accel_profile_curve_values,
+  interpolate_accel_profile,
 )
 from openpilot.starpilot.common.longitudinal_personality_profiles import (
   ACCELERATION_SPEEDS_MPH,
@@ -33,7 +37,7 @@ from openpilot.starpilot.common.longitudinal_personality_profiles import (
 def test_document_is_versioned_disabled_and_declares_exact_axes_and_units():
   document = profile_document(default_personality_profiles(False), enabled=False)
 
-  assert document["schemaVersion"] == PROFILE_SCHEMA_VERSION == 1
+  assert document["schemaVersion"] == PROFILE_SCHEMA_VERSION == 2
   assert document["enabled"] is False
   assert document["axes"] == {
     "acceleration": {
@@ -73,8 +77,50 @@ def test_non_truck_fingerprints_do_not_select_the_truck_curve(fingerprint):
   assert is_truck_fingerprint(fingerprint) is False
 
 
+def test_enabling_without_a_stored_document_creates_standard_medium_defaults():
+  document = lpp.synchronise_profile_document_enabled(None, True, ev_tuning=False, truck_tuning=False)
+  assert document == profile_document(default_personality_profiles(False), enabled=True)
+
+
+def test_enabling_does_not_overwrite_a_malformed_stored_document():
+  assert lpp.synchronise_profile_document_enabled({"schemaVersion": 99}, True, False, False) is None
+
+
+def test_disabling_without_a_stored_document_does_not_create_one():
+  assert lpp.synchronise_profile_document_enabled(None, False, ev_tuning=False, truck_tuning=False) is None
+
+
+def test_every_state_affecting_personality_param_is_parked_only():
+  assert lpp.PERSONALITY_PARKED_PARAM_KEYS == (
+    lpp.PERSONALITY_ADVANCED_PARAM_KEYS
+    | lpp.PERSONALITY_FOLLOW_PARAM_KEYS
+    | lpp.PERSONALITY_PROFILE_ENABLE_PARAM_KEYS
+    | {"CustomPersonalities"}
+  )
+  assert len(lpp.PERSONALITY_PARKED_PARAM_KEYS) == 32
+
+
+def test_legacy_follow_values_reject_coercion_and_out_of_range_inputs():
+  for invalid in (True, "1.25", math.nan, math.inf, 0.49, 3.01):
+    with pytest.raises(ValueError):
+      lpp.validate_personality_follow_value(invalid)
+  assert lpp.validate_personality_follow_value(0.5) == 0.5
+  assert lpp.validate_personality_follow_value(1.25) == 1.25
+  assert lpp.validate_personality_follow_value(3) == 3.0
+
+
+def test_advanced_personality_values_reject_coercion_and_out_of_range_inputs():
+  for invalid in (True, "50", math.nan, math.inf, 24.9, 200.1):
+    with pytest.raises(ValueError):
+      lpp.validate_personality_advanced_value(invalid)
+  assert lpp.validate_personality_advanced_value(50) == 50.0
+  assert lpp.validate_personality_advanced_value(100.0) == 100.0
+  assert lpp.validate_personality_advanced_value(72.34567) == 72.3457
+
+
 def test_runtime_loader_uses_detected_truck_curve_without_changing_legacy_truck_flag():
   source = (Path(__file__).parents[1] / "starpilot_variables.py").read_text(encoding="utf-8")
+  assert "toggle.longitudinal_personality_profiles = migrate_profile_document(profile_settings_raw) or {}" in source
   assert "is_truck_fingerprint(CP.carFingerprint) or truck_tuning_param" in source
   assert ") and not toggle.personality_ev_tuning" in source
   assert "toggle.truck_tuning = truck_tuning_param" in source
@@ -86,10 +132,15 @@ def test_acceleration_presets_select_truck_automatically_and_ev_wins_if_both_are
   assert category_curve("acceleration", config, True, True) == get_accel_profile_curve_values(2, True, False)
 
 
-def test_declared_mph_axis_matches_the_runtime_metre_per_second_breakpoints():
-  expected_mph = [speed_mps * 2.2369362920544 for speed_mps in (0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0)]
-  assert list(ACCELERATION_SPEEDS_MPH) == pytest.approx(expected_mph)
+def test_declared_custom_axes_use_exact_ten_mph_breakpoints():
+  assert ACCELERATION_SPEEDS_MPH == tuple(range(0, 91, 10))
   assert BRAKING_SPEEDS_MPH == ACCELERATION_SPEEDS_MPH
+
+
+def test_boolean_axis_values_are_not_accepted_as_numeric_breakpoints():
+  invalid = profile_document(default_personality_profiles(False), enabled=True)
+  invalid["axes"]["acceleration"]["speed"]["values"][0] = False
+  assert lpp.strict_profile_document(invalid) is None
 
 
 def test_strict_document_rejects_unversioned_partial_extra_or_axis_changes():
@@ -99,7 +150,7 @@ def test_strict_document_rejects_unversioned_partial_extra_or_axis_changes():
 
   invalid_documents = [
     valid["profiles"],
-    {**valid, "schemaVersion": 2},
+    {**valid, "schemaVersion": 99},
     {**valid, "enabled": 1},
     {**valid, "extra": True},
     {key: value for key, value in valid.items() if key != "axes"},
@@ -118,7 +169,7 @@ def test_strict_document_rejects_unversioned_partial_extra_or_axis_changes():
 def test_strict_document_rejects_boolean_non_finite_fractional_and_out_of_range_values():
   for value in (True, False, math.nan, math.inf, -math.inf, "1.0", 6.1):
     invalid = profile_document(default_personality_profiles(False), enabled=True)
-    invalid["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.0] * 7}
+    invalid["profiles"]["standard"]["acceleration"] = {"preset": "custom", "curve": [1.0] * 10}
     invalid["profiles"]["standard"]["acceleration"]["curve"][0] = value
     assert strict_personality_profiles(invalid) is None
 
@@ -169,17 +220,17 @@ def test_acceleration_presets_match_dom_curves_for_gas_ev_and_truck():
 
 
 def test_custom_initialisation_seeds_from_selected_acceleration_preset():
-  current = {"preset": "sport", "curve": [0.0] * 7}
+  current = {"preset": "sport", "curve": []}
   assert initial_custom_curve("acceleration", current, ev_tuning=False, truck_tuning=False) == \
-    get_accel_profile_curve_values(ACCELERATION_PROFILES["SPORT"], False, False)
+    lpp._sample_config_on_custom_axis("acceleration", current, False, False)
   assert initial_custom_curve("acceleration", current, ev_tuning=False, truck_tuning=True) == \
-    get_accel_profile_curve_values(ACCELERATION_PROFILES["SPORT"], False, True)
+    lpp._sample_config_on_custom_axis("acceleration", current, False, True)
 
 
 def test_custom_initialisation_uses_ev_over_truck_when_both_flags_are_set():
-  current = {"preset": "standard", "curve": [0.0] * 7}
+  current = {"preset": "standard", "curve": []}
   assert initial_custom_curve("acceleration", current, ev_tuning=True, truck_tuning=True) == \
-    get_accel_profile_curve_values(ACCELERATION_PROFILES["STANDARD"], True, False)
+    lpp._sample_config_on_custom_axis("acceleration", current, True, False)
 
 
 def test_truck_detection_accepts_live_canonical_fingerprint_identifiers():
@@ -201,35 +252,38 @@ def test_truck_detection_accepts_live_canonical_fingerprint_identifiers():
 
 def test_custom_initialisation_seeds_braking_from_selected_preset():
   assert initial_custom_curve(
-    "braking", {"preset": "eco", "curve": [2.0] * 7}, ev_tuning=True, truck_tuning=True
-  ) == [0.5] * 7
+    "braking", {"preset": "eco", "curve": []}, ev_tuning=True, truck_tuning=True
+  ) == [0.5] * 10
   assert initial_custom_curve(
-    "braking", {"preset": "sport", "curve": [0.5] * 7}, ev_tuning=False, truck_tuning=False
-  ) == [2.0] * 7
+    "braking", {"preset": "sport", "curve": []}, ev_tuning=False, truck_tuning=False
+  ) == [2.0] * 10
 
 
 def test_dom_default_custom_initialisation_uses_effective_legacy_curve():
   legacy_curve = [1.1, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
-  current = {"preset": "dom_default", "curve": [0.0] * 7}
-  assert initial_custom_curve("acceleration", current, True, True, legacy_curve=legacy_curve) == legacy_curve
+  current = {"preset": "dom_default", "curve": []}
+  assert initial_custom_curve("acceleration", current, True, True, legacy_curve=legacy_curve) == [
+    round(lpp._linear_interp(speed, lpp._V1_ACCELERATION_SPEEDS_MPH, legacy_curve), 4)
+    for speed in ACCELERATION_SPEEDS_MPH
+  ]
 
 
 def test_existing_custom_curve_is_never_reseeded():
-  curve = [1.0 + index * 0.1 for index in range(7)]
+  curve = [round(1.0 + index * 0.1, 4) for index in range(10)]
   current = {"preset": "custom", "curve": curve}
   assert initial_custom_curve("acceleration", current, True, True) == curve
 
 
 def test_profile_update_is_atomic_and_accepts_bounded_following_category():
   profiles = default_personality_profiles(True)
-  curve = [1.0 + index * 0.1 for index in range(7)]
+  curve = [round(1.0 + index * 0.1, 4) for index in range(10)]
   updated = update_personality_profile(profiles, "standard", "acceleration", "custom", curve, True, False)
-  assert profiles["standard"]["acceleration"]["preset"] == "dom_default"
+  assert profiles["standard"]["acceleration"]["preset"] == "standard"
   assert updated["standard"]["acceleration"] == {"preset": "custom", "curve": curve}
 
   following = [0.75 + index * 0.1 for index in range(10)]
   updated = update_personality_profile(updated, "standard", "following", "custom", following, True, False)
-  assert profiles["standard"]["following"]["preset"] == "dom_default"
+  assert profiles["standard"]["following"]["preset"] == "medium"
   assert updated["standard"]["following"] == {"preset": "custom", "curve": [round(value, 4) for value in following]}
   for invalid in ([0.74] * 10, [3.01] * 10, [math.nan] * 10, [True] * 10, [1.0] * 9):
     with pytest.raises(ValueError):
@@ -257,10 +311,14 @@ def test_loader_is_ui_only_fallback_and_does_not_partially_repair_persisted_docu
   assert strict_personality_profiles(malformed) is None
 
 
-def test_custom_interpolation_matches_legacy_linear_segments_and_clamps_endpoints():
-  config = {"preset": "custom", "curve": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]}
+def test_custom_interpolation_uses_ten_mph_dom_segments_and_clamps_endpoints():
+  config = {"preset": "custom", "curve": [1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]}
+  breakpoints = [speed * 0.44704 for speed in ACCELERATION_SPEEDS_MPH]
   assert interpolate_category_curve("acceleration", -1.0, config, False, False) == 1.0
-  assert interpolate_category_curve("acceleration", 1.25, config, False, False) == pytest.approx(1.25)
+  assert interpolate_category_curve("acceleration", 2.5 * 0.44704, config, False, False) == pytest.approx(
+    interpolate_accel_profile(2.5 * 0.44704, config["curve"], breakpoints)
+  )
+  assert interpolate_category_curve("acceleration", 5.0 * 0.44704, config, False, False) == pytest.approx(1.5)
   assert interpolate_category_curve("acceleration", 100.0, config, False, False) == pytest.approx(2.0)
 
 
@@ -287,3 +345,153 @@ def test_following_custom_initialisation_uses_effective_legacy_curve():
   legacy_curve = [1.0 + index * 0.05 for index in range(10)]
   current = {"preset": "dom_default", "curve": []}
   assert initial_custom_curve("following", current, False, False, legacy_curve=legacy_curve) == legacy_curve
+
+
+def test_v2_uses_one_shared_ten_mph_custom_axis():
+  assert PROFILE_SCHEMA_VERSION == 2
+  expected = tuple(range(0, 91, 10))
+  assert ACCELERATION_SPEEDS_MPH == expected
+  assert BRAKING_SPEEDS_MPH == expected
+  assert FOLLOWING_SPEEDS_MPH == expected
+
+
+def test_fresh_profiles_select_standard_standard_and_medium():
+  profiles = default_personality_profiles(False)
+  for profile in profiles.values():
+    assert profile == {
+      "acceleration": {"preset": "standard", "curve": []},
+      "braking": {"preset": "standard", "curve": []},
+      "following": {"preset": "medium", "curve": []},
+    }
+
+
+def test_following_presets_match_stock_dom_personalities_exactly():
+  assert FOLLOWING_PRESET_CURVES == {
+    "close": (1.25,) * 10,
+    "medium": (1.45,) * 10,
+    "far": (1.75,) * 10,
+  }
+
+
+@pytest.mark.parametrize("category", ["acceleration", "braking"])
+def test_custom_longitudinal_curves_interpolate_on_exact_ten_mph_points(category):
+  curve = [0.75 + index * 0.1 for index in range(10)]
+  config = {"preset": "custom", "curve": curve}
+  assert interpolate_category_curve(category, 20 * 0.44704, config, False, False) == pytest.approx(curve[2])
+  assert interpolate_category_curve(category, 25 * 0.44704, config, False, False) == pytest.approx((curve[2] + curve[3]) / 2)
+
+
+def test_named_acceleration_presets_keep_native_dom_interpolation():
+  config = {"preset": "sport", "curve": []}
+  native_curve = get_accel_profile_curve_values(ACCELERATION_PROFILES["SPORT"], False, False)
+  for speed_mps in (0.0, 2.5, 7.5, 17.5, 32.0, 45.0):
+    assert interpolate_category_curve("acceleration", speed_mps, config, False, False) == pytest.approx(
+      interpolate_accel_profile(speed_mps, native_curve)
+    )
+
+
+def test_reference_curves_are_profile_specific_and_use_the_custom_axis():
+  references = lpp.personality_reference_curves(False, False)
+  assert references["traffic"]["acceleration"] != references["aggressive"]["acceleration"]
+  assert references["aggressive"]["following"] == [1.25] * 10
+  assert references["standard"]["following"] == [1.45] * 10
+  assert references["relaxed"]["following"] == [1.75] * 10
+  for profile in references.values():
+    for curve in profile.values():
+      assert len(curve) == 10
+      assert all(math.isfinite(value) for value in curve)
+
+
+def test_exact_v1_document_migrates_whole_or_not_at_all():
+  legacy_axes = {
+    "acceleration": {
+      "speed": {"unit": "mph", "values": [0.0, 11.184681, 22.369363, 33.554044, 44.738726, 55.923407, 89.477452]},
+      "value": {"unit": "m/s^2", "meaning": "maximum_requested_acceleration"},
+    },
+    "braking": {
+      "speed": {"unit": "mph", "values": [0.0, 11.184681, 22.369363, 33.554044, 44.738726, 55.923407, 89.477452]},
+      "value": {"unit": "m/s^2", "meaning": "cruise_slc_deceleration_magnitude"},
+    },
+    "following": {
+      "speed": {"unit": "mph", "values": list(range(0, 91, 10))},
+      "value": {"unit": "s", "meaning": "base_time_headway"},
+    },
+  }
+  legacy_profiles = {
+    personality: {
+      "acceleration": {"preset": "standard", "curve": []},
+      "braking": {"preset": "standard", "curve": []},
+      "following": {"preset": "medium", "curve": []},
+    }
+    for personality in PERSONALITY_IDS
+  }
+  legacy_profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]}
+  legacy = {"schemaVersion": 1, "enabled": True, "axes": legacy_axes, "profiles": legacy_profiles}
+
+  migrated = lpp.migrate_profile_document(legacy)
+  assert migrated is not None
+  assert migrated["schemaVersion"] == 2
+  assert migrated["enabled"] is True
+  migrated_acceleration = migrated["profiles"]["aggressive"]["acceleration"]
+  assert migrated_acceleration["preset"] == "custom"
+  assert len(migrated_acceleration["curve"]) == 10
+  assert migrated_acceleration["legacyCurve"] == legacy_profiles["aggressive"]["acceleration"]["curve"]
+  assert migrated["profiles"]["standard"] == legacy_profiles["standard"]
+
+  malformed = json.loads(json.dumps(legacy))
+  malformed["profiles"]["aggressive"]["acceleration"]["curve"][0] = True
+  assert lpp.migrate_profile_document(malformed) is None
+
+
+def test_migrated_custom_acceleration_and_braking_preserve_v1_runtime_behaviour():
+  source_axis_ms = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 40.0]
+  for category, legacy_curve in (
+    ("acceleration", [1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4]),
+    ("braking", [0.5, 0.65, 0.8, 0.95, 1.1, 1.25, 1.4]),
+  ):
+    display_curve = [round(float(value), 4) for value in np.interp(np.array(ACCELERATION_SPEEDS_MPH) * 0.44704, source_axis_ms, legacy_curve)]
+    config = {"preset": "custom", "curve": display_curve, "legacyCurve": legacy_curve}
+    for speed_mps in np.linspace(0.0, 40.0, 161):
+      expected = float(np.interp(speed_mps, source_axis_ms, legacy_curve))
+      assert interpolate_category_curve(category, float(speed_mps), config, False, False) == pytest.approx(expected)
+
+
+def test_v2_legacy_curve_is_strictly_scoped_to_valid_custom_acceleration_and_braking():
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {
+    "preset": "custom", "curve": [1.0] * 10, "legacyCurve": [1.0] * 7,
+  }
+  assert lpp.strict_profile_document(profile_document(profiles, enabled=True)) is not None
+
+  invalid_named = json.loads(json.dumps(profiles))
+  invalid_named["aggressive"]["acceleration"] = {"preset": "sport", "curve": [], "legacyCurve": [1.0] * 7}
+  assert lpp.strict_profile_document(profile_document(invalid_named, enabled=True)) is None
+
+  invalid_following = json.loads(json.dumps(profiles))
+  invalid_following["aggressive"]["following"] = {
+    "preset": "custom", "curve": [1.25] * 10, "legacyCurve": [1.25] * 7,
+  }
+  assert lpp.strict_profile_document(profile_document(invalid_following, enabled=True)) is None
+
+  invalid_boolean = json.loads(json.dumps(profiles))
+  invalid_boolean["aggressive"]["acceleration"]["legacyCurve"][0] = True
+  assert lpp.strict_profile_document(profile_document(invalid_boolean, enabled=True)) is None
+
+
+def test_editing_a_migrated_custom_curve_retires_the_legacy_runtime_contract():
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {
+    "preset": "custom", "curve": [1.0] * 10, "legacyCurve": [1.0] * 7,
+  }
+  updated = update_personality_profile(
+    profiles, "aggressive", "acceleration", "custom", [1.2] * 10, False, False,
+  )
+  assert updated["aggressive"]["acceleration"] == {"preset": "custom", "curve": [1.2] * 10}
+
+
+def test_initial_custom_curve_resamples_named_preset_to_custom_axis():
+  curve = initial_custom_curve("acceleration", {"preset": "sport", "curve": []}, False, False)
+  assert len(curve) == 10
+  config = {"preset": "sport", "curve": []}
+  for speed_mph, value in zip(ACCELERATION_SPEEDS_MPH, curve, strict=True):
+    assert value == pytest.approx(interpolate_category_curve("acceleration", speed_mph * 0.44704, config, False, False), abs=5e-5)
