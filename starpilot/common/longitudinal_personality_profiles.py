@@ -37,16 +37,18 @@ def is_truck_fingerprint(fingerprint: object) -> bool:
 ACCELERATION_PRESETS = ("dom_default", "standard", "eco", "sport", "sport_plus", "custom")
 BRAKING_PRESETS = ("dom_default", "standard", "eco", "sport", "custom")
 FOLLOWING_PRESETS = ("dom_default", "close", "medium", "far", "custom")
+# Authoring limits are not the persisted schema contract.
 CURVE_BOUNDS = {
   "acceleration": (0.0, 3.5),
   "braking": (0.5, 2.0),
   "following": (0.75, 3.0),
 }
-_V1_CURVE_BOUNDS = {
+_V2_CURVE_BOUNDS = {
   "acceleration": (0.0, 6.0),
   "braking": (0.5, 2.0),
   "following": (0.75, 3.0),
 }
+_V1_CURVE_BOUNDS = dict(_V2_CURVE_BOUNDS)
 PERSONALITY_ADVANCED_PARAM_KEYS = frozenset(
   f"{profile}{suffix}"
   for profile in ("Traffic", "Aggressive", "Standard", "Relaxed")
@@ -267,7 +269,7 @@ def _validated_category_with_length(
 
 def _validated_category(category: str, raw_category) -> dict | None:
   expected_length = _CATEGORY_SPECS.get(category, ((), 0))[1]
-  return _validated_category_with_length(category, raw_category, expected_length, CURVE_BOUNDS, _V1_CURVE_BOUNDS)
+  return _validated_category_with_length(category, raw_category, expected_length, _V2_CURVE_BOUNDS, _V1_CURVE_BOUNDS)
 
 
 def _schema_values_equal(actual, expected) -> bool:
@@ -327,7 +329,7 @@ def strict_profile_document(raw_document) -> dict | None:
     PROFILE_SCHEMA_VERSION,
     PROFILE_AXES,
     {category: expected_length for category, (_, expected_length) in _CATEGORY_SPECS.items()},
-    CURVE_BOUNDS,
+    _V2_CURVE_BOUNDS,
     _V1_CURVE_BOUNDS,
   )
 
@@ -405,7 +407,20 @@ def update_personality_profile(
     raise ValueError(f"Unknown personality: {personality}")
   if category not in _CATEGORY_SPECS:
     raise ValueError(f"Unknown profile category: {category}")
+  base_document = profile_document(profiles, enabled=True)
+  canonical = strict_profile_document(base_document)
   validated = _validated_category(category, {"preset": preset, "curve": curve})
+  if validated is not None and preset == "custom":
+    minimum, maximum = CURVE_BOUNDS[category]
+    previous = canonical["profiles"][personality][category] if canonical is not None else None
+    # Only the same point in a fully valid saved Custom curve is grandfathered.
+    # Compare before rounding so a small out-of-range edit cannot masquerade as a no-op.
+    for index, value in enumerate(curve):
+      if not minimum <= value <= maximum and (
+        previous is None or previous["preset"] != "custom" or value != previous["curve"][index]
+      ):
+        validated = None
+        break
   if validated is None:
     minimum, maximum = CURVE_BOUNDS[category]
     presets, expected_length = _CATEGORY_SPECS[category]
@@ -413,13 +428,15 @@ def update_personality_profile(
     message += f"{expected_length} finite numeric values between {minimum} and {maximum}."
     raise ValueError(message)
 
-  base_document = profile_document(profiles, enabled=True)
-  canonical = strict_profile_document(base_document)
   if canonical is None:
     base = default_personality_profiles(ev_tuning, truck_tuning)
   else:
     base = canonical["profiles"]
   updated = deepcopy(base)
+  previous = updated[personality][category]
+  if preset == "custom" and previous["preset"] == "custom" and validated["curve"] == previous["curve"]:
+    # A no-op submission is not consent to retire a preserved v1 runtime curve.
+    return updated
   updated[personality][category] = validated
   return updated
 

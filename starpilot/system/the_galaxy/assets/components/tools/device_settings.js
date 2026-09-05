@@ -1693,7 +1693,9 @@ function graphGeometry(category, curve) {
   const width = 660
   const height = 240
   const speeds = state.personalityMeta?.speedBreakpointsMph?.[category] || []
-  const bounds = state.personalityMeta?.bounds?.[category] || [0, 1]
+  const editBounds = state.personalityMeta?.bounds?.[category] || [0, 1]
+  // Plot saved pre-limit values honestly; this must not widen authoring limits.
+  const bounds = [Number(editBounds[0]), Math.max(Number(editBounds[1]), ...curve.filter(Number.isFinite))]
   const left = 46
   const right = 22
   const top = 18
@@ -1711,9 +1713,8 @@ function curveTicks(bounds) {
   return [0, 1, 2, 3, 4].map(index => minimum + (maximum - minimum) * index / 4)
 }
 
-function drawPersonalityCurve(canvas, category, curve, referenceCurve = []) {
+function drawPersonalityCurve(canvas, category, curve, referenceCurve = [], geometry = graphGeometry(category, curve)) {
   if (!(canvas instanceof HTMLCanvasElement)) return
-  const geometry = graphGeometry(category, curve)
   const definition = PERSONALITY_CATEGORY_DEFINITIONS[category]
   const context = canvas.getContext("2d")
   if (!context || !definition) return
@@ -1795,9 +1796,9 @@ function drawPersonalityCurve(canvas, category, curve, referenceCurve = []) {
   })
 }
 
-function updateDraggedCurveVisual(canvas, profileId, category, curve) {
+function updateDraggedCurveVisual(canvas, profileId, category, curve, geometry) {
   const valueUnit = PERSONALITY_CATEGORY_DEFINITIONS[category]?.valueUnit || ""
-  drawPersonalityCurve(canvas, category, curve, state.personalityReferenceCurves?.[profileId]?.[category] || [])
+  drawPersonalityCurve(canvas, category, curve, state.personalityReferenceCurves?.[profileId]?.[category] || [], geometry)
   curve.forEach((value, index) => {
     const valueNode = document.getElementById(`personality-value-${profileId}-${category}-${index}`)
     if (valueNode) valueNode.textContent = `${Number(value).toFixed(2)} ${valueUnit}`
@@ -1838,8 +1839,9 @@ function beginPersonalityCurveDrag(event, profileId, category) {
     height: chartRect.height * ((geometry.height - geometry.top - geometry.bottom) / geometry.height),
   }
   const update = clientY => {
-    curve[pointIndex] = valueFromPointer(clientY, plotRect, Number(bounds[0]), Number(bounds[1]), definition.step)
-    updateDraggedCurveVisual(canvas, profileId, category, curve)
+    const value = valueFromPointer(clientY, plotRect, geometry.bounds[0], geometry.bounds[1], definition.step)
+    curve[pointIndex] = Math.max(Number(bounds[0]), Math.min(Number(bounds[1]), value))
+    updateDraggedCurveVisual(canvas, profileId, category, curve, geometry)
   }
   const removeListeners = pointerEvent => {
     canvas.removeEventListener("pointermove", move)
@@ -1903,6 +1905,7 @@ async function adjustPersonalityCurvePoint(profileId, category, index, input) {
 function renderPersonalityCurve(profile, category, config) {
   const definition = PERSONALITY_CATEGORY_DEFINITIONS[category]
   const geometry = graphGeometry(category, config.curve)
+  const editBounds = state.personalityMeta?.bounds?.[category] || [0, 1]
   const updateKey = personalityUpdateKey(profile.id, category)
   const referenceCurve = state.personalityReferenceCurves?.[profile.id]?.[category] || []
   const canvasId = `personality-chart-${profile.id}-${category}`
@@ -1920,6 +1923,9 @@ function renderPersonalityCurve(profile, category, config) {
           <button type="button" class="ds-reset-btn" aria-label="Reset ${profile.label} ${definition.label} graph to Dom default" disabled="${() => !!state.values.IsOnroad || !!state.personalityMigrationRequired || !!state.personalityUpdating[updateKey]}" @click="${() => resetPersonalityCurve(profile.id, category)}">Reset</button>
         </div>
       </div>
+      ${config.curve.some(value => value > Number(editBounds[1])) ? html`
+        <p class="ds-personality-migration-warning ds-personality-compatibility-warning">Saved values above ${editBounds[1]} ${definition.valueUnit} are preserved. Edited points must be within ${editBounds[0]}–${editBounds[1]} ${definition.valueUnit}; other points stay unchanged.</p>
+      ` : ""}
       <div class="ds-personality-graph-layout">
         <canvas
           class="ds-personality-chart"
@@ -1937,8 +1943,8 @@ function renderPersonalityCurve(profile, category, config) {
               <input
                 id="personality-input-${profile.id}-${category}-${index}"
                 type="number"
-                min="${geometry.bounds[0]}"
-                max="${geometry.bounds[1]}"
+                min="${editBounds[0]}"
+                max="${editBounds[1]}"
                 step="${definition.step}"
                 aria-label="${profile.label} ${definition.label} at ${formatProfileSpeed(geometry.speeds[index], !!state.values.IsMetric)} ${profileSpeedUnit(!!state.values.IsMetric)}, ${definition.valueUnit}"
                 aria-describedby="personality-curve-error-${profile.id}-${category}"

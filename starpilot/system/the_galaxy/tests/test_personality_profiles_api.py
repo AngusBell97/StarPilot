@@ -43,6 +43,65 @@ def _client(monkeypatch, values=None, *, ev_tuning=False, truck_tuning=False):
   return client, params
 
 
+@pytest.mark.parametrize("value", [3.51, 4.0, 5.0, 6.0])
+def test_saved_v2_high_curve_read_migrate_edit_and_master_round_trip(monkeypatch, value):
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [value] * 10}
+  raw = json.dumps(profile_document(profiles, enabled=True))
+  client, params = _client(monkeypatch, {PERSONALITY_PROFILES_PARAM: raw, "CustomPersonalities": True})
+
+  response = client.get("/api/personality_profiles")
+  assert response.status_code == 200
+  assert response.get_json()["profiles"] == profiles
+  assert response.get_json()["bounds"]["acceleration"] == [0.0, 3.5]
+  assert response.get_json()["migration_required"] is False
+  assert client.post("/api/personality_profiles/migrate").status_code == 200
+  assert params.values[PERSONALITY_PROFILES_PARAM] == raw
+  assert params.writes == []
+
+  assert client.put("/api/personality_profiles", json={
+    "profile": "relaxed", "category": "braking", "preset": "eco", "curve": [],
+  }).status_code == 200
+  stored = strict_profile_document(params.values[PERSONALITY_PROFILES_PARAM])
+  assert stored is not None
+  assert stored["profiles"]["aggressive"] == profiles["aggressive"]
+  curve = [3.0] + [value] * 9
+  response = client.put("/api/personality_profiles", json={
+    "profile": "aggressive", "category": "acceleration", "preset": "custom", "curve": curve,
+  })
+  assert response.status_code == 200
+  assert response.get_json()["profiles"]["aggressive"]["acceleration"]["curve"] == curve
+  for enabled in (False, True):
+    assert client.put("/api/params", json={"key": "CustomPersonalities", "value": enabled}).status_code == 200
+    stored = strict_profile_document(params.values[PERSONALITY_PROFILES_PARAM])
+    assert stored is not None
+    assert stored["enabled"] is enabled
+    assert stored["profiles"]["aggressive"]["acceleration"]["curve"] == curve
+  before = json.dumps(params.values, sort_keys=True)
+  writes = list(params.writes)
+  assert client.put("/api/personality_profiles", json={
+    "profile": "aggressive", "category": "acceleration", "preset": "custom", "curve": [value] * 10,
+  }).status_code == 400
+  assert json.dumps(params.values, sort_keys=True) == before
+  assert params.writes == writes
+
+
+@pytest.mark.parametrize("state", [{"IsOnroad": True}, {"IsOnroad": False, "IsOffroad": False}])
+def test_saved_v2_high_curve_never_bypasses_parked_write_guard(monkeypatch, state):
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [6.0] * 10}
+  raw = json.dumps(profile_document(profiles, enabled=True))
+  client, params = _client(monkeypatch, {PERSONALITY_PROFILES_PARAM: raw, **state})
+  assert client.get("/api/personality_profiles").status_code == 200
+  assert client.put("/api/personality_profiles", json={
+    "profile": "aggressive", "category": "acceleration", "preset": "custom", "curve": [3.0] + [6.0] * 9,
+  }).status_code == 403
+  assert client.post("/api/personality_profiles/migrate").status_code == 403
+  assert client.put("/api/params", json={"key": "CustomPersonalities", "value": False}).status_code == 403
+  assert params.values[PERSONALITY_PROFILES_PARAM] == raw
+  assert params.writes == []
+
+
 def test_get_returns_disabled_standard_defaults_and_explicit_graph_metadata(monkeypatch):
   client, _ = _client(monkeypatch)
   response = client.get("/api/personality_profiles")

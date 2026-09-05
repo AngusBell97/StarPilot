@@ -205,13 +205,66 @@ def test_custom_curve_bounds_preserve_low_acceleration_and_enforce_requested_cei
   valid["profiles"]["standard"]["braking"] = {"preset": "custom", "curve": [2.0] * 10}
   assert strict_personality_profiles(valid) == valid["profiles"]
 
-  invalid_acceleration = json.loads(json.dumps(valid))
-  invalid_acceleration["profiles"]["standard"]["acceleration"]["curve"][0] = 3.51
-  assert strict_personality_profiles(invalid_acceleration) is None
+  # A saved v2 curve can exceed the new-authoring ceiling; new points cannot.
+  with pytest.raises(ValueError):
+    update_personality_profile(valid["profiles"], "standard", "acceleration", "custom", [3.51] * 10, False)
 
   invalid_braking = json.loads(json.dumps(valid))
   invalid_braking["profiles"]["standard"]["braking"]["curve"][0] = 2.01
   assert strict_personality_profiles(invalid_braking) is None
+
+
+@pytest.mark.parametrize("value", [3.51, 4.0, 5.0, 6.0])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_saved_v2_high_acceleration_keeps_schema_and_runtime_behaviour(value, enabled):
+  document = profile_document(default_personality_profiles(False), enabled=enabled)
+  curve = [value, 3.5, 2.0, 1.5, 1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
+  document["profiles"]["aggressive"]["acceleration"] = {"preset": "custom", "curve": curve}
+  raw = json.dumps(document)
+
+  assert lpp.strict_profile_document(raw) == document
+  assert lpp.migrate_profile_document(raw) == document
+  assert load_personality_profiles(raw, False) == document["profiles"]
+  assert json.loads(serialize_personality_profiles(document["profiles"], False, enabled=enabled)) == document
+  assert lpp.synchronise_profile_document_enabled(raw, not enabled, False) == {**document, "enabled": not enabled}
+  resolved = resolve_personality_profile(raw, False, 0)
+  assert resolved == (document["profiles"]["aggressive"] if enabled else None)
+  if enabled:
+    assert resolved is not None
+    for speed_mph in (-1.0, 0.0, 2.5, 5.0, 10.0, 25.0, 90.0, 100.0):
+      assert interpolate_category_curve("acceleration", speed_mph * 0.44704, resolved["acceleration"], False) == pytest.approx(
+        interpolate_accel_profile(speed_mph * 0.44704, curve, [speed * 0.44704 for speed in ACCELERATION_SPEEDS_MPH])
+      )
+  assert json.dumps(document) == raw
+
+
+@pytest.mark.parametrize("value", [3.51, 4.0, 5.0, 6.0])
+def test_edit_saved_v2_high_point_preserves_other_points_and_profiles(value):
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [value] * 10}
+  raw = json.dumps(profiles)
+  curve = [3.0] + [value] * 9
+  updated = update_personality_profile(profiles, "aggressive", "acceleration", "custom", curve, False)
+  assert updated["aggressive"]["acceleration"] == {"preset": "custom", "curve": curve}
+  assert json.dumps(profiles) == raw
+  for profile_id in ("traffic", "standard", "relaxed"):
+    assert updated[profile_id] == profiles[profile_id]
+  with pytest.raises(ValueError):
+    update_personality_profile(updated, "aggressive", "acceleration", "custom", [value] * 10, False)
+
+
+def test_saved_high_points_cannot_be_created_moved_increased_or_rounded_into_permission():
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [4.0] + [1.0] * 9}
+  for curve in ([4.1] + [1.0] * 9, [4.00001] + [1.0] * 9, [1.0, 4.0] + [1.0] * 8):
+    with pytest.raises(ValueError):
+      update_personality_profile(profiles, "aggressive", "acceleration", "custom", curve, False)
+  with pytest.raises(ValueError):
+    update_personality_profile(profiles, "standard", "acceleration", "custom", [4.0] + [1.0] * 9, False)
+  malformed = json.loads(json.dumps(profiles))
+  malformed["relaxed"]["following"]["curve"] = [True]
+  with pytest.raises(ValueError):
+    update_personality_profile(malformed, "aggressive", "acceleration", "custom", [4.0] + [1.0] * 9, False)
 
 
 def test_disabled_document_never_resolves_an_override():
@@ -522,6 +575,16 @@ def test_v2_legacy_curve_is_strictly_scoped_to_valid_custom_acceleration_and_bra
   invalid_boolean = json.loads(json.dumps(profiles))
   invalid_boolean["aggressive"]["acceleration"]["legacyCurve"][0] = True
   assert lpp.strict_profile_document(profile_document(invalid_boolean, enabled=True)) is None
+
+
+def test_noop_custom_update_keeps_saved_legacy_runtime_curve():
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {
+    "preset": "custom", "curve": [3.5] * 10, "legacyCurve": [4.0] * 7,
+  }
+  updated = update_personality_profile(profiles, "aggressive", "acceleration", "custom", [3.5] * 10, False)
+  assert updated == profiles
+  assert interpolate_category_curve("acceleration", 10.0, updated["aggressive"]["acceleration"], False) == 4.0
 
 
 def test_editing_a_migrated_custom_curve_retires_the_legacy_runtime_contract():

@@ -44,6 +44,86 @@ def test_graph_pointer_values_are_clamped_and_snapped():
   assert result == [2.0, 1.25, 0.5]
 
 
+def test_saved_high_curve_points_remain_inside_the_graph_without_widening_authoring_limits():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  geometry_function = "function graphGeometry" + source.split("function graphGeometry", 1)[1].split("\n}\n", 1)[0] + "\n}"
+  result = _run_node("""
+    const state = { personalityMeta: { bounds: { acceleration: [0, 3.5] },
+      speedBreakpointsMph: { acceleration: [0,10,20,30,40,50,60,70,80,90] } } };
+  """ + geometry_function + """
+    const curve = [6, 4, 3.51, 3.5, 3, 2, 1, 0.8, 0.4, 0];
+    const geometry = graphGeometry("acceleration", curve);
+    console.log(JSON.stringify({
+      visible: curve.every(value => geometry.y(value) >= geometry.top && geometry.y(value) <= geometry.height - geometry.bottom),
+      authoringBounds: state.personalityMeta.bounds.acceleration,
+      displayBounds: geometry.bounds,
+      curve,
+    }));
+  """)
+  assert result["visible"] is True
+  assert result["displayBounds"] == [0, 6]
+  assert result["authoringBounds"] == [0, 3.5]
+  assert result["curve"] == [6, 4, 3.51, 3.5, 3, 2, 1, 0.8, 0.4, 0]
+
+
+def test_saved_high_curve_plot_does_not_raise_number_input_limits():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  functions = "\n".join(
+    "function " + name + source.split("function " + name, 1)[1].split("\n}\n", 1)[0] + "\n}"
+    for name in ("graphGeometry", "renderPersonalityCurve")
+  )
+  result = _run_node("""
+    const state = { values: {}, personalityCurveErrors: {}, personalityMeta: {
+      bounds: { acceleration: [0, 3.5] }, speedBreakpointsMph: { acceleration: [0,10,20,30,40,50,60,70,80,90] }
+    } };
+    const PERSONALITY_CATEGORY_DEFINITIONS = { acceleration: {label: "Acceleration", valueUnit: "m/s²", step: 0.01} };
+    const personalityUpdateKey = (profile, category) => `${profile}-${category}`;
+    const requestAnimationFrame = () => {};
+    const html = (parts, ...values) => parts.reduce((text, part, i) => text + part + (values[i] ?? ""), "");
+  """ + functions + """
+    const rendered = renderPersonalityCurve({id: "aggressive", label: "Aggressive"}, "acceleration", {preset:"custom",curve:[6,4,3.51,3,2,1,1,1,1,1]});
+    console.log(JSON.stringify({maxima:[...rendered.matchAll(/max="([^"]+)"/g)].map(match=>match[1]), warning:rendered.includes("Saved values above") }));
+  """)
+  assert result["maxima"] == ["3.5"] * 10
+  assert result["warning"] is True
+
+
+def test_drag_on_expanded_saved_curve_uses_plot_scale_but_caps_only_edited_point():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  functions = "\n".join(
+    "function " + name + source.split("function " + name, 1)[1].split("\n}\n", 1)[0] + "\n}"
+    for name in ("graphGeometry", "beginPersonalityCurveDrag")
+  )
+  result = _run_node("""
+    const state = { personalityUpdating:{}, personalityProfiles:{aggressive:{acceleration:{preset:"custom",curve:[6,4,1,1,1,1,1,1,1,1]}}},
+      personalityMeta:{bounds:{acceleration:[0,3.5]},speedBreakpointsMph:{acceleration:[0,10,20,30,40,50,60,70,80,90]}} };
+    const PERSONALITY_CATEGORY_DEFINITIONS = { acceleration:{label:"Acceleration",step:0.01} };
+    const personalityUpdateKey = (p,c) => `${p}-${c}`;
+    const updates=[]; const saves=[];
+    const updateDraggedCurveVisual = (canvas,p,c,curve,geometry) => updates.push({curve:[...curve],bounds:geometry?.bounds});
+    const restorePersonalityCurveVisual = () => {};
+    const savePersonalityCategory = async (p,c,preset,curve) => {saves.push([...curve]);return true;};
+    class HTMLCanvasElement {
+      constructor(){this.listeners={};}
+      getBoundingClientRect(){return {left:0,top:0,width:660,height:240};}
+      setPointerCapture(){} hasPointerCapture(){return false;}
+      addEventListener(name,fn){this.listeners[name]=fn;}
+      removeEventListener(name){delete this.listeners[name];}
+    }
+  """ + functions + """
+    const canvas=new HTMLCanvasElement();
+    beginPersonalityCurveDrag({currentTarget:canvas,clientX:46,clientY:111,pointerId:1,preventDefault(){}},"aggressive","acceleration");
+    canvas.listeners.pointermove({clientY:18});
+    await canvas.listeners.pointerup({pointerId:1});
+    console.log(JSON.stringify({updates,saves,original:state.personalityProfiles.aggressive.acceleration.curve}));
+  """)
+  assert result["updates"][0]["curve"] == [3, 4] + [1] * 8
+  assert result["updates"][1]["curve"] == [3.5, 4] + [1] * 8
+  assert all(update["bounds"] == [0, 6] for update in result["updates"])
+  assert result["saves"] == [[3.5, 4] + [1] * 8]
+  assert result["original"] == [6, 4] + [1] * 8
+
+
 def test_rendered_editor_has_parked_locks_units_and_all_three_profile_categories():
   source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
   assert 'disabled="${() => !!state.values.IsOnroad' in source
