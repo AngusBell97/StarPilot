@@ -104,7 +104,7 @@ def test_drag_on_expanded_saved_curve_uses_plot_scale_but_caps_only_edited_point
     const restorePersonalityCurveVisual = () => {};
     const savePersonalityCategory = async (p,c,preset,curve) => {saves.push([...curve]);return true;};
     class HTMLCanvasElement {
-      constructor(){this.listeners={};}
+      constructor(){this.listeners={};this.dataset={};}
       getBoundingClientRect(){return {left:0,top:0,width:660,height:240};}
       setPointerCapture(){} hasPointerCapture(){return false;}
       addEventListener(name,fn){this.listeners[name]=fn;}
@@ -588,3 +588,71 @@ def test_personality_jerk_layout_metadata_matches_stored_percentage_range():
   ]
   assert len(jerk_params) == 20
   assert all((param.get("min"), param.get("max"), param.get("step")) == (25, 200, 1) for param in jerk_params)
+
+
+def test_graph_geometry_accepts_rendered_width_without_changing_saved_bounds():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  geometry_function = "function graphGeometry" + source.split("function graphGeometry", 1)[1].split("\n}\n", 1)[0] + "\n}"
+  result = _run_node("""
+    const state = {personalityMeta:{bounds:{acceleration:[0,3.5]},speedBreakpointsMph:{acceleration:[0,90]}}};
+  """ + geometry_function + """
+    console.log(JSON.stringify([224,280,660,750].map(width => {
+      const g=graphGeometry("acceleration", [6,6], width);
+      return {width:g.width, endpoints:[g.x(0),g.x(1)], bounds:g.bounds};
+    })));
+  """)
+  assert result == [{"width": width, "endpoints": [46, width - 22], "bounds": [0, 6]} for width in (224, 280, 660, 750)]
+
+
+def test_personality_responsive_layout_uses_available_card_width():
+  css = DEVICE_SETTINGS_CSS_PATH.read_text(encoding="utf-8")
+  assert "container-type: inline-size" in css
+  assert "@container (max-width: 850px)" in css
+  assert "repeat(auto-fit, minmax(min(100%, 260px), 1fr))" in css
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  assert "canvas.clientWidth" in source
+  assert 'context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)' in source
+
+
+def test_personality_save_blocks_onroad_even_for_synthetic_events():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  save = "async function savePersonalityCategory" + source.split("async function savePersonalityCategory", 1)[1].split("\n}\n", 1)[0] + "\n}"
+  result = _run_node("""
+    const state = {values:{IsOnroad:true}};
+    const fetch = () => {throw new Error("On-road write attempted")};
+  """ + save + """
+    console.log(JSON.stringify(await savePersonalityCategory("standard", "acceleration", "eco", [])));
+  """)
+  assert result is False
+
+
+def test_responsive_canvas_keeps_metric_endpoint_labels_separate_and_scales_bitmap():
+  source = DEVICE_SETTINGS_PATH.read_text(encoding="utf-8")
+  functions = "\n".join(
+    "function " + name + source.split("function " + name, 1)[1].split("\n}\n", 1)[0] + "\n}"
+    for name in ("graphGeometry", "curveTicks", "drawPersonalityCurve")
+  )
+  result = _run_node("""
+    const state = {values:{IsMetric:true},personalityMeta:{bounds:{acceleration:[0,3.5]},
+      speedBreakpointsMph:{acceleration:[0,10,20,30,40,50,60,70,80,90]}}};
+    const PERSONALITY_CATEGORY_DEFINITIONS={acceleration:{valueUnit:"m/s²",step:0.01}};
+    const window={devicePixelRatio:2};
+    const labels=[], transforms=[];
+    const context=new Proxy({
+      measureText:text=>({width:String(text).length*5}),
+      fillText:(text,x,y)=>{if(y===227) labels.push({text,x,width:String(text).length*5});},
+      setTransform:(...args)=>transforms.push(args),
+    },{get:(target,key)=>target[key] || (()=>{})});
+    class HTMLCanvasElement {clientWidth=261; getContext(){return context;}}
+  """ + functions + """
+    const canvas=new HTMLCanvasElement(), curve=Array(10).fill(6);
+    drawPersonalityCurve(canvas,"acceleration",curve);
+    console.log(JSON.stringify({labels,transforms,width:canvas.width,height:canvas.height,curve}));
+  """)
+  assert (result["width"], result["height"]) == (522, 480)
+  assert result["transforms"] == [[2, 0, 0, 2, 0, 0]]
+  assert result["curve"] == [6] * 10
+  labels = result["labels"]
+  assert [labels[0]["text"], labels[-1]["text"]] == ["0", "144.8"]
+  for left, right in zip(labels, labels[1:]):
+    assert left["x"] + left["width"] / 2 + 6 <= right["x"] - right["width"] / 2

@@ -1627,6 +1627,7 @@ function togglePersonalityAdvanced(profileId) {
 }
 
 async function savePersonalityCategory(profileId, category, preset, curve, successMessage) {
+  if (state.values.IsOnroad) return false
   if (state.personalityMigrationRequired) {
     showParamSnackbar("This profile data requires a verified migration before it can be edited.", "error")
     return false
@@ -1705,8 +1706,7 @@ function resetPersonalityCurve(profileId, category) {
   )
 }
 
-function graphGeometry(category, curve) {
-  const width = 660
+function graphGeometry(category, curve, width = 660) {
   const height = 240
   const speeds = state.personalityMeta?.speedBreakpointsMph?.[category] || []
   const editBounds = state.personalityMeta?.bounds?.[category] || [0, 1]
@@ -1729,11 +1729,18 @@ function curveTicks(bounds) {
   return [0, 1, 2, 3, 4].map(index => minimum + (maximum - minimum) * index / 4)
 }
 
-function drawPersonalityCurve(canvas, category, curve, referenceCurve = [], geometry = graphGeometry(category, curve)) {
+function drawPersonalityCurve(canvas, category, curve, referenceCurve = [], geometry) {
   if (!(canvas instanceof HTMLCanvasElement)) return
   const definition = PERSONALITY_CATEGORY_DEFINITIONS[category]
   const context = canvas.getContext("2d")
   if (!context || !definition) return
+
+  // Keep labels and points in CSS pixels instead of stretching a 660px bitmap.
+  geometry ||= graphGeometry(category, curve, canvas.clientWidth || 660)
+  const pixelRatio = window.devicePixelRatio || 1
+  canvas.width = Math.round(geometry.width * pixelRatio)
+  canvas.height = Math.round(geometry.height * pixelRatio)
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
 
   context.clearRect(0, 0, geometry.width, geometry.height)
   context.lineWidth = 1
@@ -1756,7 +1763,17 @@ function drawPersonalityCurve(canvas, category, curve, referenceCurve = [], geom
     context.lineTo(x, geometry.height - geometry.bottom)
     context.stroke()
     context.textAlign = "center"
-    context.fillText(formatProfileSpeed(speed, !!state.values.IsMetric), x, geometry.height - 13)
+    // Thin labels (not data points) on narrow charts, retaining both endpoints.
+    const labelStride = Math.max(1, Math.ceil(geometry.speeds.length * 32 / (geometry.width - geometry.left - geometry.right)))
+    const label = formatProfileSpeed(speed, !!state.values.IsMetric)
+    const lastIndex = geometry.speeds.length - 1
+    const lastLabel = formatProfileSpeed(geometry.speeds[lastIndex], !!state.values.IsMetric)
+    const lastLabelLeft = geometry.x(lastIndex) - context.measureText(lastLabel).width / 2
+    // The final interval may be shorter than the stride, especially in km/h.
+    const clearsEndpoint = x + context.measureText(label).width / 2 + 6 <= lastLabelLeft
+    if (index === 0 || index === lastIndex || (index % labelStride === 0 && clearsEndpoint)) {
+      context.fillText(label, x, geometry.height - 13)
+    }
   })
   context.font = "bold 9px sans-serif"
   context.textAlign = "left"
@@ -1834,6 +1851,19 @@ function restorePersonalityCurveVisual(profileId, category, curve) {
   })
 }
 
+function redrawVisiblePersonalityCurves() {
+  document.querySelectorAll(".ds-personality-curve canvas").forEach(canvas => {
+    if (!canvas.clientWidth || canvas.dataset.dragging) return
+    const { profile, category } = canvas.closest(".ds-personality-curve").dataset
+    const curve = state.personalityProfiles?.[profile]?.[category]?.curve
+    if (curve) drawPersonalityCurve(canvas, category, curve, state.personalityReferenceCurves?.[profile]?.[category] || [])
+  })
+}
+
+// Observe the settings container, not individual cards that reactive renders replace.
+let personalityGraphResizeObserver
+window.addEventListener("resize", () => requestAnimationFrame(redrawVisiblePersonalityCurves))
+
 function beginPersonalityCurveDrag(event, profileId, category) {
   const canvas = event?.currentTarget
   const config = state.personalityProfiles?.[profileId]?.[category]
@@ -1843,7 +1873,7 @@ function beginPersonalityCurveDrag(event, profileId, category) {
 
   event.preventDefault()
   const curve = [...config.curve]
-  const geometry = graphGeometry(category, curve)
+  const geometry = graphGeometry(category, curve, canvas.clientWidth || 660)
   const chartRect = canvas.getBoundingClientRect()
   const pointerX = (event.clientX - chartRect.left) * geometry.width / chartRect.width
   let pointIndex = 0
@@ -1860,6 +1890,7 @@ function beginPersonalityCurveDrag(event, profileId, category) {
     updateDraggedCurveVisual(canvas, profileId, category, curve, geometry)
   }
   const removeListeners = pointerEvent => {
+    delete canvas.dataset.dragging
     canvas.removeEventListener("pointermove", move)
     canvas.removeEventListener("pointerup", finish)
     canvas.removeEventListener("pointercancel", cancel)
@@ -1876,6 +1907,7 @@ function beginPersonalityCurveDrag(event, profileId, category) {
   }
   const move = pointerEvent => update(pointerEvent.clientY)
 
+  canvas.dataset.dragging = "true"
   canvas.setPointerCapture(event.pointerId)
   canvas.addEventListener("pointermove", move)
   canvas.addEventListener("pointerup", finish)
@@ -2621,6 +2653,15 @@ function resolveActiveSectionSlug(params) {
 
 export function DeviceSettings({ params }) {
   lastParams = params
+
+  requestAnimationFrame(() => {
+    personalityGraphResizeObserver?.disconnect()
+    const wrapper = document.querySelector(".ds-wrapper")
+    if (wrapper && typeof ResizeObserver !== "undefined") {
+      personalityGraphResizeObserver = new ResizeObserver(redrawVisiblePersonalityCurves)
+      personalityGraphResizeObserver.observe(wrapper)
+    }
+  })
 
   fetchFlmWorkspace()
   ensureFavoriteValuePolling()

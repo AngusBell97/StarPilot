@@ -763,6 +763,7 @@
 }
 
 .ds-personality-card {
+  container-type: inline-size;
   --personality-accent: #38bdf8;
   --personality-accent-bg: rgba(56, 189, 248, 0.12);
   --personality-accent-border: rgba(56, 189, 248, 0.35);
@@ -900,7 +901,7 @@
 .ds-personality-fields {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 }
 
 .ds-personality-field {
@@ -945,7 +946,7 @@
   border-radius: 0;
   color: var(--text-muted);
   cursor: pointer;
-  flex: 1 1 0;
+  flex: 1 1 auto;
   font: inherit;
   font-size: 0.64rem;
   font-weight: var(--font-weight-semibold);
@@ -1001,6 +1002,7 @@
 }
 
 .ds-personality-curve-head h4 {
+  color: var(--text-color);
   font-size: var(--font-size-sm);
   margin: 0;
 }
@@ -1050,8 +1052,9 @@
   background: rgba(2, 6, 23, 0.55);
   border: 1px solid var(--sidebar-border-color);
   border-radius: 0.5rem;
-  height: auto;
-  min-height: 220px;
+  box-sizing: border-box;
+  height: 240px;
+  min-width: 0;
   touch-action: none;
   width: 100%;
 }
@@ -1288,22 +1291,27 @@
     border-left: 0;
   }
 
-  .ds-personality-fields,
+}
+
+/* Respond to the card's available space, including landscape and embeds. */
+@container (max-width: 850px) {
   .ds-personality-graph-layout,
   .ds-personality-advanced-value {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
+  .ds-personality-values {
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    max-height: none;
+  }
+}
+
+@container (max-width: 400px) {
   .ds-personality-curve-head {
-    flex-direction: column;
+    flex-wrap: wrap;
   }
 
   .ds-personality-curve-actions {
     justify-content: flex-start;
-  }
-
-  .ds-personality-values {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-height: none;
   }
 }
