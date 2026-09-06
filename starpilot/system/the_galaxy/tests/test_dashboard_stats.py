@@ -2499,7 +2499,7 @@ def test_toggle_profile_slots_save_and_load_the_same_filtered_settings(monkeypat
     for key, (default, value_type, _) in definitions.items()
   ]
   monkeypatch.setattr(server, "_params_raw", raw_params)
-  monkeypatch.setattr(server, "params", FakeParams({"IsOnroad": False}))
+  monkeypatch.setattr(server, "params", FakeParams({"IsOnroad": False, "IsOffroad": True}))
   monkeypatch.setattr(server, "EXCLUDED_KEYS", set())
   monkeypatch.setattr(server, "TOGGLE_BACKUPS", tmp_path)
   update_calls = []

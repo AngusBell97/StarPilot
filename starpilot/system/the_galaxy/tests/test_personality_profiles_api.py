@@ -43,6 +43,122 @@ def _client(monkeypatch, values=None, *, ev_tuning=False, truck_tuning=False):
   return client, params
 
 
+def _slot_client(monkeypatch, tmp_path, settings, values=None):
+  client, params = _client(monkeypatch, values)
+  types = {key: the_galaxy.ParamKeyType.BOOL if key == "CustomPersonalities" else the_galaxy.ParamKeyType.FLOAT
+           for key in settings}
+  monkeypatch.setattr(params, "get_type", lambda key: types[key], raising=False)
+  monkeypatch.setattr(the_galaxy, "_params_raw", params)
+  monkeypatch.setattr(the_galaxy, "TOGGLE_BACKUPS", tmp_path)
+  monkeypatch.setattr(the_galaxy, "_get_toggle_backup_keys", lambda: set(settings))
+  monkeypatch.setattr(the_galaxy, "update_starpilot_toggles", lambda: None)
+  (tmp_path / ".params-profile-a.json").write_text(json.dumps({
+    "format": the_galaxy.param_profiles.PROFILE_FORMAT, "version": 1, "slot": "a",
+    "settings": {key: {"type": int(types[key]), "value": value} for key, value in settings.items()},
+  }))
+  return client, params
+
+
+@pytest.mark.parametrize("state", [{"IsOnroad": True}, {"IsOffroad": False}, {"IsOffroad": None}])
+def test_slot_load_requires_confirmed_offroad(monkeypatch, tmp_path, state):
+  client, params = _slot_client(monkeypatch, tmp_path, {"UnrelatedSetting": 2.0}, state)
+  assert client.post("/api/toggles/profiles/a/load").status_code == 403
+  assert params.writes == []
+
+
+def test_slot_load_rechecks_offroad_after_acquiring_shared_lock(monkeypatch, tmp_path):
+  client, params = _slot_client(monkeypatch, tmp_path, {"UnrelatedSetting": 2.0})
+
+  class StateChangingLock:
+    def __enter__(self):
+      params.values["IsOffroad"] = False
+
+    def __exit__(self, *args):
+      pass
+
+  monkeypatch.setattr(the_galaxy, "_PERSONALITY_PROFILES_WRITE_LOCK", StateChangingLock())
+  assert client.post("/api/toggles/profiles/a/load").status_code == 403
+  assert params.writes == []
+
+
+def test_slot_load_preserves_native_types_renames_and_skips(monkeypatch, tmp_path):
+  from datetime import datetime
+
+  client, params = _slot_client(monkeypatch, tmp_path, {"BytesSetting": 0, "TimeSetting": 0, "ChangedSetting": 0})
+  types = {"BytesSetting": the_galaxy.ParamKeyType.BYTES, "TimeSetting": the_galaxy.ParamKeyType.TIME,
+           "ChangedSetting": the_galaxy.ParamKeyType.BOOL}
+  monkeypatch.setattr(params, "get_type", lambda key: types[key])
+  monkeypatch.setattr(the_galaxy, "LEGACY_STARPILOT_PARAM_RENAMES", {"OldBytesSetting": "BytesSetting"})
+  path = tmp_path / ".params-profile-a.json"
+  payload = json.loads(path.read_text())
+  payload["settings"] = {
+    "OldBytesSetting": {"type": int(types["BytesSetting"]), "value": "AP8="},
+    "TimeSetting": {"type": int(types["TimeSetting"]), "value": "2026-01-01T00:00:00+00:00"},
+    "ChangedSetting": {"type": int(the_galaxy.ParamKeyType.FLOAT), "value": 2.0},
+    "UnavailableSetting": {"type": int(the_galaxy.ParamKeyType.FLOAT), "value": 3.0},
+  }
+  path.write_text(json.dumps(payload))
+  response = client.post("/api/toggles/profiles/a/load")
+  assert response.status_code == 200
+  assert response.get_json()["restoredCount"] == 2
+  assert response.get_json()["skippedCount"] == 2
+  assert params.values["BytesSetting"] == b"\x00\xff"
+  assert params.values["TimeSetting"] == datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+  assert {key for key, _ in params.writes} == {"BytesSetting", "TimeSetting"}
+
+
+@pytest.mark.parametrize("key,value", [
+  ("CustomPersonalities", "true"),
+  (sorted(PERSONALITY_ADVANCED_PARAM_KEYS)[0], 200.1),
+  (sorted(PERSONALITY_FOLLOW_PARAM_KEYS)[0], 99),
+])
+def test_slot_load_validates_personality_before_any_writes(monkeypatch, tmp_path, key, value):
+  client, params = _slot_client(monkeypatch, tmp_path, {"UnrelatedSetting": 2.0, key: value})
+  assert client.post("/api/toggles/profiles/a/load").status_code == 400
+  assert params.writes == []
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_slot_load_rejects_incompatible_document_before_any_writes(monkeypatch, tmp_path, enabled):
+  client, params = _slot_client(monkeypatch, tmp_path, {"UnrelatedSetting": 2.0, "CustomPersonalities": enabled}, {
+    PERSONALITY_PROFILES_PARAM: {"schemaVersion": 99},
+  })
+  assert client.post("/api/toggles/profiles/a/load").status_code == 409
+  assert params.writes == []
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_slot_load_syncs_master_preserves_historical_curves_under_shared_lock(monkeypatch, tmp_path, enabled):
+  profiles = default_personality_profiles(False)
+  profiles["aggressive"]["acceleration"] = {"preset": "custom", "curve": [6.0] * 10}
+  client, params = _slot_client(monkeypatch, tmp_path, {"UnrelatedSetting": 2.0, "CustomPersonalities": enabled}, {
+    PERSONALITY_PROFILES_PARAM: profile_document(profiles, enabled=not enabled),
+  })
+  original_put = params.put
+  original_put_bool = params.put_bool
+
+  def locked_put(key, value):
+    assert the_galaxy._PERSONALITY_PROFILES_WRITE_LOCK.locked()
+    original_put(key, value)
+
+  def locked_put_bool(key, value):
+    assert the_galaxy._PERSONALITY_PROFILES_WRITE_LOCK.locked()
+    original_put_bool(key, value)
+
+  monkeypatch.setattr(params, "put", locked_put)
+  monkeypatch.setattr(params, "put_bool", locked_put_bool)
+  response = client.post("/api/toggles/profiles/a/load")
+  assert response.status_code == 200
+  assert response.get_json()["restoredCount"] == 2
+  assert response.get_json()["slot"] == "a"
+  assert params.values["CustomPersonalities"] is enabled
+  document = strict_profile_document(params.values[PERSONALITY_PROFILES_PARAM])
+  assert document is not None
+  assert document["enabled"] is enabled
+  assert document["profiles"] == profiles
+  assert params.values["UnrelatedSetting"] == 2.0
+
+
 @pytest.mark.parametrize("value", [3.51, 4.0, 5.0, 6.0])
 def test_saved_v2_high_curve_read_migrate_edit_and_master_round_trip(monkeypatch, value):
   profiles = default_personality_profiles(False)

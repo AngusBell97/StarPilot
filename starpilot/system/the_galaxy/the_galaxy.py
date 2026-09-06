@@ -9856,6 +9856,10 @@ def setup(app):
     if not isinstance(toggle_values, dict):
       return jsonify({"success": False, "message": "Toggle backup does not contain settings."}), 400
 
+    return _restore_toggle_values(toggle_values)
+
+  def _restore_toggle_values(toggle_values, *, profile=None):
+    # Slot files and uploaded backups share personality validation and master synchronisation.
     parked_personality_keys = {
       LEGACY_STARPILOT_PARAM_RENAMES.get(key, key)
       for key in toggle_values
@@ -9892,7 +9896,7 @@ def setup(app):
         }), 400
 
     restored_count = 0
-    skipped_count = 0
+    skipped_count = profile["skippedCount"] if profile is not None else 0
     master_restore_requested = any(
       LEGACY_STARPILOT_PARAM_RENAMES.get(key, key) == "CustomPersonalities"
       for key in validated_personality_values
@@ -9904,6 +9908,8 @@ def setup(app):
     ), None)
 
     with _PERSONALITY_PROFILES_WRITE_LOCK:
+      if (profile is not None or parked_personality_keys) and _personality_settings_write_locked():
+        return jsonify({"success": False, "message": "Settings can only be restored while parked with off-road state confirmed."}), 403
       if master_restore_requested:
         ev_tuning = _get_detected_ev_tuning()
         truck_tuning = (_get_detected_truck_tuning() or params.get_bool("TruckTuning")) and not ev_tuning
@@ -9943,15 +9949,27 @@ def setup(app):
 
         try:
           restore_value = validated_personality_values.get(key, value)
-          _params_raw.put(mapped_key, _coerce_toggle_restore_value(mapped_key, restore_value))
+          # Slot values already use the native Params type (including BYTES and TIME).
+          if profile is None or mapped_key in PERSONALITY_PARKED_PARAM_KEYS:
+            restore_value = _coerce_toggle_restore_value(mapped_key, restore_value)
+          _params_raw.put(mapped_key, restore_value)
           restored_count += 1
-        except (TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError, OverflowError):
           skipped_count += 1
 
     if restored_count == 0:
       return jsonify({"success": False, "message": "No compatible toggle settings were found in this backup."}), 400
 
     update_starpilot_toggles()
+    if profile is not None:
+      message = f"Loaded {profile['label']} ({restored_count} settings)."
+      if skipped_count:
+        message += f" Skipped {skipped_count} incompatible settings."
+      return jsonify({
+        "success": True, "message": message,
+        "slot": profile["slot"], "label": profile["label"],
+        "restoredCount": restored_count, "skippedCount": skipped_count,
+      })
     message = f"Restored {restored_count} toggle settings."
     if skipped_count:
       message += f" Skipped {skipped_count} incompatible or unavailable settings."
@@ -9990,10 +10008,10 @@ def setup(app):
 
   @app.route("/api/toggles/profiles/<slot>/load", methods=["POST"])
   def load_toggle_profile(slot):
-    if _safe_params_get_bool("IsOnroad"):
-      return jsonify({"success": False, "message": "Settings profiles can only be loaded while parked."}), 403
+    if _personality_settings_write_locked():
+      return jsonify({"success": False, "message": "Settings profiles can only be loaded while parked with off-road state confirmed."}), 403
     try:
-      result = param_profiles.load_profile(
+      profile = param_profiles.prepare_profile(
         _params_raw,
         slot,
         allowed_keys=_get_toggle_backup_keys(),
@@ -10003,15 +10021,7 @@ def setup(app):
     except param_profiles.ParamProfileError as error:
       return jsonify({"success": False, "message": str(error)}), 400
 
-    update_starpilot_toggles()
-    message = f"Loaded {result['label']} ({result['restoredCount']} settings)."
-    if result["skippedCount"]:
-      message += f" Skipped {result['skippedCount']} incompatible settings."
-    return jsonify({
-      "success": True,
-      "message": message,
-      **result,
-    })
+    return _restore_toggle_values(profile["settings"], profile=profile)
 
   @app.route("/api/toggles/reset_default", methods=["POST"])
   def reset_toggle_values():
