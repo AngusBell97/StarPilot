@@ -206,9 +206,10 @@ class ModelRenderer(Widget):
     if lead_ready and getattr(self, '_paint', True):
       self._draw_lead_indicator()
     # The lead text is independent of the marker: it reads the same lead source directly.
-    if self._lead_info_mode and getattr(self, '_paint', True):
+    info_mode = getattr(self, '_lead_info_mode', 0)
+    if info_mode and getattr(self, '_paint', True):
       info = self._lead_candidates(sm)[0][3]
-      text = self._format_lead_info(info, self._lead_info_mode, self._lead_info_metric) if info is not None else ""
+      text = self._format_lead_info(info, info_mode, getattr(self, '_lead_info_metric', None)) if info is not None else ""
       if text:
         self._draw_lead_info(rect, text)
 
@@ -363,7 +364,8 @@ class ModelRenderer(Widget):
     path_pts = self._path.projected_points + np.array([self._rect.x, self._rect.y], dtype=np.float32)
     max_len = min(len(path_pts) // 2, len(self._acceleration_x))
 
-    segment_colors = []
+    hues = []
+    saturations = []
     gradient_stops = []
 
     i = 0
@@ -378,23 +380,24 @@ class ModelRenderer(Widget):
       lin_grad_point = 1 - (track_y - self._rect.y) / self._rect.height
 
       # speed up: 120, slow down: 0
-      path_hue = np.clip(60 + self._acceleration_x[i] * 35, 0, 120)
+      path_hue = 60 + self._acceleration_x[i] * 35
 
       saturation = min(abs(self._acceleration_x[i] * 1.5), 1)
-      lightness = np.interp(saturation, [0.0, 1.0], [0.95, 0.62])
-      alpha = np.interp(lin_grad_point, [0.75 / 2.0, 0.75], [0.4, 0.0])
-
-      # Use HSL to RGB conversion
-      color = self._hsla_to_color(path_hue / 360.0, saturation, lightness, alpha)
-
+      hues.append(path_hue)
+      saturations.append(saturation)
       gradient_stops.append(lin_grad_point)
-      segment_colors.append(color)
 
       # Skip a point, unless next is last
       i += 1 + (1 if (i + 2) < max_len else 0)
 
-    # Store the gradient in the path object
-    self._exp_gradient.colors = segment_colors
+    if gradient_stops:
+      hues = np.clip(hues, 0, 120) / 360.0
+      lightness = np.interp(saturations, [0.0, 1.0], [0.95, 0.62])
+      alphas = np.interp(gradient_stops, [0.75 / 2.0, 0.75], [0.4, 0.0])
+      self._exp_gradient.colors = [self._hsla_to_color(h, s, l, a)
+                                   for h, s, l, a in zip(hues, saturations, lightness, alphas, strict=True)]
+    else:
+      self._exp_gradient.colors = []
     self._exp_gradient.stops = gradient_stops
 
 

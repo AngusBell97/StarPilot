@@ -98,7 +98,7 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
                 remote_pairing=None, parked=None, camera_snapshot=None, clock=time.monotonic, starport_setup=None,
                 starport_client=None, navigation=None, offline_maps=None, drive_state=None, cloud_provider=None, cloud_offroad=None, projection_layout=None,
                 local_access=None, tmux_live=None, starport_logs=None, hotspot=None, toyota_tools=None, replay_client=None, replay_root=None,
-                spotify_setup=None, companion=None, phone_location=None):
+                spotify_setup=None, companion=None, phone_location=None, reverse_proxy=None):
   from openpilot.starpilot.galaxy.companion import CompanionRegistry, APK_PATH
   from openpilot.starpilot.gps.phone import PhoneGpsPublisher
   companion_source = companion if companion is not None else CompanionRegistry()
@@ -126,7 +126,6 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
 
   address_source = local_access if local_access is not None else LocalAccess(port)
   console_source = tmux_live if tmux_live is not None else TmuxLive()
-  monitor_source = monitor if monitor is not None else SystemMonitor()
   reports = crashes if crashes is not None else CrashReports()
   crash_reports_lock = threading.Lock()
   starport_logs_source = starport_logs
@@ -162,6 +161,8 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
   notification_owner = notifications
   snapshots = camera_snapshot if camera_snapshot is not None else CameraSnapshot()
   access = owner if owner is not None else default_owner()
+  from openpilot.starpilot.galaxy.reverse_proxy import ReverseProxySettings
+  proxy_settings = ReverseProxySettings(access.root)
   pairing = remote_pairing if remote_pairing is not None else default_remote_pairing()
   pairing_authority = None
   device_name = DeviceName(pairing.root)
@@ -173,6 +174,18 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
     from openpilot.starpilot.galaxy.evidence import EvidenceSource
     evidence_source = EvidenceSource()
 
+  monitor_source = monitor if monitor is not None else SystemMonitor(messages=evidence_source)
+  weather_source = None
+  weather_lock = threading.Lock()
+
+  def weather_status():
+    nonlocal weather_source
+    with weather_lock:
+      if weather_source is None:
+        from openpilot.starpilot.galaxy.weather import WeatherSource
+        weather_source = WeatherSource()
+        server.weather_source = weather_source
+      return weather_source.sample()
   vehicle_display = DeviceStateSource(evidence_source)
 
   def context_source(params):
@@ -528,6 +541,7 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
       send_recording(self, lease, content_type)
 
     def local_request(self, *, mutation=False):
+      proxy = reverse_proxy if reverse_proxy is not None else proxy_settings.current
       host = self.headers.get('Host', '')
       origin = self.headers.get('Origin')
       local_address = self.connection.getsockname()[0]
@@ -549,6 +563,8 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
         if self.path.startswith(prefix + '/') or self.path == prefix:
           self.path = self.path[len(prefix):] or '/'
         return True
+      if proxy is not None and proxy.allows(self.client_address[0], host, origin, mutation=mutation):
+        return True
       if not allowed_authority(host, local_address, self.server.server_port) or \
          (mutation and origin != f'http://{host}') or \
          (origin is not None and origin != f'http://{host}'):
@@ -568,10 +584,15 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
       return access.status().status
 
     def direct_local(self):
+      proxy = reverse_proxy if reverse_proxy is not None else proxy_settings.current
       return not getattr(self.server, 'remote_transport', False) and \
+             not (proxy is not None and proxy.matches_peer(self.client_address[0])) and \
              direct_local_connection(self.client_address[0], self.connection.getsockname()[0], self.headers)
 
     def spotify_install_allowed(self):
+      proxy = reverse_proxy if reverse_proxy is not None else proxy_settings.current
+      if proxy is not None and proxy.matches_peer(self.client_address[0]):
+        return False
       return install_origin_allowed(self.client_address[0], self.connection.getsockname()[0], self.headers,
                                     getattr(self.server, 'remote_transport', False))
 
@@ -691,6 +712,15 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
         else:
           self.camera_video(path.removeprefix('/api/recordings/media/'))
         return
+      if path == '/api/connect/proxy':
+        if not self.require_session():
+          return
+        try:
+          self.json(200, {**proxy_settings.snapshot(), 'canEdit': cloud_allowed(),
+                          'passwordConfigured': access.status().status == AccessStatus.CONFIGURED_LOCAL})
+        except (OSError, ValueError):
+          self.json(503, {'error': 'Reverse proxy configuration is unavailable'})
+        return
       if path == '/api/connect/provider':
         if not self.require_session():
           return
@@ -721,6 +751,13 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
                         **({'gatewayAccess': True} if getattr(self.server, 'remote_transport', False) else {}),
                         'state': 'configured' if status == AccessStatus.CONFIGURED_LOCAL else
                                  'unavailable' if status == AccessStatus.UNAVAILABLE else 'setup_required'})
+      elif path == '/api/localization':
+        if not self.require_session():
+          return
+        from openpilot.common.params import Params
+        from openpilot.starpilot.galaxy.localization import language_snapshot
+        previous = parse_qs(urlsplit(self.path).query).get('language', [''])[0]
+        self.json(200, language_snapshot(Params(), previous))
       elif path == '/api/galaxy/device-name':
         if not self.require_session():
           return
@@ -854,6 +891,12 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
             self.json(200, result)
           else:
             self.json(401, {'error': 'Sign in to Galaxy'})
+      elif path == '/api/weather':
+        if not self.require_session():
+          return
+        result = weather_status()
+        if self.require_session():
+          self.json(200, result)
       elif path == '/api/system/monitor':
         if not self.require_session():
           return
@@ -1582,7 +1625,7 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
           self.json(404, {'error': 'Not found'})
         return
       if path not in ('/api/companion/uplink', '/api/companion/settings', '/api/companion/location',
-                      '/api/connect/provider', '/api/auth/login', '/api/auth/logout', '/api/settings/preview', '/api/settings/confirm',
+                      '/api/connect/proxy', '/api/connect/provider', '/api/auth/login', '/api/auth/logout', '/api/settings/preview', '/api/settings/confirm',
                       '/api/settings/recovery/preview', '/api/settings/recovery/confirm',
                       '/api/settings/reset-default', '/api/settings/restore', '/api/recordings/action',
                       '/api/replay/start', '/api/replay/control', '/api/replay/stop',
@@ -1743,6 +1786,23 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
             self.json(200, result)
           else:
             self.json(401, {'error': 'Sign in to Galaxy'})
+        return
+      if path == '/api/connect/proxy':
+        identity = self.settings_session()
+        try:
+          def authorized():
+            return (identity is not None and self.settings_session() == identity and cloud_allowed() and
+                    (not payload.get('enabled') or access.status().status == AccessStatus.CONFIGURED_LOCAL))
+          result = proxy_settings.save(payload, authorized)
+        except PermissionError as error:
+          self.json(403, {'error': str(error)})
+        except (ValueError, TypeError) as error:
+          self.json(409, {'error': str(error)})
+        except OSError:
+          self.json(503, {'error': 'Reverse proxy settings could not be saved'})
+        else:
+          self.json(200, {**result, 'canEdit': cloud_allowed(),
+                          'passwordConfigured': access.status().status == AccessStatus.CONFIGURED_LOCAL})
         return
       if path == '/api/connect/provider':
         identity = self.settings_session()

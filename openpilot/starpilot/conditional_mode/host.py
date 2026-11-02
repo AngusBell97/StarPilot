@@ -61,6 +61,7 @@ class ConditionalModeHost:
     selected_t_follow_s: float | None = None,
     selected_t_follow_observed_mono_ns: int | None = None,
     settings_owner: ConditionalSettingsOwner | None = None,
+    lane_change_chill: bool | None = None,
   ) -> HostProposal:
     signal_options = None
     settings_revision = None
@@ -142,6 +143,7 @@ class ConditionalModeHost:
       selected_t_follow_observed_mono_ns=selected_t_follow_observed_mono_ns,
       owner_context=owner_context,
       signal_options=signal_options,
+      lane_change_chill=lane_change_chill,
     )
     authority = projected.authority
     if authority is not None and authority.fresh and (not authority.system_long_capable or authority.safe_mode or

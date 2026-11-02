@@ -6,7 +6,7 @@ compare-and-save dependencies, edit permissions and confirmation requirements.
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow
 
 SECTIONS = (
-  ("slc/offsets", "Speed-limit offsets", "Offsets for each speed range", frozenset(("slc_adopt", "slc_reset", *(f"Offset{i}" for i in range(1, 8))))),
+  ("slc/offsets", "Speed-limit offsets", "Offsets for each speed range", frozenset(("slc_reset", *(f"slc:offset:{i}" for i in range(1, 8))))),
   ("slc/sources", "Limit sources", "Primary and secondary limits; conflicting dashboard fallback waits 5 seconds without Maps", frozenset(("SLCPriority1", "SLCPriority2"))),
   ("slc/timing", "Timing and confirmation", "Profile-based slowing; mapped zones under 5 seconds are skipped only when both boundaries are known", frozenset(("SLCWarningLeadTime", "SLCLowerLimitTiming", "SLCHigherLimitDistance", "SLCConfirmationLower", "SLCConfirmationHigher"))),
   ("slc/reengagement", "Manual speed and re-engagement", "Zone recall and engagement speed", frozenset(("SLCRememberManualOffset", "SLCReengageSpeed"))),

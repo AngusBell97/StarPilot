@@ -63,6 +63,7 @@ class StopFrame:
   native_departure_clear: bool = False
   standstill_path_extent_m: float | None = None
   longitudinal_stop_active: bool = False
+  longitudinal_launch_active: bool = False
 
 
 @dataclass(frozen=True)
@@ -135,7 +136,11 @@ class StopLightDetector:
       self.standstill_committed = False
       self.commit_clear_since_s = None
       return False
-    if acquire and not self.committed and horizon is not None:
+    clear_launch = (frame.standstill is True and frame.longitudinal_launch_active is True and
+                    frame.longitudinal_stop_active is False and
+                    frame.model_should_stop is False and model_stopping is False and frame.forcing_stop is False and
+                    horizon is not None and horizon >= FROZEN_RAW_STOP_DISTANCE_M + STOP_MODEL_RELEASE_MARGIN_M)
+    if acquire and not self.committed and horizon is not None and not clear_launch:
       self.committed = True
       self.released_at_standstill = False
       self.commit_distance_m = horizon

@@ -49,6 +49,7 @@ type State struct {
 	SourceGeneration          uint64
 	ProducerSession           uint64
 	MatchedLimitMps           float32
+	LimitPreview              LimitPreview
 	lastMapLoadAttempt        time.Time
 	bootNow                   func() uint64
 	// The fix the current road result was computed from. The loop runs at
@@ -95,6 +96,7 @@ func (s *State) clearRoadDerived() {
 	s.TargetVelocities = nil
 	s.MapCurveSpeed = 0
 	s.MatchedLimitMps = 0
+	s.LimitPreview = LimitPreview{}
 	s.NextHazard.Reset()
 	s.NextAdvisorySpeed.Reset()
 	s.clearSpeedLimitEvidence()
@@ -266,6 +268,7 @@ func (s *State) ProcessGps(sample cereal.GpsSample, success bool, load MapLoader
 		s.ShadowBoundary = s.boundaryPreviewDetails()
 		s.ShadowNextLimit, s.ShadowNextDistance = s.ShadowBoundary.Limit, s.ShadowBoundary.Distance
 	}
+	s.LimitPreview = s.previewLimit()
 }
 
 func (s *State) SuggestedSpeed() float32 {
@@ -374,6 +377,12 @@ func (s *State) buildMessageAt(now uint64) (*capnp.Message, error) {
 	output.SetRoadName(s.CurrentWay.Way.Name())
 
 	output.SetSpeedLimit(s.MatchedLimitMps)
+	if s.LimitPreview.BoundaryID != "" {
+		output.SetPreviewSpeedLimit(s.LimitPreview.Speed)
+		output.SetPreviewDistance(s.LimitPreview.Distance)
+		output.SetPreviewBoundaryId(s.LimitPreview.BoundaryID)
+		output.SetPreviewWayId(s.LimitPreview.WayID)
+	}
 
 	output.SetConditionalSpeedLimit(s.CurrentWay.ConditionalMaxSpeedRaw())
 

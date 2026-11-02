@@ -55,6 +55,7 @@ class Reason(StrEnum):
   CEM_STOP = 'cem_stop'
   CEM_SPEED_LIMIT = 'cem_speed_limit'  # Historical route labels only.
   CEM_HOLD = 'cem_hold'
+  CEM_LANE_CHANGE = 'cem_lane_change'  # close-gap lane change in progress: Chill for the manoeuvre
   CCM_SPEED = 'ccm_speed'
   CCM_LEAD = 'ccm_lead'
   CCM_LAUNCH = 'ccm_launch'
@@ -110,6 +111,7 @@ class SceneEvidence:
   forcing_stop: bool | None = None
   committed_stop: bool | None = None
   adjacent_lead_ambiguous: bool | None = None
+  lane_change_chill: bool | None = None  # planner's close-gap lane-change window (SP-040); None when unknown
   low_speed_stop_scene: bool | None = None
   launch_candidate: bool | None = None
   standstill_stop_hold: bool | None = None
@@ -521,6 +523,16 @@ class ConditionalModePolicy:
       self.cem_active_reason = Reason.CEM_STOP if stop_held else Reason.CEM_SPEED if speed_held else Reason.NO_TRIGGER
       return self._decision(held, authority, True, warm, self.cem_active_reason, 8 if stop_held else 6 if speed_held else 0)
     self.cem_previous_standstill = self.cem_previous_stop_hold = False
+    if scene.lane_change_chill is True:
+      # Close-gap lane change (SP-040): Chill for the manoeuvre so the end-to-end model cannot keep braking for
+      # the car in the lane being left. Automatic holds are dropped; a slower lead re-triggers afterwards.
+      self.open_road.reset()
+      self.cem_hold_until = self.cem_slow_lead_until = self.cem_open_road_until = 0.0
+      self.cem_false_since = None
+      self.cem_active = False
+      self.cem_previous_open_road = False
+      self.cem_active_reason = Reason.NO_TRIGGER
+      return self._decision(False, authority, True, warm, Reason.CEM_LANE_CHANGE, 0)
     launch_suppressed = now_s < self.cem_launch_suppress_until
     if (scene.tesla_open_road is True and settings.cem_open_road and not launch_suppressed and
         authority.driving_enabled and authority.long_active):

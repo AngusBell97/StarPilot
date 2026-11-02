@@ -7,7 +7,8 @@ import math
 import numbers
 
 PERSONALITY_PROFILES_PARAM = "LongitudinalPersonalityProfiles"
-PROFILE_SCHEMA_VERSION = 6
+PROFILE_SCHEMA_VERSION = 7  # 6 meant different things in this build and in Dom; 7 holds both
+MAX_EXTRA_STOPPED_GAP_M = 3.048
 GLOBAL_BRAKING_RESPONSES = ("standard", "eco", "sport")
 DEFAULT_DECELERATION_PROFILE = "eco"
 PERSONALITY_IDS = ("traffic", "aggressive", "standard", "relaxed")
@@ -227,7 +228,7 @@ def default_personality_profiles(ev_tuning: bool, truck_tuning: bool = False) ->
 
 def profile_document(profiles: dict[str, dict], *, enabled: bool, global_braking_response: str = DEFAULT_DECELERATION_PROFILE,
                      selected_acceleration_profile: str = "dom_default", selected_deceleration_profile: str | None = None,
-                     slc_limits: dict | None = None) -> dict:
+                     slc_limits: dict | None = None, extra_stopped_gap_m: float = 0.0) -> dict:
   if type(enabled) is not bool:
     raise ValueError("enabled must be a JSON boolean")
   if global_braking_response not in GLOBAL_BRAKING_RESPONSES:
@@ -238,7 +239,10 @@ def profile_document(profiles: dict[str, dict], *, enabled: bool, global_braking
     raise ValueError("invalid selected acceleration profile")
   if selected_deceleration_profile not in ("dom_default", *GLOBAL_BRAKING_RESPONSES):
     raise ValueError("invalid selected deceleration profile")
+  if type(extra_stopped_gap_m) not in (int, float) or not math.isfinite(extra_stopped_gap_m) or not 0 <= extra_stopped_gap_m <= MAX_EXTRA_STOPPED_GAP_M:
+    raise ValueError("invalid extra stopped-lead gap")
   return {
+    "extraStoppedGapM": float(extra_stopped_gap_m),
     "schemaVersion": PROFILE_SCHEMA_VERSION,
     "slcLimits": deepcopy(default_slc_limits() if slc_limits is None else slc_limits),
     "enabled": enabled,
@@ -357,6 +361,10 @@ def _strict_document(
     keys.update(("selectedAccelerationProfile", "selectedDecelerationProfile"))
   if schema_version >= 6:
     keys.add("slcLimits")
+  if schema_version >= 7:
+    keys.add("extraStoppedGapM")
+  if (schema_version == 6 and isinstance(decoded, dict) and "extraStoppedGapM" in decoded and "slcLimits" not in decoded):
+    keys = (keys - {"slcLimits"}) | {"extraStoppedGapM"}  # Dom's version 6 layout
   if not isinstance(decoded, dict) or set(decoded) != keys:
     return None
   if type(decoded["schemaVersion"]) is not int or decoded["schemaVersion"] != schema_version:
@@ -369,8 +377,12 @@ def _strict_document(
   if schema_version >= 5 and (decoded["selectedAccelerationProfile"] not in ("dom_default", "standard", "eco", "sport", "sport_plus") or
                               decoded["selectedDecelerationProfile"] not in ("dom_default", *GLOBAL_BRAKING_RESPONSES)):
     return None
-  limits = validate_slc_limits(decoded["slcLimits"]) if schema_version >= 6 else default_slc_limits()
+  limits = validate_slc_limits(decoded["slcLimits"]) if "slcLimits" in keys else default_slc_limits()
   if limits is None:
+    return None
+  if "extraStoppedGapM" in keys and (type(decoded["extraStoppedGapM"]) not in (int, float) or
+                                    not math.isfinite(decoded["extraStoppedGapM"]) or
+                                    not 0 <= decoded["extraStoppedGapM"] <= MAX_EXTRA_STOPPED_GAP_M):
     return None
   raw_profiles = decoded["profiles"]
   if not isinstance(raw_profiles, dict) or set(raw_profiles) != set(PERSONALITY_IDS):
@@ -397,6 +409,7 @@ def _strict_document(
       profile[category] = validated
     profiles[personality] = profile
   return {
+    **({"extraStoppedGapM": float(decoded["extraStoppedGapM"])} if "extraStoppedGapM" in keys else {}),
     "schemaVersion": schema_version,
     **({"slcLimits": limits} if schema_version >= 6 else {}),
     "enabled": decoded["enabled"],
@@ -419,7 +432,7 @@ def strict_profile_document(raw_document) -> dict | None:
   # meaning; adopting a speed-dependent preset requires an explicit selection.
   decoded = _decode_json(raw_document)
   version = decoded.get("schemaVersion") if isinstance(decoded, dict) else None
-  if type(version) is not int or version not in (2, 3, 4, 5, PROFILE_SCHEMA_VERSION):
+  if type(version) is not int or version not in (2, 3, 4, 5, 6, PROFILE_SCHEMA_VERSION):
     return None
   document = _strict_document(
     decoded,
@@ -438,10 +451,14 @@ def strict_profile_document(raw_document) -> dict | None:
           profile[category]["legacyActivation"] = True
       document = profile_document(document["profiles"], enabled=document["enabled"],
                                   global_braking_response=document.get("globalBrakingResponse", "standard"))
-    elif version == 5:
+    elif version in (5, 6):
+      # Version 5, this build's version 6 (fixed SLC caps) and Dom's version 6 (extra stopped gap)
+      # all migrate to version 7, which carries both.
       document = profile_document(document["profiles"], enabled=document["enabled"],
                                   selected_acceleration_profile=document["selectedAccelerationProfile"],
-                                  selected_deceleration_profile=document["selectedDecelerationProfile"])
+                                  selected_deceleration_profile=document["selectedDecelerationProfile"],
+                                  slc_limits=document.get("slcLimits"),
+                                  extra_stopped_gap_m=document.get("extraStoppedGapM", 0.0))
   return document
 
 
@@ -517,11 +534,12 @@ def serialize_personality_profiles(profiles, ev_tuning: bool, truck_tuning: bool
                                    global_braking_response: str = DEFAULT_DECELERATION_PROFILE,
                                    selected_acceleration_profile: str = "dom_default",
                                    selected_deceleration_profile: str | None = None,
-                                   slc_limits: dict | None = None) -> str:
+                                   slc_limits: dict | None = None, extra_stopped_gap_m: float = 0.0) -> str:
   del ev_tuning, truck_tuning
   document = profile_document(profiles, enabled=enabled, global_braking_response=global_braking_response,
                               selected_acceleration_profile=selected_acceleration_profile,
-                              selected_deceleration_profile=selected_deceleration_profile, slc_limits=slc_limits)
+                              selected_deceleration_profile=selected_deceleration_profile, slc_limits=slc_limits,
+                              extra_stopped_gap_m=extra_stopped_gap_m)
   canonical = strict_profile_document(document)
   if canonical is None:
     raise ValueError("Longitudinal personality profiles must be complete and valid.")

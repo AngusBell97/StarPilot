@@ -36,6 +36,7 @@ export function normalizeSnapshot(raw, expectedMode = "synthetic-preview") {
   const vitals = Object.fromEntries(["cpuTempC", "gpuTempC", "hotspotTempC", "gpuEdgeTempC", "memoryUsedBytes", "memoryTotalBytes",
     "onboardMaxAgeMs", "maxAgeMs", "memoryMaxAgeMs"].map((key) => [key, number(v[key])]))
   return { sampleMono: number(raw.sampleMono), sourceId: text(raw.sourceId), intervalSeconds: number(raw.intervalSeconds, 0, 10), source: raw.source, sampledAt: raw.sampledAt, cpuPercent: percent(raw.cpuPercent), cores, memory, storage,
+    batteryVoltage: number(raw.batteryVoltage, 0.01, 60),
     uptimeSeconds: number(raw.uptimeSeconds), processCount: integer(raw.processCount), processes, vitals }
 }
 

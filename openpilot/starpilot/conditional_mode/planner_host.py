@@ -395,6 +395,10 @@ class ConditionalPlannerHost:
       self.retained_manual = None
       self.card_session = None
       self.card_last_sequence = 0
+    # Close-gap lane change: the planner's window asks the policy for Chill (SP-040); unknown when the plan is not owned.
+    chill = getattr(planner, 'lane_change_chill', None)
+    lane_change_chill = (bool(chill.active) if plan_owned and chill is not None and
+                         type(getattr(chill, 'active', None)) is bool else None)
     proposal = self.mode.sample(
       sm, cp, now_mono_ns=now_mono_ns, now_boot_ns=now_boot_ns,
       sample_skew_ns=sample_skew_ns, drive_id=drive_id,
@@ -402,6 +406,7 @@ class ConditionalPlannerHost:
       selected_t_follow_s=selected_follow_time(planner),
       selected_t_follow_observed_mono_ns=sm.logMonoTime.get('modelV2'),
       settings_owner=self.settings,
+      lane_change_chill=lane_change_chill,
     )
     snapshot = self.settings.current
     if snapshot is None or proposal.settings_revision != snapshot.revision:

@@ -35,6 +35,7 @@ from openpilot.starpilot.longitudinal.slc_coast import braking_lead_relevant, sl
 from openpilot.starpilot.longitudinal.throttle_gate import ModelThrottleGate
 from openpilot.starpilot.longitudinal.ioniq6_start import eligible as ioniq6_long_eligible
 from openpilot.starpilot.longitudinal.lane_change_gap import LaneChangeGap, project as project_lane_gap
+from openpilot.starpilot.longitudinal.lane_change_chill import LaneChangeChill
 from openpilot.starpilot.longitudinal.mode_recovery import ModeRecovery, project as project_mode_recovery
 from openpilot.starpilot.longitudinal.experimental_release import ConditionalHandoff, ExperimentalRelease, project as project_release
 from openpilot.starpilot.longitudinal.force_stop import StopPlan
@@ -160,6 +161,7 @@ class LongitudinalPlanner:
     self.throttle_gate = ModelThrottleGate()
     self.ioniq6_throttle_gate_enabled = ioniq6_long_eligible(CP)
     self.lane_change_gap = LaneChangeGap()
+    self.lane_change_chill = LaneChangeChill()  # Chill longitudinal mode for the duration of a close-gap lane change
     self.experimental_release = ExperimentalRelease()
     self.mode_recovery = ModeRecovery()
     self.lead_approach = LeadApproach(dt, CP.longitudinalActuatorDelay)
@@ -282,10 +284,18 @@ class LongitudinalPlanner:
     approach_follow = self.lead_approach.step(
       lead_approach_key, project_approach(sm, self.CP, sample_now_ns, lead_approach_key) if lead_approach_key is not None else None,
       base_follow, blocked=reset_state)
+    gap_frame = project_lane_gap(sm, sample_now_ns) if lane_change_policy is not None else None
     gap_follow = self.lane_change_gap.step(
-      lane_change_policy, project_lane_gap(sm, sample_now_ns) if lane_change_policy is not None else None,
+      lane_change_policy, gap_frame,
       base_follow=base_follow, long_active=bool(self.CP.openpilotLongitudinalControl and sm['carControl'].longActive and
                                                 not reset_state and sm['selfdriveState'].enabled and approach_follow is None))
+    # Close-gap lane change: the window in which the conditional-mode policy proposes Chill (plannerd hands
+    # self.lane_change_chill.active to the conditional host after this update, selfdrived publishes the mode and the
+    # screen, this planner and every mode reader follow it). Here it only shapes the request upwards.
+    self.lane_change_chill.step(
+      lane_change_policy, gap_frame, now_ns=sample_now_ns,
+      long_active=bool(self.CP.openpilotLongitudinalControl and sm['carControl'].longActive and
+                       not reset_state and sm['selfdriveState'].enabled))
     follow = approach_follow if approach_follow is not None else gap_follow
     selected_follow = follow if follow is not None else base_follow
     self.force_stop_plan = force_stop_provider(selected_follow) if force_stop_provider is not None else StopPlan()
@@ -334,6 +344,7 @@ class LongitudinalPlanner:
                     follow_seconds=follow if follow is not None else
                     (self.last_profile.follow_seconds if self.last_profile is not None else None),
                     acceleration_max=acceleration_cap,
+                    extra_stopped_gap_m=(selected_profiles.extra_stopped_gap_m if profile_eligible and selected_profiles is not None else 0.0),
                     stop_line_m=self.force_stop_plan.obstacle_m, modelV2=qualified_model_leads(sm, sample_now_ns, self.model_lead_history))
 
     # MPC has selected the actual follow time for this model cycle. Its solve
@@ -398,6 +409,12 @@ class LongitudinalPlanner:
       fallback=should_stop(v_ego, output_a_target_mpc))
     output_a_target_e2e = sm['modelV2'].action.desiredAcceleration
     output_should_stop_e2e = sm['modelV2'].action.shouldStop
+    if (self.force_stop_plan.resume_override and not self.force_stop_plan.forcing and
+        not self.force_stop_plan.should_stop and not reset_state and not self.fcw and self.allow_throttle and
+        abs(v_ego) < 2.0 and v_cruise > 0.3 and self.mpc.solution_status == 0 and
+        not any(lead.present for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo))):
+      output_a_target_e2e = max(output_a_target_e2e, 0.2)
+      output_should_stop_e2e = False
 
     relevant_lead = any(braking_lead_relevant(lead, v_ego) for lead in
                         (sm['radarState'].leadOne, sm['radarState'].leadTwo))
@@ -578,6 +595,10 @@ class LongitudinalPlanner:
 
     mpc_source = self.mpc.source
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
+    # While the lane-change Chill window is open, release braking at 2 m/s^3 and rise at cruise jerk; never lower.
+    output_a_target = self.lane_change_chill.shape(
+      float(output_a_target), previous=float(a_prev), dt=self.dt,
+      positive_jerk=float(np.interp(v_ego, A_CRUISE_MAX_BP, J_CRUISE_VALS)))
     # A curve candidate alone cannot own driver feedback. Lead/e2e braking and
     # an equal or lower SLC ceiling retain their own attribution.
     self.last_curve_ceiling_applied = (curve.effective_mps is not None and v_cruise == curve.effective_mps and
@@ -681,7 +702,7 @@ class LongitudinalPlanner:
       now_ns=sample_now_ns, before=before_lane_gap, after=after_lane_gap, final=float(self.output_a_target),
       model=float(output_a_target_e2e), mpc=float(output_a_target_mpc), response_mpc=float(gap_mpc_target), cruise=float(self.a_cruise),
       base_follow=float(base_follow), selected_follow=float(selected_follow), should_stop=bool(self.output_should_stop),
-      approach_priority=bool(approach_follow is not None))
+      approach_priority=bool(approach_follow is not None), **self.lane_change_chill.diagnostic())
     if lane_gap_diagnostic is not None:
       cloudlog.event('lane_change_gap', **lane_gap_diagnostic)
 

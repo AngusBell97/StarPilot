@@ -422,11 +422,14 @@ class TestStateMigration(unittest.TestCase):
                  'LongitudinalPersonalityProfiles': b'{broken', 'LaneCenterOffset': b'bad'}
       for key, raw in corrupt.items():
         Path(self.params.get_param_path(key)).write_bytes(raw)
+      retired_offset = Path(self.params.get_param_path('Offset3'))
+      retired_offset.write_bytes(b'3')
       manager.manager_init()
       self.assertTrue(self.params.get_bool('AlwaysOnLateral'))
       self.assertFalse(self.params.get_bool('OpenpilotEnabledToggle'))
       for key, raw in corrupt.items():
         self.assertEqual(Path(self.params.get_param_path(key)).read_bytes(), raw)
+      self.assertFalse(retired_offset.exists())
 
 
 if __name__ == '__main__':

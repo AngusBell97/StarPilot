@@ -109,6 +109,7 @@ class SelectedProfilesTests(unittest.TestCase):
     document = self.document('dom_default', 'sport', enabled=True)
     document['schemaVersion'] = 4
     document.pop('slcLimits')
+    document.pop('extraStoppedGapM')
     document['globalBrakingResponse'] = document.pop('selectedDecelerationProfile')
     document.pop('selectedAccelerationProfile')
     for profile in document['profiles'].values():

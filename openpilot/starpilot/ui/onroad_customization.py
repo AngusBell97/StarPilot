@@ -11,6 +11,7 @@ from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.ui.onroad_torque_geometry import maximum_footprint, lane_bar_footprint
 from openpilot.starpilot.ui.large_speed_geometry import confirmation_bounds, confirmation_footprint
 from openpilot.starpilot.ui.onroad_stopped_timer import timer_size
+from openpilot.starpilot.ui.onroad_favorites_geometry import shelf_metadata
 from openpilot.starpilot.ui.large_speed_geometry import (WIDTH, CARD_HEIGHT, ACTION_WIDTH, ACTION_HEIGHT, ACTION_X, ACTION_Y,
                                                         GAP, SOURCE_ROW_HEIGHT, sources_extent)
 
@@ -78,6 +79,7 @@ class LayoutProfile(TypedDict):
   inputZonePriority: NotRequired[str]
   widgetOrder: NotRequired[list[str]]
   runtimePreviewWidgets: NotRequired[list[str]]
+  quickSelectShelves: NotRequired[list[dict[str, Any]]]
 
 
 def _widget(label: str, kind: str, width: float, height: float, x: float, y: float) -> Widget:
@@ -94,7 +96,8 @@ PROFILES: dict[str, LayoutProfile] = {
               "cruise_limits": _widget("Cruise and speed limit", "cruise_limits", WIDTH, CARD_HEIGHT, 88, 75),
               "speed_limit_actions": _widget("Speed limit actions", "speed_limit_actions", ACTION_WIDTH, ACTION_HEIGHT, ACTION_X, ACTION_Y),
               "steering_wheel": _widget("Steering wheel", "steering_wheel", 192, 192, 1588, 75),
-              "driver_monitor": _widget("Driver monitoring", "driver_monitor", 128, 128, 120, 840)}},
+              "driver_monitor": _widget("Driver monitoring", "driver_monitor", 128, 128, 270, 840),
+              "following_distance": _widget("Following distance", "following_distance", 150, 200, 88, 804)}},
   "compact": {"label": "Small UI", "width": 536, "height": 240,
               "bounds": {"x": 0, "y": 0, "width": 476, "height": 240},
               "protectedWidget": "speed_limit_actions",
@@ -125,7 +128,7 @@ COMPACT_SPEED_LAYOUT_V8 = {
 for profile, sizes in DM_SIZES.items():
   PROFILES[profile]['widgets']['driver_monitor']['default']['size'] = sizes[1]
 
-LEGACY_WIDGETS = {"large": {"current_speed", "cruise_limits", "steering_wheel"},
+LEGACY_WIDGETS = {"large": {"current_speed", "cruise_limits", "steering_wheel", "following_distance"},
                   "compact": {"max_speed", "speed_limit", "steering_wheel"}}
 DM_WIDGETS = {profile: keys | {"driver_monitor"} for profile, keys in LEGACY_WIDGETS.items()}
 for _profile, _data in PROFILES.items():
@@ -228,7 +231,8 @@ LEAD_WIDGETS = (*LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET)
 LEAD_LADDER_SIZE = {"large": (150, 200), "compact": (72, 96)}
 _LEAD_TEXT_NOTES = {
   LEAD_SPEED_WIDGET: "The lead car's speed from radar. Shown with or without the lead indicator.",
-  LEAD_DISTANCE_WIDGET: "Distance to the lead car from radar. Shown with or without the lead indicator.",
+  LEAD_DISTANCE_WIDGET: ("Distance to the lead car from radar, in Galaxy's road-distance units (Localization), or the driving units "
+                         "when those are Original. Shown with or without the lead indicator."),
   LEAD_TIME_WIDGET: ("Live follow time in profile seconds: the gap less the planner's 6 m stop margin, over your speed, "
                      "so it compares with the personality profile's following value."),
 }
@@ -237,12 +241,17 @@ for _profile, (_width, _height, _x, _top) in {"large": (300, 72, 780, 520), "com
     _lead_text = _widget(_label, _key, _width, _height, _x, _top + _index * _height)
     _lead_text["default"]["enabled"] = False
     _lead_text["note"] = _LEAD_TEXT_NOTES[_key]
+    if _profile == "compact":
+      _lead_text["bounds"] = {"x": 0, "y": 0, "width": 536, "height": 240}  # The rail column is allowed, like the rail widgets.
     PROFILES[_profile]["widgets"][_key] = _lead_text
 for _profile, (_x, _y) in {"large": (1640, 330), "compact": (400, 140)}.items():
   _ladder = _widget("Lead follow ladder", LEAD_LADDER_WIDGET, *LEAD_LADDER_SIZE[_profile], _x, _y)
   _ladder["default"]["enabled"] = False
   _ladder["note"] = ("The bar at the top is the lead car, the dot is you and the white rung is the profile's follow time. "
-                     "The dot sits on the rung when you are at the target. The numbers are the live follow time and the target.")
+                     "The dot sits on the rung when you are at the target. The numbers are the live follow time and the target. "
+                     "Lead widgets may sit over the Speed limit actions area; they hide while a limit is waiting for your answer.")
+  if _profile == "compact":
+    _ladder["bounds"] = {"x": 0, "y": 0, "width": 536, "height": 240}
   PROFILES[_profile]["widgets"][LEAD_LADDER_WIDGET] = _ladder
 ROAD_BASE_WIDTH = 1860
 SIDEBAR_EXTRA = 300
@@ -271,7 +280,7 @@ _torque['confirmationObstacle'] = {
 
 # These editor sprites use the runtime components and their canonical assets/fonts.
 RUNTIME_PREVIEW_WIDGETS = {
-  "large": (LANE_BAR_WIDGET, "current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "driver_monitor", "speed_limit_actions"),
+  "large": (LANE_BAR_WIDGET, "current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "following_distance", "driver_monitor", "speed_limit_actions"),
   "compact": (LANE_BAR_WIDGET, "max_speed", "speed_limit", "steering_wheel", "conditional_mode", "following_distance",
               "model_confidence", "driver_monitor", "speed_limit_actions"),
 }
@@ -291,6 +300,7 @@ WIDGET_COLORS = {
     "speed_limit_actions": {"cardFill": "#10191FFF", "cardBorder": "#35434DFF", "text": "#F1F6F3FF"},
     "steering_wheel": {"cardFill": None, "cardBorder": "#00000000"},
     "driver_monitor": _FRAME_COLORS,
+    "following_distance": _FRAME_COLORS,
   },
   "compact": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
@@ -309,7 +319,7 @@ WIDGET_COLORS = {
 # Back-to-front order used when a layout first opts into custom layers.
 DEFAULT_WIDGET_ORDER = {
   "large": (NAV_MAP_WIDGET, "pip_left", "pip_right", "cruise_limits", "speed_limit_actions", CEM_GAUGE_WIDGET, "current_speed",
-            "steering_wheel", "torque_bar", LANE_BAR_WIDGET, "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET,
+            "steering_wheel", "torque_bar", LANE_BAR_WIDGET, "following_distance", "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET,
             *LEAD_WIDGETS),
   "compact": ("pip_left", "pip_right", "speed_limit", "max_speed", "steering_wheel", "torque_bar", LANE_BAR_WIDGET,
               "speed_limit_actions", "driver_monitor", *RAIL_WIDGETS, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, *LEAD_WIDGETS),
@@ -334,16 +344,21 @@ def widget_bounds(profile, widget):
 def customization_metadata():
   profiles = copy.deepcopy(PROFILES)
   profiles["large"]["widgets"]["driver_monitor"]["defaultAnchor"] = "driver_side"
+  profiles["large"]["widgets"]["following_distance"]["defaultAnchor"] = "driver_side"
   # The editor grows the cruise box by these while speed-limit sources are shown.
   profiles["large"]["widgets"]["cruise_limits"]["sourcesExtent"] = {
     "inline": sources_extent({'speedSources': True}), "card": sources_extent({'speedSources': True, 'speedSourcesCard': True}), 'actionGap': GAP}
   profiles["large"]["inputZones"] = [{"id": "favorites_drawer", "label": "Quick Select drawer",
-                                       "x": 30, "y": 900, "width": 150, "height": 150}]
+                                    "x": 30, "y": 900, "width": 340, "height": 150,
+                                    "excludes": [key for key in profiles["large"]["widgets"]
+                                                 if key not in ("torque_bar", "pip_left", "pip_right", "nav_map", "speed_limit_actions")]}]
+  profiles["large"]["quickSelectShelves"] = shelf_metadata()
   profiles["compact"]["inputZones"] = [
     {"id": f"favorite_{index + 1}", "label": f"Quick Select {index + 1}",
      "x": index * 476 / 3, "y": 0, "width": 476 / 3, "height": 240} for index in range(3)]
   for profile in profiles.values():
     profile["inputZonePriority"] = "Enabled Quick Select slots; speed-limit controls and steering wheel take priority"
+  profiles["large"]["inputZonePriority"] = "Visible corner cue; other controls take priority over the larger swipe area"
   for name, profile in profiles.items():
     for key, widget in profile["widgets"].items():
       widget["colors"] = dict(WIDGET_COLORS[name].get(key, {}))
@@ -362,7 +377,7 @@ def customization_metadata():
 
 
 def default_document():
-  return {"version": 12, "clock24Hour": False, "palette": dict(PALETTE), "roadColors": {profile: {} for profile in PROFILES},
+  return {"version": 12, "clock24Hour": False, "reduceMotion": False, "palette": dict(PALETTE), "roadColors": {profile: {} for profile in PROFILES},
           "widgetColors": {profile: {} for profile in PROFILES}, "layouts": {
     profile: {key: {**widget["default"], **({"size": WIDGET_SIZES[key][profile][1]} if key in WIDGET_SIZES else {})}
               for key, widget in data["widgets"].items()}
@@ -416,7 +431,8 @@ def _compact_action_collisions(layout):
   actions, area = layout['speed_limit_actions'], widgets['speed_limit_actions']
   for key, widget in widgets.items():
     saved = layout[key]
-    if (not saved['enabled'] or key in ('speed_limit_actions', 'speed_limit', 'stopped_timer') or widget.get('layer') == 'underlay'):
+    # The stopped timer and the lead widgets yield at render time while a speed-limit confirmation is shown.
+    if (not saved['enabled'] or key in ('speed_limit_actions', 'speed_limit', 'stopped_timer', *LEAD_WIDGETS) or widget.get('layer') == 'underlay'):
       continue
     width, height = (saved['size'],) * 2 if key in WIDGET_SIZES else (widget['width'], widget['height'])
     if (saved['x'] < actions['x'] + area['width'] and saved['x'] + width > actions['x'] and
@@ -515,6 +531,10 @@ def validate_document(value):
     fields.add('clock24Hour')
     if type(value['clock24Hour']) is not bool:
       raise ValueError('Invalid clock format preference')
+  if 'reduceMotion' in value:
+    fields.add('reduceMotion')
+    if type(value['reduceMotion']) is not bool:
+      raise ValueError('Invalid motion preference')
   if 'showMaxSpeed' in value:
     fields.add('showMaxSpeed')
     if type(value['showMaxSpeed']) is not bool:
@@ -524,6 +544,10 @@ def validate_document(value):
   palette, layouts = value["palette"], value["layouts"]
   if type(palette) is not dict or set(palette) != set(PALETTE) or type(layouts) is not dict or set(layouts) != set(PROFILES):
     raise ValueError("Invalid customization fields")
+  added_personality = type(layouts['large']) is dict and 'following_distance' not in layouts['large']
+  if added_personality:
+    layouts = copy.deepcopy(layouts)
+    layouts['large']['following_distance'] = dict(PROFILES['large']['widgets']['following_distance']['default'])
   if any(all(type(layouts[profile]) is dict and
              (set(layouts[profile]) - {"vasm", *OPTIONAL_WIDGETS, *CAMERA_WIDGETS}) == keys
              for profile, keys in shape.items())
@@ -587,6 +611,9 @@ def validate_document(value):
             if type(monitor.get(axis)) in (int, float):
               monitor[axis] += 32
         monitor['size'] = DM_SIZES[profile][1]
+      if (profile == 'large' and added_personality and type(monitor) is dict and
+          (monitor.get('x'), monitor.get('y'), monitor.get('size')) == (120, 840, 128)):
+        monitor['x'] = data['widgets']['driver_monitor']['default']['x']
       missing = set(data["widgets"]) - set(layouts[profile])
       if missing and missing <= OPTIONAL_WIDGETS:
         for optional in missing:
@@ -699,7 +726,8 @@ def validate_document(value):
     result['widgetOrder'] = {}
     for profile, order in orders.items():
       if type(order) is list:
-        order = [*order, *(key for key in PROFILES[profile]['widgets'] if key in OPTIONAL_WIDGETS and key not in order)]
+        order = [*order, *(key for key in PROFILES[profile]['widgets']
+                          if (key in OPTIONAL_WIDGETS or profile == 'large' and key == 'following_distance') and key not in order)]
       result['widgetOrder'][profile] = validate_widget_order(order, PROFILES[profile]['widgets'])
   if 'speedSources' in value:
     result['speedSources'] = value['speedSources']
@@ -707,6 +735,7 @@ def validate_document(value):
     result['speedSourcesCard'] = value['speedSourcesCard']
   if 'speedAlign' in value:
     result['speedAlign'] = value['speedAlign']
+  result['reduceMotion'] = value.get('reduceMotion', False)
   if 'clock24Hour' in value:
     result['clock24Hour'] = value['clock24Hour']
   if 'showMaxSpeed' in value:

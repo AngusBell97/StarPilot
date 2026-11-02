@@ -418,6 +418,7 @@ class SceneProjector:
     selected_t_follow_observed_mono_ns: int | None = None,
     owner_context: ConditionalOwnerContext | None = None,
     signal_options: CEMOptions | None = None,
+    lane_change_chill: bool | None = None,
   ) -> ProjectedScene:
     if (
       type(now_mono_ns) is not int
@@ -668,6 +669,9 @@ class SceneProjector:
       native_departure_clear=bool(tesla_launch_clear),
       longitudinal_stop_active=bool(_field(control, 'longActive') is True and _field(selfdrive, 'enabled') is True and
         _field(controls, 'longControlState') == structs.CarControl.Actuators.LongControlState.stopping),
+      longitudinal_launch_active=bool(_field(control, 'enabled') is True and _field(control, 'longActive') is True and
+        _field(selfdrive, 'enabled') is True and _field(controls, 'longControlState') in
+        (structs.CarControl.Actuators.LongControlState.starting, structs.CarControl.Actuators.LongControlState.pid)),
       standstill_path_extent_m=(_standstill_path_extent(model) if model_transport_current and car_valid and
                                 _field(car, 'standstill') is True else None),
     )
@@ -815,6 +819,7 @@ class SceneProjector:
       launch_forced_exit=True if chill_observation.forced_exit else False if chill_observation.launch_candidate is not None else None,
       launch_lead=chill_observation.launch_status == 'lead' if chill_observation.launch_candidate else None,
       adjacent_lead_ambiguous=adjacent_ambiguous,
+      lane_change_chill=lane_change_chill if type(lane_change_chill) is bool else None,
     )
     authority = None
     if (

@@ -538,8 +538,10 @@ class LaneRuntimeTests(unittest.TestCase):
               self.assertIsNone(result)
             elif phase == 'signal':
               self.assertLess(result.correction, previous)
-            elif tick >= 20:
-              self.assertGreater(result.correction, previous)
+            elif tick >= 30:
+              # Wait for two delay packets; guarded correction may then settle.
+              self.assertGreater(result.correction, 0.)
+              self.assertGreater(command.actuators.curvature, reference.actuators.curvature)
             previous = result.correction if result is not None else 0.0
 
   def test_actual_aol_lateral_only_controls_without_longitudinal(self):

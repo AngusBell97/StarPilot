@@ -19,9 +19,9 @@ LIMITS={'acceleration':.7,'braking':.8}
 
 def test_v5_migrates_without_changing_profiles_or_saved_bytes():
   old=profile_document(default_personality_profiles(False),enabled=True)
-  old.pop('slcLimits');old['schemaVersion']=5
+  old.pop('slcLimits');old.pop('extraStoppedGapM');old['schemaVersion']=5
   raw=json.dumps(old);new=migrate_profile_document(raw)
-  assert new['schemaVersion']==6 and new['profiles']==old['profiles']
+  assert new['schemaVersion']==7 and new['extraStoppedGapM']==0. and new['profiles']==old['profiles']
   assert all(v==LIMITS for v in new['slcLimits'].values())
   assert json.loads(raw)==old
 

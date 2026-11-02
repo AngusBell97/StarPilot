@@ -166,10 +166,28 @@ class OnroadAppearance:
   show_lead_indicator: bool = False
   lead_info_mode: LeadInfoMode = LeadInfoMode.OFF
   lead_info_metric: bool | None = False
+  # Galaxy's road-distance slider units for the lead distance widget: True metres, False feet, None follows the driving units.
+  lead_distance_metric: bool | None = None
   camera_view: CameraViewChoice = CameraViewChoice.STANDARD
   driver_camera_on_reverse: bool = False
   hide_personality_alerts: bool = False
   wheel_pedal_feedback: bool = False
+
+
+def galaxy_distance_metric(params: Any) -> bool | None:
+  """Galaxy's distance units for the lead distance widget: the road-distance choice, else the small-measurement
+  choice (which defaults to metres), else None so the driving units apply. Mirrors galaxy.slider_units.selection."""
+  for key, default in (("GalaxyRoadDistanceUnits", b"0"), ("GalaxySmallDistanceUnits", b"1")):
+    try:
+      raw, readable = read_saved(params, key, 8)
+    except (AttributeError, OSError, TypeError, ValueError):
+      continue
+    if not readable or raw not in (None, b"0", b"1", b"2"):
+      continue
+    choice = {b"1": True, b"2": False}.get(default if raw is None else raw)
+    if choice is not None:
+      return choice
+  return None
 
 
 def onroad_appearance(params: Any) -> OnroadAppearance:
@@ -182,6 +200,7 @@ def onroad_appearance(params: Any) -> OnroadAppearance:
   except (AttributeError, OSError, TypeError, ValueError):
     metric_raw, metric_readable = None, False
   metric = False if metric_readable and metric_raw in (None, b"0") else True if metric_readable and metric_raw == b"1" else None
+  lead_distance_metric = galaxy_distance_metric(params)
   return OnroadAppearance(
     show_developer_sidebar=values["DeveloperSidebar"] is True,
     hide_personality_alerts=values["HidePersonalityAlerts"] is True,
@@ -195,6 +214,7 @@ def onroad_appearance(params: Any) -> OnroadAppearance:
     # Lead Info is its own display choice; it no longer needs the lead indicator to be shown.
     lead_info_mode=saved_lead_info.mode if saved_lead_info.mode is not None else LeadInfoMode.OFF,
     lead_info_metric=metric,
+    lead_distance_metric=lead_distance_metric,
     camera_view=camera_view if camera_view is not None else CameraViewChoice.STANDARD,
     driver_camera_on_reverse=values["DriverCamera"] is True,
   )

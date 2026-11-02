@@ -9,11 +9,26 @@ Lead, curve, stop and actuator safety constraints retain their existing owners.
 
 ## New limits and adoption
 
+On SET or RES engagement, a currently qualified limit from the selected source
+initializes SET with its existing offset and mph/km/h rounding, even with Automatic
+adoption off. Sources keep updating while disengaged. This explicit adoption clears
+the matching prompt, decline or set-speed override; later limits keep the normal
+confirmation policy. Without a qualified current limit, RESUME restores the previous
+SET and normal SET initialization applies. An early Maps proposal does not replace
+the current road's limit at engagement. Toyota still requires native cruise capacity
+and release approval before applying the target.
+
 A different numeric limit from the selected source starts a new decision, including
 while a set-speed override is active. A source/road identity change at the same
 numeric limit does not start another decision. A decline remains effective across
 a source gap or same-value provider change; a later different limit starts a new
 window, including when an earlier numeric limit returns.
+
+A different provider proposing a different numeric limit must remain the proposed
+replacement for two seconds before confirmation or automatic adoption. A competing
+qualified reading cancels that check; missing readings do not restart it. Adoption
+still requires fresh evidence at the end. Same-provider limit changes, explicit
+driver adoption and latched early Maps proposals keep their existing timing.
 
 While StarPilot owns speed control, a proposed limit whose adjusted, rounded target
 already matches both current SET values is recorded without another confirmation
@@ -48,8 +63,17 @@ The source and arrow share a centered row; all sign contents use the same geomet
 on both screens. Small arrows are baked at double resolution and text is aligned
 to final pixels for clear native rendering.
 Tesla wheel gestures retain their speed-adjustment role. Tapping the sign opens the same
-Accept / Reject choices on either native screen. A pending manual choice expires
-after ten monotonic seconds, including time without active longitudinal control.
+Accept / Reject choices on either native screen. Manual confirmations appear only
+while system longitudinal control is engaged, including a temporary accelerator
+override. Disengaged and AOL lateral-only modes keep displaying limits without
+prompting. Losing longitudinal engagement cancels the pending choice without
+declining it; re-engaging starts a fresh choice if needed. A pending manual choice
+expires after ten monotonic seconds while engaged, including source gaps. The same
+decision, card and expanded controls remain during a gap, with Accept disabled and
+an unavailable label. Reject still dismisses that decision. Recovery renews the
+action presentation without restarting the decision, deadline or attention cycle.
+Wheel confirmation presses remain consumed during a gap, so they cannot become
+ordinary SET adjustments. An unavailable Accept is never queued for recovery.
 Decline and timeout leave set speed unchanged. An action at the exact deadline
 can still complete its presented decision; a later action cannot accept it.
 
@@ -58,9 +82,14 @@ separate lower-limit and higher-limit confirmation choices. The standalone
 "Use X Speed" button is removed; the confirmation card and assigned adoption action
 remain available. This update does not change saved preferences.
 
+Dom's optional early adoption (`SLCAdvanceSeconds`, "Adopt limits early") is not enabled in
+this build; this build's mapped lower-limit timing and higher-limit distance apply instead.
+
 Only a finite positive source observation can propose a limit. Missing, stale and
-unknown observations stay distinct. Source loss clears a pending choice; it cannot
-change set speed. While the publisher remains fresh, the widget retains the latest
+unknown observations stay distinct. Source loss retains an engaged manual choice
+until its original deadline and creates no authority to change set speed. Automatic
+adoption retains accepted history and does not reapply an unchanged limit on
+recovery. While the publisher remains fresh, the widget retains the latest
 received limit, offset and original source with an unavailable status, independently
 of accepted history. Cruise continues using its current SET, including a driver's
 manual adjustment. Source loss creates no speed target and cannot select a
@@ -75,6 +104,15 @@ Previous accepted limit and its legacy Experimental fallback are retired.
 saved bytes for older versions; current code neither reads nor writes it.
 Missing, 0, 1, 2 and malformed old values all use the same behavior above.
 Old Quick Select assignments remain saved but unavailable.
+
+Offsets use only the saved `SLCOffsetSchedule`, with fixed physical speed ranges
+and adjustments. Without a saved schedule, all seven ranges start at zero and
+can be edited immediately in Galaxy, Large UI, or Compact UI. Retired
+`Offset1`–`Offset7` values are ignored; users with only those values must configure
+their offsets again. Existing schedules are preserved, including across display
+unit changes. There is no separate offset-adoption step.
+Converted offsets display as whole mph or km/h, and edits use whole units.
+Unit switches retain the saved precision so repeated conversions do not drift.
 
 Offset-only edits preserve accepted and
 rejected state and renew action identities. A changed offset can update the set
@@ -119,6 +157,12 @@ checks remain in their source adapters. Vision still requires its separate displ
 and control qualification. Online providers are not connected as live control
 sources. See [selection](SELECTION.md), [Maps](MAP_SOURCE.md), and the pinned camera
 [model provenance](vision/assets/PROVENANCE.md).
+
+Vision interprets sign numerals using the existing Metric setting: km/h when on,
+mph when off. The producer converts once to m/s for both UI layouts and cruise SET.
+Changing Metric clears Vision's retained sign and supporting reads, including
+in-flight results and cached heartbeats; fresh evidence must confirm the next limit.
+The current applied SET remains unchanged by this reset.
 
 Every action binds the current session, decision and presentation. The causal ledger
 keeps consumed confirmation presses out of the ordinary cruise-button path, through

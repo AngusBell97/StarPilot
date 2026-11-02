@@ -21,6 +21,7 @@ class TestSoundd(OpenpilotTestCase):
     soundd.output_underflow_count = 0
     soundd.reported_output_underflows = 0
     soundd.stream_report_at = None
+    soundd.slc_warning_playing = False  # this build's SLC warning
     warning = mocker.patch("openpilot.selfdrive.ui.soundd.cloudlog.warning")
     error = mocker.patch("openpilot.selfdrive.ui.soundd.cloudlog.error")
     output = np.empty((8, 1), dtype=np.float32)

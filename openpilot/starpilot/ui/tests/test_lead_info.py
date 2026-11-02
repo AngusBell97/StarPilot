@@ -169,7 +169,7 @@ class LeadInfoTests(unittest.TestCase):
                      [(169.0, 41.0), (171.0, 41.0), (169.0, 43.0), (171.0, 43.0), (170.0, 42.0)])
     self.assertEqual([call.args[-1] for call in draw.call_args_list], [rl.BLACK] * 4 + [rl.WHITE])
 
-  def test_native_text_needs_current_primary_bar_and_context_resets(self):
+  def test_native_text_reads_the_radar_lead_without_the_marker_and_context_resets(self):
     renderer = native.ModelRenderer.__new__(native.ModelRenderer)
     renderer._lead_indicator_enabled = False
     renderer._lead_info_mode = 0
@@ -189,13 +189,13 @@ class LeadInfoTests(unittest.TestCase):
     rect = rl.Rectangle(0, 0, 476, 240)
     lead = NS(present=True, dRel=20.0, yRel=0.0, vRel=-1.0, vLead=12.5)
     messages = {"carOutput": NS(actuatorsOutput=NS(torque=0.0)), "extrinsicsCalibration": NS(height=[]),
-                "selfdriveState": NS(experimentalMode=False), "modelV2": NS(),
+                "selfdriveState": NS(experimentalMode=False), "modelV2": NS(), "longitudinalPlan": NS(),
                 "radarState": NS(leadOne=lead, leadTwo=NS(present=False))}
 
     class SubMaster:
       recv_frame = {"extrinsicsCalibration": 2, "modelV2": 2}
       updated = {"carParams": False, "modelV2": False, "radarState": False}
-      valid = {"radarState": True}
+      valid = {"radarState": True, "longitudinalPlan": False, "modelV2": True}
 
       def __getitem__(self, key):
         return messages[key]
@@ -208,12 +208,26 @@ class LeadInfoTests(unittest.TestCase):
       renderer._draw_lead_info.assert_called_once_with(rect, "20 m")
       self.assertEqual((renderer._lead_info_mode, renderer._lead_info_metric), (0, None))
       renderer._draw_lead_info.reset_mock()
+      renderer._draw_lead_indicator.reset_mock()
+      renderer.render_with_lead(rect, False, 2, False)
+      renderer._draw_lead_info.assert_called_once_with(rect, "28 mph")
+      renderer._draw_lead_indicator.assert_not_called()
+      renderer._draw_lead_info.reset_mock()
+      renderer.render_with_lead(rect, False, 0, True)
+      renderer._draw_lead_info.assert_not_called()
       sm.recv_frame["modelV2"] = 0
       renderer.render_with_lead(rect, True, 1, True)
       renderer._draw_lead_info.assert_not_called()
       sm.recv_frame["modelV2"] = 2
       renderer._path.raw_points = np.empty((0, 3), dtype=np.float32)
+      renderer._draw_lead_indicator.reset_mock()
       renderer.render_with_lead(rect, True, 1, True)
+      renderer._draw_lead_info.assert_called_once_with(rect, "20 m")
+      renderer._draw_lead_indicator.assert_not_called()  # No road geometry: no marker, but the text still reads radar.
+      renderer._draw_lead_info.reset_mock()
+      messages["radarState"] = NS(leadOne=NS(present=False), leadTwo=NS(present=False))
+      renderer._path.raw_points = np.array([[20.0, 0.0, 0.0]], dtype=np.float32)
+      renderer.render_with_lead(rect, False, 1, True)
       renderer._draw_lead_info.assert_not_called()
 
 

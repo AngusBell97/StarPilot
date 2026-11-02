@@ -70,7 +70,7 @@ from openpilot.starpilot.ui.runtime_snapshot import RuntimeSnapshotAdapter, curr
 from openpilot.starpilot.ui.runtime_software import deliver_software
 from openpilot.starpilot.ui.network_panel import NetworkPanelBridge
 from openpilot.starpilot.ui.slc_action_dispatch import SlcActionDispatcher
-from openpilot.starpilot.ui.onroad_state import AlertSize, BorderSignals, OnroadRequest, OnroadState, SlcUiRequest, is_personality_notice, is_lane_change_notice
+from openpilot.starpilot.ui.onroad_state import AlertSize, BorderSignals, OnroadRequest, OnroadState, SlcUiRequest, is_personality_notice
 from openpilot.starpilot.ui.onroad_favorites import OnroadFavorites
 from openpilot.starpilot.ui.onroad_dm import DriverMonitorLayer
 from openpilot.starpilot.favorites.owner import FavoritesOwner
@@ -85,7 +85,9 @@ from openpilot.starpilot.favorites.actions import (BOOKMARK, CYCLE_PERSONALITY, 
 from openpilot.starpilot.longitudinal.profile_document import PERSONALITY_PROFILES_PARAM
 from openpilot.starpilot.longitudinal.profile_preferences import read_document_value, read_master_value
 from openpilot.starpilot.saved_document import commit_exact
-from openpilot.starpilot.ui.lead_follow import NUDGE_STEP_S, encode_profile_document, nudged_profile_document
+from openpilot.starpilot.longitudinal.profile_document import active_personality_id
+from openpilot.starpilot.ui.lead_follow import NUDGE_STEP_S, encode_profile_document, interpolated_follow_s, nudged_profile_document
+from openpilot.common.constants import CV
 from openpilot.starpilot.favorites.state import FavoriteAction
 from openpilot.starpilot.favorites.layout_actions import layout_actions
 from openpilot.starpilot.saved_source import read_saved
@@ -196,7 +198,6 @@ class StarShellSession:
         self.view.onroad.stock_confidence_layer = lambda rect, state: render_stock_confidence(camera_owner, rect, state)
         self.view.onroad.stock_confidence_reset = camera_owner.reset_stock_confidence_layer
         self.view.onroad.extra_overlays = lambda rect, state: camera_owner.render_model_source_layer(rect, show_long_indicator=None)
-        self.view.onroad.compact_sidebar.personality_renderer = self._render_personality
       else:
         self.view.onroad.extra_overlays = lambda rect, state: camera_owner.render_model_source_layer(rect)
     except Exception:
@@ -289,6 +290,9 @@ class StarShellSession:
     self.favorites_owner = FavoritesOwner(ui_state.params, self._favorite_actions, self._favorite_authority, self._favorite_render_actions,
                                          current_action=lambda key: self._resolve_favorite_actions(frozenset((key,))).get(key))
     self.favorites = OnroadFavorites(self.fonts, self._favorite_request)
+    if profile == Profile.LARGE:
+      self.favorites.prepare()
+      self.view.onroad.quick_select_layer = lambda _content, _state: self.favorites.render(time.monotonic())
     self._favorite_snapshot = None
     self._favorite_data = None
     self._favorite_read_at = None
@@ -328,6 +332,13 @@ class StarShellSession:
     alert_allowed = state.alert.size == AlertSize.NONE or allow_personality_notice and is_personality_notice(state.alert)
     return bool(self._mode == ShellMode.ONROAD and state.camera_available and alert_allowed and camera_allowed)
 
+  def _bookmark_authority(self) -> bool:
+    if (getattr(ui_state, "replay_clock", None) is not None or
+        self._mode != ShellMode.ONROAD or not ui_state.started):
+      return False
+    car_state = display_message(ui_state.sm, 'carState', time.monotonic_ns(), after_frame=ui_state.started_frame)
+    return bool(car_state is not None and car_state.canValid and not car_state.canTimeout)
+
   def _render_driver_monitor(self, rect, state):
     from openpilot.starpilot.ui.runtime_snapshot import display_message
     now = state.observed_ns or time.monotonic_ns()
@@ -342,12 +353,6 @@ class StarShellSession:
     self._driver_monitor_layer.render(state, monitor=monitor, driver=driver,
                                       fresh=monitor is not None and driver is not None,
                                       onroad=ui_state.is_onroad(), top_icons=top_icons)
-
-  def _render_personality(self, rect, state):
-    indicator = self.camera_owner._long_indicator
-    indicator.set_should_draw(state.alert.size == AlertSize.NONE or is_lane_change_notice(state.alert))
-    indicator.render_sidebar(rect, personality=state.personality,
-                             longitudinal_active=state.cruise_active, traffic_mode=state.traffic_mode)
 
   def _comma_speed_actions(self, *, require_display=False):
     # Hardware inputs must not expire while building unrelated settings pages.
@@ -403,30 +408,46 @@ class StarShellSession:
     return "" if preset == "custom" else f"Set the {personality_id} profile's following to Custom first"
 
   def _nudge_follow_gap(self, direction: int) -> bool:
-    """Move the active custom following curve at the current speed by one step; saved while driving."""
-    if not (self._favorite_authority() and ui_state.CP is not None and ui_state.has_longitudinal_control and
-            not ui_state.params.get_bool("SafeMode")):
+    """Move the active custom following curve at the current speed by one step; saved while driving.
+
+    A short on-screen notice confirms the new value at this speed, or says why the press could not apply."""
+    def allowed():
+      return bool(self._favorite_authority(allow_personality_notice=True) and ui_state.CP is not None and
+                  ui_state.has_longitudinal_control and not ui_state.params.get_bool("SafeMode"))
+    if not allowed():
+      return False
+    state = self.snapshot(ShellMode.ONROAD).onroad
+    notice = self.adapter.follow_gap_notice
+    reason = self._follow_gap_reason(state)
+    if reason:
+      notice.show("Follow gap", reason, time.monotonic_ns(), duration_ns=2_500_000_000)
       return False
     try:
-      master = read_master_value(ui_state.params)
       saved = read_document_value(ui_state.params)
       speed = float(ui_state.sm['carState'].vEgo)
     except (AttributeError, OSError, TypeError, ValueError, KeyError):
       return False
-    if not master.valid or master.value is not True or not saved.valid or not isinstance(saved.value, dict) or not saved.value.get("enabled"):
+    if not saved.valid or not isinstance(saved.value, dict):
       return False
-    state = self.snapshot(ShellMode.ONROAD).onroad
     document = nudged_profile_document(saved.value, int(ui_state.personality), state.traffic_mode, speed, direction * NUDGE_STEP_S)
     if document is None:
+      notice.show("Follow gap", "Already at the limit", time.monotonic_ns())
       return False
     result = commit_exact(ui_state.params, key=PERSONALITY_PROFILES_PARAM, max_bytes=65536, raw=encode_profile_document(document),
-                          expected=saved.raw, authorized=lambda: self._favorite_authority() and not ui_state.params.get_bool("SafeMode"),
-                          temp_prefix=".follow-gap-")
-    return bool(result.committed and result.verified)
+                          expected=saved.raw, authorized=allowed, temp_prefix=".follow-gap-")
+    if not (result.committed and result.verified):
+      return False
+    personality_id = active_personality_id(state.traffic_mode, int(ui_state.personality))
+    speed_mph = speed * CV.MS_TO_MPH
+    value = interpolated_follow_s(document["profiles"][personality_id]["following"]["curve"], speed_mph)
+    shown_speed = f"{round(speed * CV.MS_TO_KPH)} km/h" if state.metric else f"{round(speed_mph)} mph"
+    notice.show(f"{value:.2f} s" if value is not None else "Saved", f"{personality_id.title()} follow gap at {shown_speed}", time.monotonic_ns())
+    return True
 
   def native_favorite_actions(self, bookmark, personality, experimental):
     state = self.snapshot(ShellMode.ONROAD).onroad
     available = self._favorite_authority()
+    bookmark_available = self._bookmark_authority()
     conditional = self._conditional_favorite_active()
     long_available = bool(available and ui_state.CP is not None and ui_state.has_longitudinal_control and
                           not ui_state.params.get_bool("SafeMode"))
@@ -468,11 +489,13 @@ class StarShellSession:
     personality_available = bool(self._favorite_authority(allow_personality_notice=True) and ui_state.CP is not None and
                                  ui_state.has_longitudinal_control and not ui_state.params.get_bool("SafeMode"))
     self._wheel_personality = lambda: cycle_personality(-1)
-    follow_gap_reason = self._follow_gap_reason(state) if long_available else "Longitudinal control required"
+    # Like the personality action, a press stays allowed while its own notice is on screen.
+    follow_gap_reason = self._follow_gap_reason(state) if personality_available else "Longitudinal control required"
     follow_gap_label = f"{state.follow_target_s:.2f} s" if state.follow_target_s is not None else "Press"
     actions = {
-      BOOKMARK: FavoriteAction(BOOKMARK, "Bookmark", available=available, reason="" if available else "Onroad only",
-                               token=repr((drive, available)), invoke=lambda: guarded(bookmark)),
+      BOOKMARK: FavoriteAction(BOOKMARK, "Bookmark", available=bookmark_available, reason="" if bookmark_available else "Fresh onroad state required",
+                               token=repr((drive, bookmark_available)),
+                               invoke=lambda: self._bookmark_authority() and bookmark()),
       CYCLE_PERSONALITY: FavoriteAction(CYCLE_PERSONALITY, "Cycle Driving Personality", kind="enum",
                                       state_label=("Aggressive", "Standard", "Relaxed")[current_personality],
                                       available=personality_available, reason="" if personality_available else "Longitudinal control required",
@@ -521,7 +544,7 @@ class StarShellSession:
       invoke=lambda: guarded(device.toggle_screen_off))
     if not hasattr(self, 'mode_actions'):
       self.mode_actions = ModeActionPublisher()
-    for key, label, mode, requested in ((TRAFFIC, "Traffic Mode", 'traffic', state.traffic_mode),
+    for key, label, mode, requested in ((TRAFFIC, "Traffic Mode", 'traffic', state.traffic_selected or state.traffic_mode),
                                        (SWITCHBACK, "Switchback Mode", 'switchback', getattr(state, 'switchback_mode', False))):
       now_ns = time.monotonic_ns()
       allowed = (self._favorite_authority() and not ui_state.params.get_bool("SafeMode") and
@@ -641,7 +664,11 @@ class StarShellSession:
         self._wheel_pending.append(event)
         continue
       command = self._wheel_consumer.accept(event, ui_state.params, ui_state.CP, ui_state.sm, now_ns=now_ns)
-      if command is None or command.action == 0 or not self._favorite_authority(allow_personality_notice=command.action == 1):
+      if command is None or command.action == 0:
+        continue
+      authorized = (self._bookmark_authority() if command.action == 8 else
+                    self._favorite_authority(allow_personality_notice=command.action in (1, 15, 16)))
+      if not authorized:
         continue
       actions = self._native_favorite_actions()
       try:
@@ -1278,7 +1305,7 @@ class StarShellSession:
     from openpilot.starpilot.ui.feature_settings_state import CURVE_CONFIRM_ACTIONS, CONDITIONAL_CONFIRM_ACTIONS, TORQUE_CONFIRM_ACTIONS, is_long_confirm_action
     from openpilot.starpilot.ui.long_profile_feature import long_confirm_question
     from openpilot.starpilot.ui.controller_feature import SETUP_ACTION, SETUP_QUESTION
-    action_key = row.key if (row.key.startswith("map_memory:") or row.key in TORQUE_CONFIRM_ACTIONS or row.key in ("slc_adopt", "slc_reset", LANE_CHANGE_RESET, SETUP_ACTION) or
+    action_key = row.key if (row.key.startswith("map_memory:") or row.key in TORQUE_CONFIRM_ACTIONS or row.key in ("slc_reset", LANE_CHANGE_RESET, SETUP_ACTION) or
                              row.key in CURVE_CONFIRM_ACTIONS | CONDITIONAL_CONFIRM_ACTIONS or is_long_confirm_action(row.key)) else "reset_profiles"
     if action_key in CONDITIONAL_CONFIRM_ACTIONS:
       self._confirm_conditional(FeatureSettingsRequest(action_key, row.source, "confirm", confirmation=True,
@@ -1297,7 +1324,6 @@ class StarShellSession:
                                      "Friction and other models stay unchanged.",
                 "torque_rebase": f"Reapply saved torque values ({row.value}) with the current vehicle tune? " +
                                  "Saved values must pass current limits.",
-                "slc_adopt": "Keep these speed-limit offsets and speed ranges when units change? Legacy values remain saved but inactive.",
                 "slc_reset": f"Reset speed-limit offsets to zero? {row.value}. " +
                              "Saved SLC control may resume if its switch is On; the switch will not change.",
                 "curve_reset": "Reset saved Curve learning? Your Curve Speed Controller On/Off choice will stay the same.",
@@ -1312,7 +1338,7 @@ class StarShellSession:
                                                      capability=row.capability, dependencies=row.dependencies))
     if action_key.startswith("map_memory:"):
       button="Continue"
-    elif action_key in ("torque_adopt", "slc_adopt"):
+    elif action_key == "torque_adopt":
       button = "Continue"
     elif action_key in ("torque_rebase", "torque_gain_rebase"):
       button = "Review"
@@ -1490,6 +1516,8 @@ class StarShellSession:
     if mode == ShellMode.ONROAD:
       self._update_favorites(snapshot.onroad, time.monotonic())
       self._poll_wheel(time.monotonic_ns())
+      if self.profile == Profile.LARGE and self.favorites.is_open:
+        snapshot = replace(snapshot, onroad=self.favorites.present(snapshot.onroad))
     else:
       self.favorites.cancel()
     if mode != ShellMode.ONROAD or not snapshot.onroad.camera_available:
@@ -1513,7 +1541,7 @@ class StarShellSession:
       drag_x = getattr(self.input, pane[2]).drag_x if pane else 0.0
       self.view.render(replace(snapshot, selected=Destination.NETWORK) if external else snapshot, drag_x=drag_x)
       self._pip_signals_cache = None
-      if mode == ShellMode.ONROAD:
+      if mode == ShellMode.ONROAD and self.profile == Profile.COMPACT:
         self.favorites.render(time.monotonic())
     network = (mode == ShellMode.SETTINGS and self.profile == Profile.LARGE and snapshot.selected == Destination.NETWORK and
                snapshot.settings.destination(Destination.NETWORK).available and self.network_layer is not None)
@@ -1551,6 +1579,11 @@ class StarShellSession:
     self._request_emitted = True
     previous_destination = self.selected
     action = request.action
+    if request.source == 'onroad' and getattr(action, 'kind', None) == 'cycle_personality':
+      self._native_favorite_actions()
+      if self._wheel_personality is not None:
+        self._wheel_personality()
+      return
     if request.source == "onroad" and getattr(action, "kind", None) == "set_experimental":
       binding = self._native_favorite_actions().get(EXPERIMENTAL)
       if not (binding is not None and binding.available and binding.invoke is not None and
@@ -1733,7 +1766,7 @@ class StarShellSession:
     self._onroad_claimed = False
     if mode == ShellMode.ONROAD:
       self._update_favorites(snapshot.onroad, now)
-      if self.favorites.is_open:
+      if self.favorites.is_open or self.favorites.claims_corner(x, y):
         self._favorite_claimed = self.favorites.press(x, y, now)
         self.input.cancel()
         return
@@ -1923,7 +1956,6 @@ class StarMainLayout(MainLayout):
     device_scroller._items.insert(1, device_scroller._items.pop())
     toggle_items = self._large_panels[Destination.TOGGLES]._scroller._items
     toggle_items.insert(2, text_item("Safe Mode", "N/A"))
-    toggle_items.insert(7, text_item("Right Hand Driving", "N/A"))
     from openpilot.common.hardware import HARDWARE
     from openpilot.starpilot.ui.starpilot_settings_adapter_large import StarPilotSettingsAdapterLarge
     for destination, owner in self._large_panels.items():
@@ -2035,7 +2067,7 @@ class StarMainLayout(MainLayout):
       return False
     param = {ToggleKey.ENABLED: "OpenpilotEnabledToggle", ToggleKey.EXPERIMENTAL: "ExperimentalMode",
              ToggleKey.DISENGAGE_ACCELERATOR: "DisengageOnAccelerator", ToggleKey.LANE_DEPARTURE: "IsLdwEnabled",
-             ToggleKey.ALWAYS_ON_DM: "AlwaysOnDM", ToggleKey.RECORD_FRONT: "RecordFront",
+             ToggleKey.ALWAYS_ON_DM: "AlwaysOnDM", ToggleKey.RIGHT_HAND_DRIVING: "IsRhdDetected", ToggleKey.RECORD_FRONT: "RecordFront",
              ToggleKey.RECORD_AUDIO: "RecordAudio", ToggleKey.METRIC: "IsMetric"}.get(request.key)
     return bool(param is not None and owner.request_toggle(param, request.value))
 
@@ -2212,7 +2244,9 @@ class StarMiciMainLayout(MiciMainLayout):
       return
     if destination == Destination.DRIVING_MODEL:
       from openpilot.starpilot.ui.models_compact import ModelsCompact
-      ModelsCompact(self.star).open()
+      if not hasattr(self, "_models_compact"):
+        self._models_compact = ModelsCompact(self.star)
+      self._models_compact.open()
       return
     if destination == Destination.DRIVING_CONTROLS:
       from openpilot.starpilot.ui.feature_settings_compact import FeatureSettingsCompact

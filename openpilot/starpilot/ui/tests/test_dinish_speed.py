@@ -4,6 +4,7 @@ from itertools import product
 import io
 import re
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from PIL import Image
 import numpy as np
@@ -88,7 +89,7 @@ def test_large_sign_is_secondary_to_set_speed_at_the_saved_position():
         current = replace(current, metric=metric, cruise_kph=value / factor * 3.6 if value else None,
                           speed_limit=observation)
         calls = []
-        with patch.object(fonts, 'draw', lambda *args, calls=calls: calls.append(args)):
+        with patch.object(fonts, 'draw', lambda *args, calls=calls: calls.append(args)), patch.object(rl, 'draw_line_ex') as lines:
           UnifiedSpeedWidget(fonts).render(rl.Rectangle(30, 30, 1800, 1020), current)
         calls = [call for call in calls if call[-1].a == 255]
         posted = next(call for call in calls if call[0] == '120' and call[1] == FontRole.BOLD)
@@ -281,6 +282,7 @@ def test_large_sources_and_confirmation_text_have_clearance_below_both_signs():
     with BitmapFonts(Profile.LARGE, default_font_directory()) as fonts:
       widget = UnifiedSpeedWidget(fonts)
       view = OnroadView.__new__(OnroadView)
+      view.personality = Mock()
       view.fonts = fonts
       view.unified_speed = widget
       for vienna, separate in product((False, True), repeat=2):

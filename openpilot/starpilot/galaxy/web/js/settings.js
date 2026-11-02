@@ -3,6 +3,7 @@ import { GxState } from "./state.js"
 import { connectionError } from "./polling.js"
 import { reactive, nextTick } from "../vendor/vue/vue.esm-browser.js"
 import { GalaxySettingRow, GalaxyRangeSettingRow, pairedSettingRows, settingControl } from "./galaxy-setting-row.js"
+import { ReverseProxySettings } from "./reverse-proxy.js"
 import { OnroadLayoutPage } from "./onroad-layout.js"
 import { FavoritesPage } from "./favorites.js"
 import { SoundPacks } from "./sound-packs.js"
@@ -21,7 +22,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
   { id: "wheel", label: "Wheel Controls", icon: "bi-controller", pages: ["wheel"] },
   { id: "visual", label: "Visual (Display & UI)", icon: "bi-eye", pages: ["appearance", "ui_layout", "favorites", "pip"] },
   { id: "sounds", label: "Sounds & Alerts", icon: "bi-volume-up", pages: ["sounds"] },
-  { id: "device", label: "Device & Data", icon: "bi-hdd", pages: ["display", "data"] },
+  { id: "device", label: "Device & Data", icon: "bi-hdd", pages: ["power", "display", "data"] },
   { id: "localization", label: "Localization", icon: "bi-globe", pages: ["localization"] },
   { id: "developer", label: "Developer", icon: "bi-code-slash", pages: ["developer"] },
 ])
@@ -33,7 +34,7 @@ export const isPipCropRow = (row) => ["Visual camera crop editor", "Camera crop 
   /^Vehicle (left|right) crop/.test(row.label || "")
 
 const SECTION_LINKS = {
-  device: [{ label: "Display", page: "display", value: "Adjust screen brightness and display timing" }, { label: "Data Uploads", page: "data", value: "Choose mobile-data uploads and usage-statistics sharing" }],
+  device: [{ label: "Parked Power", page: "power", value: "Adjust shutdown hours and battery-voltage cutoff" }, { label: "Display", page: "display", value: "Adjust screen brightness and display timing" }, { label: "Data Uploads", page: "data", value: "Choose mobile-data uploads and usage-statistics sharing" }],
   visual: [{ label: "Driving Screen Widgets, Colors & Layout", page: "ui_layout" }, { label: "Quick Select", page: "favorites" }, { label: "Blind Spot Camera and Preview", page: "pip" }],
 }
 
@@ -240,6 +241,7 @@ export class SettingsFeed {
     const attempt = this.generation
     const result = await operation
     if (result?.saved === true) {
+      if (page === "localization") globalThis.dispatchEvent?.(new Event("galaxy-language-changed"))
       for (const feed of activeSettings) {
         if (feed !== this && !feed.pending && !feed.saving) feed.load(feed.page, { keepData: true, quiet: true })
       }
@@ -270,7 +272,7 @@ const SETTINGS_PAGE_INTRO = `
 
 export const SettingsPage = {
   emits: ["nested"],
-  components: { GxDialog, GxState, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, GxNotice },
+  components: { GxDialog, GxState, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
   props: {
     mode: { type: String, required: true }, unauthorized: { type: Function, required: true },
     initialPage: { type: String, default: "hub" }, title: { type: String, default: "Toggles" },
@@ -538,6 +540,7 @@ export const SettingsPage = {
       <template v-else>
         <GxNotice v-if="state.data && state.data.vehicleIdentified === false" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
         <CloudProviderPage ref="cloudProvider" v-if="state.developerOpen" :mode="mode" :unauthorized="unauthorized" />
+        <ReverseProxySettings v-if="state.developerOpen" :mode="mode" :unauthorized="unauthorized" />
         <GxState v-if="state.status === 'loading'" loading>Reading your device’s saved preferences…</GxState>
         <GxNotice tone="danger" v-else-if="state.status === 'unavailable' && !state.error">The device could not read these preferences. Reconnecting automatically…</GxNotice>
         <GxNotice tone="danger" v-if="state.error">{{ state.error }}

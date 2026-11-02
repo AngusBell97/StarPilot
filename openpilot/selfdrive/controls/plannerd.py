@@ -222,34 +222,58 @@ def conditional_handoff_for_frame(host: ConditionalPlannerHost | None, sm, CP, n
 
 
 def apply_conditional_stop_hold(host, planner, sm, CP, now_ns: int, drive_id: int, *, now_boot_ns: int | None = None, sample_skew_ns: int = 0) -> bool:
+  def unavailable():
+    owner = getattr(host, 'stopped_lead_release', None)
+    if owner is not None:
+      owner.reset()
+    return False
+
   if (host is None or not CP.openpilotLongitudinalControl or CP.passive or CP.dashcamOnly or
       not 0 < drive_id <= now_ns or host.mode.drive_id != drive_id or
       not host.mode.projector.stop_detector.standstill_committed):
-    return False
+    return unavailable()
   settings = host.settings.verdict(host.settings.current, now_mono_ns=now_ns, drive_id=drive_id)
   if settings.safe_mode is True:
     host.mode.projector.stop_detector.reset()
   if settings.status != 'ready' or settings.safe_mode is not False:
-    return False
+    return unavailable()
   if not all(host._fresh_service(sm, name, drive_id, now_ns)
              for name in ('carState', 'carControl', 'selfdriveState')):
-    return False
+    return unavailable()
   state, control, vehicle = sm['selfdriveState'], sm['carControl'], sm['carState']
   if not vehicle.canValid or vehicle.canTimeout:
-    return False
+    return unavailable()
   if not state.enabled or not control.enabled or not control.longActive or vehicle.brakePressed or vehicle.gasPressed:
     host.mode.projector.stop_detector.reset()
-    return False
+    return unavailable()
   if not host._fresh_service(sm, 'modelV2', drive_id, now_ns):
-    return False
+    return unavailable()
   if (type(now_boot_ns) is not int or type(sample_skew_ns) is not int or
       now_boot_ns <= 0 or not 0 <= sample_skew_ns <= 1_000_000 or
       now_boot_ns < now_ns - sample_skew_ns // 2 or not sm.all_checks(NATIVE_PLAN_INPUTS) or
       not 0 < sm['modelV2'].timestampEof <= now_boot_ns or
       now_boot_ns - sm['modelV2'].timestampEof > 150_000_000):
-    return False
+    return unavailable()
   if (now_ns - sm.logMonoTime['modelV2'] > 150_000_000 or
       now_ns - int(sm.recv_time['modelV2'] * 1e9) > 150_000_000):
+    return unavailable()
+  stop_plan = getattr(planner, 'force_stop_plan', None)
+  if (stop_plan is not None and stop_plan.resume_override and stop_plan.model_ns == sm.logMonoTime['modelV2'] and
+      not stop_plan.forcing and not stop_plan.should_stop and abs(vehicle.vEgo) < 2.0 and planner.allow_throttle and
+      not any(lead.present for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo))):
+    host.mode.projector.stop_detector.reset()
+    return False
+  from openpilot.starpilot.conditional_mode.stop_release import owner_for
+  owner = getattr(host, 'stopped_lead_release', None)
+  if owner is None:
+    owner = owner_for(CP)
+    if owner is not None:
+      host.stopped_lead_release = owner
+  if owner is not None and owner.sample(sm, CP, planner, host.mode.projector.stop_detector, now_ns=now_ns, drive_id=drive_id):
+    detector = host.mode.projector.stop_detector
+    detector.committed = detector.standstill_committed = False
+    detector.commit_clear_since_s = None
+    detector._reset_light()
     return False
   planner.output_should_stop = True
   planner.output_a_target = min(planner.output_a_target, 0.)
@@ -454,6 +478,8 @@ def starpilot_main():
   if conditional_host is not None:
     subscribed_services.append('starpilotRadarState')
   optional_slc = ['slcDashboardObservation', 'slcVisionObservation', 'mapdOut', 'starpilotCarState'] if slc_available else []
+  if slc_available and feature_enabled(params, CP, 'aol', os.environ):
+    optional_slc.append('aolAxisState')
   subscribed_services.extend(optional_slc)
   optional_map = ['gpsLocationExternal', 'gpsLocation', 'onroadEvents'] if map_host is not None else []
   subscribed_services.extend(optional_map)

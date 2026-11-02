@@ -39,7 +39,7 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
       params.put_bool('SpeedLimitController', True, block=True)
       params.put_bool('SLCConfirmation', True, block=True)
       params.put('SLCPriority1', 'Dashboard', block=True)
-      params.put('SLCOffsetSchedule', od.to_value(od.adopt_legacy(False, (0.,) * 7)), block=True)
+      params.put('SLCOffsetSchedule', od.to_value(od.default_document(False)), block=True)
       owner = plannerd.SavedSlcLifecycle(params, cp, {})
       runtime, _ = owner.refresh(2_000_000_000)
       sm['carState'].vCruise = sm['carState'].vCruiseCluster = 60.
@@ -80,7 +80,7 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
         params.put_bool('SLCConfirmationLower', confirmation, block=True)
         params.put_bool('SLCConfirmationHigher', confirmation, block=True)
         params.put('SLCPriority1', 'Dashboard', block=True)
-        params.put('SLCOffsetSchedule', od.to_value(od.adopt_legacy(False, (0.,) * 7)), block=True)
+        params.put('SLCOffsetSchedule', od.to_value(od.default_document(False)), block=True)
         owner = plannerd.SavedSlcLifecycle(params, cp, {})
         original, _ = owner.refresh(now)
         sm['slcDashboardObservation'].speedMps = 65 * CV.MPH_TO_MS

@@ -49,6 +49,25 @@ def test_defaults_and_metadata_are_independent_and_valid():
   assert default_document()["layouts"]["large"]["current_speed"]["x"] == 640
 
 
+@pytest.mark.parametrize('custom', (False, True))
+def test_personality_upgrade_adds_large_widget_without_losing_saved_layout(custom):
+  import copy
+  document = default_document()
+  del document['layouts']['large']['following_distance']
+  document['layouts']['large']['driver_monitor'].update(x=700 if custom else 120)
+  document['layouts']['large']['current_speed'].update(x=600, enabled=False)
+  document['widgetOrder'] = {'large': [key for key in DEFAULT_WIDGET_ORDER['large'] if key != 'following_distance']}
+  before = copy.deepcopy(document)
+  migrated = validate_document(document)
+  assert document == before and validate_document(migrated) == migrated
+  large = migrated['layouts']['large']
+  assert large['following_distance'] == {'x': 88, 'y': 804, 'enabled': True}
+  assert large['driver_monitor']['x'] == (700 if custom else 270)
+  assert large['current_speed'] == before['layouts']['large']['current_speed']
+  assert set(migrated['widgetOrder']['large']) == set(large)
+  assert migrated['layouts']['compact'] == before['layouts']['compact']
+
+
 @pytest.mark.parametrize('version', (10, 11))
 @pytest.mark.parametrize('separate', (False, True))
 @pytest.mark.parametrize('lower', (False, True))
@@ -206,6 +225,16 @@ def test_lead_widgets_are_opt_in_on_both_screens_and_migrate_saved_layouts():
   enabled = default_document()
   enabled['layouts']['compact'][LEAD_LADDER_WIDGET]['enabled'] = True
   assert validate_document(enabled)['layouts']['compact'][LEAD_LADDER_WIDGET]['enabled'] is True
+  # Like the stopped timer, lead widgets may sit over the Speed limit actions (they yield at render time) and in the rail column.
+  actions = enabled['layouts']['compact']['speed_limit_actions']
+  enabled['layouts']['compact'][LEAD_LADDER_WIDGET].update(x=actions['x'] + 10, y=actions['y'] + 10)
+  for key in LEAD_WIDGETS:
+    enabled['layouts']['compact'][key]['enabled'] = True
+  enabled['layouts']['compact']['lead_time'].update(x=536 - 118, y=0)
+  assert validate_document(enabled)['layouts']['compact'][LEAD_LADDER_WIDGET] == enabled['layouts']['compact'][LEAD_LADDER_WIDGET]
+  enabled['layouts']['compact']['clock'].update(x=actions['x'] + 10, y=actions['y'] + 10, enabled=True)
+  with pytest.raises(ValueError):
+    validate_document(enabled)
 
 
 def test_clock_format_preference_defaults_migrates_and_validates():
@@ -844,6 +873,7 @@ def test_stopped_timer_draws_inside_its_moved_widget():
   from openpilot.starpilot.ui import onroad
   document = default_document()
   view = onroad.OnroadView.__new__(onroad.OnroadView)
+  view.personality = Mock()
   view.fonts = Mock(spec=BitmapFonts)
   view.fonts.profile = Profile.COMPACT
   view.fonts.measure.return_value = NS(width=100, height=20)
@@ -867,6 +897,7 @@ def test_projection_timer_renders_at_saved_coordinates_without_native_timer_enab
   layout['widgets'][STOPPED_TIMER_WIDGET].update(enabled=True, x=450, y=600)
   document = projection_customization(layout, default_document())
   view = onroad.OnroadView.__new__(onroad.OnroadView)
+  view.personality = Mock()
   view.fonts = Mock(spec=BitmapFonts)
   view.fonts.profile = Profile.LARGE
   view.fonts.measure.return_value = NS(width=100, height=20)
