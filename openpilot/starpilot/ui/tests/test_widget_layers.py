@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from openpilot.starpilot.ui.onroad_customization import (
-  CLOCK_WIDGET, DEFAULT_WIDGET_ORDER, MODE_WIDGET, PROFILES, customization_metadata, decode_document, default_document, validate_document,
+  LANE_BAR_WIDGET, CLOCK_WIDGET, DEFAULT_WIDGET_ORDER, MODE_WIDGET, PROFILES, customization_metadata, decode_document, default_document, validate_document,
 )
 from openpilot.starpilot.system.starport.projection_layout import (
   CAR_EXIT, default_layout_for_viewport, decode_layout_for_viewport, layout_metadata_for_viewport, projection_customization,
@@ -109,12 +109,13 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
   source = Path(__file__).parents[1] / 'onroad.py'
   tree = ast.parse(source.read_text())
   method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == '_ordered_widgets')
-  namespace: dict[str, Any] = {'CLOCK_WIDGET': CLOCK_WIDGET, 'MODE_WIDGET': MODE_WIDGET, 'placement': placement, 'widget_order': widget_order,
+  namespace: dict[str, Any] = {'LANE_BAR_WIDGET': LANE_BAR_WIDGET, 'CLOCK_WIDGET': CLOCK_WIDGET, 'MODE_WIDGET': MODE_WIDGET, 'placement': placement, 'widget_order': widget_order,
                              'RAIL_WIDGETS': RAIL_WIDGETS, 'STOPPED_TIMER_WIDGET': STOPPED_TIMER_WIDGET,
                'manual_slc_confirmation': lambda profile, state: False, 'AlertSize': NS(NONE='none', FULL='full'), 'CameraViewChoice': NS(NONE='none'),
                'rl': NS(Rectangle=lambda x, y, width, height: NS(x=x, y=y, width=width, height=height))}
   exec(compile(ast.Module(body=[method], type_ignores=[]), str(source), 'exec'), namespace)
   seen = []
+  namespace["draw_lane_bar"] = lambda *args, **kwargs: seen.append(LANE_BAR_WIDGET)
   view = NS(fonts=NS(profile=profile), projection_viewport=viewport)
   view.pip_layer = Mock(side_effect=lambda rect, state, submit: [submit(key, lambda key=key: seen.append(key))
                                                                for key in ('pip_left', 'pip_right')])
@@ -147,7 +148,8 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
     view.now_playing = NS(render=lambda state: seen.append('now_playing'))
     view.jetlink_status = NS(render=lambda state: seen.append('jetlink_status'))
   document['widgetOrder'] = {profile: order}
-  state = NS(customization=document, camera_available=True, viewport_width=1860, alert=NS(size='none'), stopped_duration_s=65,
+  document['layouts'][profile][LANE_BAR_WIDGET]['enabled'] = True
+  state = NS(customization=document, lane_correction=0.0, camera_available=True, viewport_width=1860, alert=NS(size='none'), stopped_duration_s=65,
              appearance=NS(camera_view='road'))
   namespace['_ordered_widgets'](view, NS(x=30, y=30, width=1800, height=1020), state)
   assert seen == order
@@ -166,6 +168,7 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
   assert 'speed_limit_actions' not in seen
   assert 'cem_gauge' not in seen
   assert 'torque_bar' not in seen
+  assert LANE_BAR_WIDGET not in seen
   assert STOPPED_TIMER_WIDGET not in seen
   if profile == 'compact':
     seen.clear()

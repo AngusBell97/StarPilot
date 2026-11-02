@@ -16,6 +16,8 @@ class CruiseCeiling:
 class CurveCeiling:
   speed_mps: float
   model_ns: int
+  apex_speed_mps: float | None = None
+  binding_distance_m: float | None = None
 
 
 @dataclass(frozen=True)

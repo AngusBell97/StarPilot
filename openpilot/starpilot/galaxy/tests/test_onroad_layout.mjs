@@ -1054,7 +1054,7 @@ const displayRows = [
   { key: "DeveloperSidebar", label: "Developer Sidebar", group: "Big layout", choices: ["Off", "On"], available: true, reason: "", requires: "" },
   { key: "ShowBrakeStatus", label: "Wheel brake and acceleration colors", group: "widget", choices: ["Off", "On"], available: true, reason: "", requires: "" },
   { key: "HideLeadMarker", label: "Lead Indicator", group: "Lead car", choices: ["Off", "On"], available: true, reason: "", requires: "" },
-  { key: "LeadInfo", label: "Lead Info", group: "Lead car", choices: ["Off", "Distance", "Speed"], available: true, reason: "", requires: "HideLeadMarker" },
+  { key: "LeadInfo", label: "Lead Info", group: "Lead car", choices: ["Off", "Distance", "Speed"], available: true, reason: "", requires: "" },
   { key: "SignalMetrics", label: "C4 amber signal border", group: "Alerts and borders", choices: ["Off", "On"], available: true, reason: "", requires: "" },
 ]
 const withDisplayData = () => ({ ...snapshot(), display: { rows: copy(displayRows),
@@ -1147,12 +1147,10 @@ shifted.selectProfile("compact")
 assert.equal(shifted.expandedRoad, false)
 assert.equal(shifted.roadBounds.width, 476)
 const leadInfo = display.vm.displayRow("LeadInfo")
-assert.equal(display.vm.displaySettingRow(leadInfo).reason, "Turn on Lead Indicator first")
+assert.equal(display.vm.displaySettingRow(leadInfo).reason, "", "the lead text no longer waits for the Lead indicator")
+assert.equal(display.vm.displayValue("HideLeadMarker"), "Off")
 display.vm.setDisplay("LeadInfo", "Distance")
-assert.equal(display.vm.displayValue("LeadInfo"), "Off", "blocked until the draft shows the Lead indicator")
-display.vm.setDisplay("HideLeadMarker", "On")
-display.vm.setDisplay("LeadInfo", "Distance")
-assert.equal(display.vm.displayValue("LeadInfo"), "Distance")
+assert.equal(display.vm.displayValue("LeadInfo"), "Distance", "editable while the draft hides the Lead indicator")
 assert.equal(display.vm.dirty, true)
 display.vm.undo(); display.vm.undo()
 assert.equal(display.vm.dirty, false)

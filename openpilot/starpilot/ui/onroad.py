@@ -16,9 +16,13 @@ import json
 import pyray as rl
 
 from openpilot.starpilot.ui import clip
+from openpilot.starpilot.ui.burn_in import dimmer
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.starpilot.ui.onroad_customization import (CLOCK_WIDGET, MODE_WIDGET, RAIL_WIDGETS, STOPPED_TIMER_WIDGET, placement, rgba,
-                                                         widget_order, widget_size)
+from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CLOCK_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET,
+                                                         LEAD_SPEED_WIDGET, LEAD_TIME_WIDGET, MODE_WIDGET, RAIL_WIDGETS, STOPPED_TIMER_WIDGET, offset,
+                                                         placement, rgba, widget_order, widget_size)
+from openpilot.starpilot.ui.lead_follow import (follow_state, follow_target_text, follow_time_s, ladder_fraction, lead_distance_text,
+                                                lead_speed_text, lead_time_text)
 from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice
 
 from openpilot.starpilot.ui.onroad_alerts import AlertRenderer
@@ -31,14 +35,14 @@ from openpilot.starpilot.ui.onroad_large_widgets import CurrentSpeedHud, Unified
 from openpilot.starpilot.ui.onroad_cem_gauge import AetherGauge
 from openpilot.starpilot.ui.live_developer_sidebar import render_sidebar as render_live_sidebar
 from openpilot.starpilot.ui.layout_preview_sidebar import SIDEBAR_WIDTH
-from openpilot.starpilot.ui.onroad_state import AlertSize, OnroadState, manual_slc_confirmation, slc_action_occludes, slc_controls
+from openpilot.starpilot.ui.onroad_state import AlertSize, OnroadState, manual_slc_confirmation, slc_action_occludes
 from openpilot.starpilot.ui.onroad_stopped_timer import duration_color, duration_text, timer_size
-from openpilot.starpilot.ui.onroad_torque import TorqueBarWidget
+from openpilot.starpilot.ui.onroad_torque import TorqueBarWidget, draw_lane_bar
 from openpilot.starpilot.ui.onroad_navigation import NavigationCard
 from openpilot.starpilot.ui.onroad_navigation_favorites import NavigationFavorites
 from openpilot.starpilot.ui.presentation import BitmapFonts, FontRole, Profile
 from openpilot.starpilot.ui.large_speed_geometry import ACTION_TEXT_SIZE
-from openpilot.starpilot.ui.speed_limit_widget import INK, MUTED, draw_ink, draw_line, draw_text
+from openpilot.starpilot.ui.speed_limit_widget import INK, MUTED, draw_ink
 from openpilot.starpilot.conditional_mode.policy import ModeChoice
 
 
@@ -46,6 +50,22 @@ CameraLayer = Callable[[rl.Rectangle, OnroadState], None]
 OverlayLayer = Callable[[rl.Rectangle, OnroadState], None]
 PipLayer = Callable[[rl.Rectangle, OnroadState], None]
 ProjectionControlLayer = Callable[[OnroadState], None]
+
+# Compact widgets never dimmed for burn-in: prompts that need an answer, the
+# stopped timer (it counts), and the camera and map views.
+UNDIMMED_WIDGETS = frozenset(("speed_limit_actions", STOPPED_TIMER_WIDGET, "nav_map"))
+
+# Follow ladder colors by state: too far, on target, slightly close, too close.
+FOLLOW_STATE_COLORS = {
+  "far": rl.Color(159, 178, 187, 255), "target": rl.Color(61, 220, 132, 255),
+  "near": rl.Color(255, 176, 59, 255), "close": rl.Color(255, 77, 94, 255),
+}
+LEAD_BAR_COLOR = rl.Color(223, 229, 232, 255)
+LEAD_TRACK_COLOR = rl.Color(255, 255, 255, 41)
+# Ladder geometry in a 150 x 200 frame; the widget scales it by its height.
+LADDER_FRAME_HEIGHT = 200.0
+LADDER_DOT_TOP, LADDER_DOT_BOTTOM = 56.0, 150.0
+
 
 def _load_fade(path: Path) -> rl.Texture:
   entry = next(item for item in json.loads(Path(__file__).with_name('onroad-assets.json').read_text())['files']
@@ -198,27 +218,10 @@ class OnroadView:
       a, b = self.fonts.vertical_ink(unit, FontRole.MEDIUM, secondary)
       draw_ink(self.fonts, unit, FontRole.MEDIUM, secondary, x + value_width + 8 - unit_left, y + value_height - (b - a), INK)
       return
-    controls = slc_controls(self.fonts.profile, state)
     feedback = state.speed_limit.action_feedback
     if (self.fonts.profile == Profile.LARGE and feedback and state.alert.size == AlertSize.NONE and
         placement(state.customization, self.fonts.profile, 'speed_limit_actions')['enabled']):
-      draw_ink(self.fonts, feedback, FontRole.MEDIUM, 30, bounds[0][0], bounds[-1][3] + 8 if controls else bounds[0][1] + 24, MUTED)
-    if not controls:
-      return
-    large = self.fonts.profile == Profile.LARGE
-    size = ACTION_TEXT_SIZE[self.fonts.profile]
-    role = FontRole.MEDIUM
-    a, b = self.fonts.vertical_ink('Use', role, size)
-    color = rl.Color(*rgba(state.customization, 'text', self.fonts.profile, 'speed_limit_actions'))
-    for control in controls:
-      left, top, right, bottom = control.bounds
-      cy = (top + bottom) / 2
-      measured = self.fonts.measure(control.label, role, size)
-      x = (left + right - measured.width) / 2
-      draw_text(self.fonts, control.label, role, size, x, cy - (b - a) / 2 - a, color)
-      if getattr(self, 'pressed_action', lambda: None)() == control.request:
-        y = cy + (b - a) / 2 + (8 if large else 4)
-        draw_line(self.fonts.profile, rl.Vector2(x, y), rl.Vector2(x + measured.width, y), 3 if large else 2, color)
+      draw_ink(self.fonts, feedback, FontRole.MEDIUM, 30, bounds[0][0], bounds[0][1] + 24, MUTED)
 
   def _preview_badge(self, state: OnroadState) -> None:
     """Keep synthetic replay visibly identified even over a full alert."""
@@ -299,6 +302,90 @@ class OnroadView:
     self.fonts.draw(text, role, size, x + offset_px, y + offset_px, rl.Color(0, 0, 0, min(color.a, 170)))
     self.fonts.draw(text, role, size, x, y, color)
 
+  def _lead_widget_placement(self, state: OnroadState, key: str):
+    position = placement(state.customization, self.fonts.profile, key)
+    if (not position["enabled"] or state.alert.size != AlertSize.NONE or
+        state.appearance.camera_view == CameraViewChoice.DRIVER or state.reverse_driver_camera):
+      return None
+    return position
+
+  def _lead_text(self, state: OnroadState, key: str, center_shift: float = 0) -> None:
+    """One of the lead readouts: speed, distance or live follow time, from the radar lead."""
+    profile = self.fonts.profile
+    position = self._lead_widget_placement(state, key)
+    if position is None:
+      return
+    lead = state.conditional_lead
+    if key == LEAD_SPEED_WIDGET:
+      text = lead_speed_text(lead, state.metric)
+    elif key == LEAD_DISTANCE_WIDGET:
+      text = lead_distance_text(lead, state.metric)
+    else:
+      text = lead_time_text(lead, state.speed_mps)
+    if not text:
+      return
+    width, height = widget_size(state.customization, profile, key)
+    size = 42 if profile == Profile.LARGE else 20
+    role = FontRole.SEMI_BOLD
+    measured = self.fonts.measure(text, role, size)
+    x = position["x"] + center_shift + (width - measured.width) / 2
+    y = position["y"] + (height - measured.height) / 2
+    color = rl.Color(*rgba(state.customization, "text", profile, key))
+    offset_px = 2 if profile == Profile.LARGE else 1
+    self.fonts.draw(text, role, size, x + offset_px, y + offset_px, rl.Color(0, 0, 0, min(color.a, 170)))
+    self.fonts.draw(text, role, size, x, y, color)
+
+  def _lead_ladder(self, state: OnroadState, center_shift: float = 0) -> None:
+    """The follow ladder: lead bar on top, the car as a dot rising toward it, the target as a white rung."""
+    profile = self.fonts.profile
+    position = self._lead_widget_placement(state, LEAD_LADDER_WIDGET)
+    if position is None:
+      return
+    width, height = widget_size(state.customization, profile, LEAD_LADDER_WIDGET)
+    x0, y0 = position["x"] + center_shift, position["y"]
+    scale = height / LADDER_FRAME_HEIGHT
+    document = state.customization
+    text_color = rl.Color(*rgba(document, "text", profile, LEAD_LADDER_WIDGET))
+    rl.draw_rectangle_rounded(rl.Rectangle(x0, y0, width, height), 0.3, 8,
+                              rl.Color(*rgba(document, "cardFill", profile, LEAD_LADDER_WIDGET)))
+
+    def box(x, y, w, h, color):
+      rl.draw_rectangle_rounded(rl.Rectangle(x0 + x * scale, y0 + y * scale, w * scale, h * scale), 1.0, 4, color)
+
+    lead = state.conditional_lead
+    current = follow_time_s(lead.distance_m, state.speed_mps) if lead is not None else None
+    target = state.follow_target_s
+    accent = FOLLOW_STATE_COLORS.get(follow_state(current, target), text_color)
+    box(12, 20, 40, 10, LEAD_BAR_COLOR)
+    box(28, 24, 8, 156, LEAD_TRACK_COLOR)
+    box(14, 98, 36, 4, rl.WHITE)
+    fraction = ladder_fraction(current, target)
+    if fraction is not None:
+      center_y = LADDER_DOT_TOP + fraction * (LADDER_DOT_BOTTOM - LADDER_DOT_TOP)
+      rl.draw_circle_v(rl.Vector2(x0 + 32 * scale, y0 + center_y * scale), 12 * scale, accent)
+    shadow = rl.Color(0, 0, 0, 170)
+    offset_px = 2 if profile == Profile.LARGE else 1
+    for text, role, size, top, color in (("--" if current is None else f"{current:.1f} s", FontRole.BOLD, 30 * scale, 10, accent),
+                                         (follow_target_text(target) or "--", FontRole.SEMI_BOLD, 22 * scale, 89, text_color)):
+      x, y = x0 + 64 * scale, y0 + top * scale
+      self.fonts.draw(text, role, size, x + offset_px, y + offset_px, shadow)
+      self.fonts.draw(text, role, size, x, y, color)
+
+  def _lead_widgets(self, state: OnroadState, center_shift: float = 0) -> None:
+    """The legacy (unordered) draw path; the compact screen dims each widget for burn-in like the ordered path."""
+    compact = self.fonts.profile == Profile.COMPACT
+    for key in LEAD_INFO_WIDGETS:
+      if compact:
+        with dimmer.scope(key):
+          self._lead_text(state, key, center_shift)
+      else:
+        self._lead_text(state, key, center_shift)
+    if compact:
+      with dimmer.scope(LEAD_LADDER_WIDGET):
+        self._lead_ladder(state, center_shift)
+    else:
+      self._lead_ladder(state, center_shift)
+
   def _ordered_widgets(self, content, state, *, driver_camera=False, stock_layer=None, only_widget=None):
     profile = str(self.fonts.profile)
     large = profile == "large"
@@ -364,6 +451,13 @@ class OnroadView:
       submit("driver_monitor", lambda: monitor(content, state))
     submit(MODE_WIDGET, lambda: self._driving_mode(state, (width - 1860) / 2 if large else 0))
     submit(CLOCK_WIDGET, lambda: self._clock(state, (width - 1860) / 2 if large else 0))
+    if not driver_camera:
+      for key in LEAD_INFO_WIDGETS:
+        submit(key, lambda key=key: self._lead_text(state, key, (width - 1860) / 2 if large else 0))
+      submit(LEAD_LADDER_WIDGET, lambda: self._lead_ladder(state, (width - 1860) / 2 if large else 0))
+    if state.alert.size == AlertSize.NONE and not driver_camera and placement(state.customization, profile, LANE_BAR_WIDGET)["enabled"]:
+      submit(LANE_BAR_WIDGET, lambda: draw_lane_bar(content, state, (width if self.projection_viewport else 2160) if large else 536,
+                                                  fonts=self.fonts, projection=bool(self.projection_viewport)))
     pending = manual_slc_confirmation(self.fonts.profile, state)
     for key in widget_order(state.customization, profile):
       if only_widget is not None and key != only_widget:
@@ -371,7 +465,11 @@ class OnroadView:
       if pending and key == 'speed_limit_actions':
         continue
       if draw := callbacks.get(key):
-        draw()
+        if large or key in UNDIMMED_WIDGETS or key.startswith("pip_"):
+          draw()
+        else:
+          with dimmer.scope(key):
+            draw()
     if pending and (only_widget is None or only_widget == ('cruise_limits' if large else 'speed_limit')) and not driver_camera:
       self._slc_actions(state)
 
@@ -419,6 +517,7 @@ class OnroadView:
             self.steering_wheel.render(content, state)
           if placement(state.customization, "large", "torque_bar")["enabled"]:
             self.torque_bar.render(content, state, width if self.projection_viewport else 2160)
+          draw_lane_bar(content, state, width if self.projection_viewport else 2160, fonts=self.fonts, projection=bool(self.projection_viewport))
           if state.stopped_duration_s is not None:
             self._stopped_timer(state, state.stopped_duration_s)
         if self.extra_overlays is not None:
@@ -443,6 +542,7 @@ class OnroadView:
           jetlink.render(state)
         self._driving_mode(state, right_shift / 2)
         self._clock(state, right_shift / 2)
+        self._lead_widgets(state, right_shift / 2)
         if exit_layer := getattr(self, "projection_exit_layer", None):
           exit_layer(state)
       if not ordered and manual_slc_confirmation(self.fonts.profile, state):
@@ -520,9 +620,16 @@ class OnroadView:
         self._prepare_compact_fade()
         rl.draw_texture_ex(self._fade, rl.Vector2(0, 0), 0, 1, rl.WHITE)
         if state.alert.size == AlertSize.NONE and not driver_camera:
-          self.compact_hud.render(state)
+          with dimmer.scope("speed_limit"):
+            self.compact_hud._speed_limit_sign(state)
+          with dimmer.scope("max_speed"):
+            self.compact_hud.render_max_speed(state)
+          with dimmer.scope("steering_wheel"):
+            self.compact_hud.render_steering_wheel(state)
           if placement(state.customization, "compact", "torque_bar")["enabled"]:
             self.torque_bar.render(frame, state, 536)
+          with dimmer.scope(LANE_BAR_WIDGET):
+            draw_lane_bar(frame, state, 536, fonts=self.fonts, projection=bool(self.projection_viewport))
           if not manual_slc_confirmation(self.fonts.profile, state):
             self._slc_actions(state)
           if state.stopped_duration_s is not None:
@@ -533,8 +640,12 @@ class OnroadView:
           monitor_layer(frame, state)
       self.navigation.render(state)
       if not ordered:
-        self._driving_mode(state)
-        self._clock(state)
+        with dimmer.scope(MODE_WIDGET):
+          self._driving_mode(state)
+        with dimmer.scope(CLOCK_WIDGET):
+          self._clock(state)
+        if not driver_camera:
+          self._lead_widgets(state)
       if not ordered and not driver_camera and manual_slc_confirmation(self.fonts.profile, state):
         self._slc_actions(state)
       signals = state.border_signals
@@ -546,13 +657,17 @@ class OnroadView:
     if not driver_camera and not state.customization.get("widgetOrder", {}).get("compact"):
       rail = rl.Rectangle(0, 0, 536, 240)
       if use_stock:
-        stock_layer(rail, state)
-        self.compact_sidebar.render_personality(rail, state)
+        with dimmer.scope("model_confidence"):
+          stock_layer(rail, state)
+        with dimmer.scope("following_distance"):
+          self.compact_sidebar.render_personality(rail, state)
       else:
-        self.compact_sidebar.render(rail, state)
+        with dimmer.scope("rail"):
+          self.compact_sidebar.render(rail, state)
     clip.begin_scissor_mode(0, 0, 476, 240)
     try:
-      rl.draw_rectangle_rounded_lines_ex(rl.Rectangle(4, 4, 468, 232), 0.12, 16, 8, color)
+      with dimmer.scope("border"):
+        rl.draw_rectangle_rounded_lines_ex(rl.Rectangle(4, 4, 468, 232), 0.12, 16, 8, color)
     finally:
       clip.end_scissor_mode()
     render_compact_half_borders(state, state.observed_ns / 1e9 if state.observed_ns else rl.get_time())

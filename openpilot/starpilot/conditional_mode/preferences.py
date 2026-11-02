@@ -52,6 +52,7 @@ class CCMOptions:
   set_speed_margin_mps: float = 3 * MPH_TO_MPS
   lead: bool = True
   launch_assist: bool = False
+  allow_chill_in_bends: bool = False
   persist_manual: bool = False
 
 
@@ -78,6 +79,7 @@ class SavedPreferences:
       ccm_set_speed_margin_mps=self.ccm.set_speed_margin_mps,
       ccm_lead=self.ccm.lead,
       ccm_launch=self.ccm.launch_assist,
+      ccm_allow_chill_in_bends=self.ccm.allow_chill_in_bends,
     )
 
 
@@ -106,7 +108,7 @@ def _validate(preferences: SavedPreferences) -> None:
     raise PreferenceError('invalid stop, lane, or set-speed margin value')
   booleans = (cem.open_road, cem.curves, cem.curves_with_lead, cem.lead, cem.slower_lead,
               cem.stopped_lead, cem.stop_lights, cem.signal_lane_detection, cem.persist_manual,
-              ccm.lead, ccm.launch_assist, ccm.persist_manual)
+              ccm.lead, ccm.launch_assist, ccm.allow_chill_in_bends, ccm.persist_manual)
   if not all(type(value) is bool for value in booleans):
     raise PreferenceError('invalid conditional-mode boolean')
 
@@ -126,6 +128,9 @@ def _invalid_json_constant(value: str):
 
 def _typed_section(value: object, section_type: type[CEMOptions] | type[CCMOptions]):
   expected = {field.name for field in fields(section_type)}
+  # The sole optional extension preserves old documents as Off without a write.
+  if section_type is CCMOptions and type(value) is dict and set(value) == expected - {'allow_chill_in_bends'}:
+    value = {**value, 'allow_chill_in_bends': False}
   if type(value) is not dict or set(value) != expected:
     raise PreferenceError('missing or unknown conditional-mode option')
   return section_type(**cast(dict[str, Any], value))
@@ -172,6 +177,9 @@ def encode_preferences(preferences: SavedPreferences) -> bytes:
     'cem': {field.name: getattr(preferences.cem, field.name) for field in fields(CEMOptions)},
     'ccm': {field.name: getattr(preferences.ccm, field.name) for field in fields(CCMOptions)},
   }
+  # Off retains old-reader compatibility, including after turning the toggle off.
+  if preferences.ccm.allow_chill_in_bends is False:
+    document['ccm'].pop('allow_chill_in_bends')
   return json.dumps(document, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
 
 

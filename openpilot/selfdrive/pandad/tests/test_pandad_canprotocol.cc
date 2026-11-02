@@ -106,7 +106,7 @@ void PandaTest::test_can_recv(uint32_t rx_chunk_size) {
 
 class FirmwareHandle : public PandaCommsHandle {
 public:
-  explicit FirmwareHandle(unsigned char value) : value(value) {}
+  explicit FirmwareHandle(unsigned char value) : value(value) { hw_serial = "0123456789abcdef01234567"; }
   int control_read(uint8_t request, uint16_t, uint16_t, unsigned char *data, uint16_t length, unsigned int) override {
     if ((request != 0xd3 && request != 0xd4) || length != 64) return -1;
     memset(data, value, length);
@@ -151,6 +151,40 @@ void test_firmware_selection() {
     CHECK(FirmwarePanda(type, 0x22).up_to_date());
     CHECK(!FirmwarePanda(type, 0x11).up_to_date());
   }
+  // Exercise the exact native validator used after the Python wrapper selects
+  // a per-serial image. Matching signatures must not admit unqualified variants.
+  const char *map_key = "STARPILOT_PANDA_FIRMWARE_MAP";
+  const char *serial_key = "STARPILOT_PANDA_FIRMWARE_0123456789abcdef01234567";
+  CHECK(getenv(map_key) == nullptr && getenv(serial_key) == nullptr);
+  setenv(map_key, "1", 1);
+  CHECK(!FirmwarePanda(Type::CUATRO, 0x22).up_to_date());
+  setenv(serial_key, "panda_h7.bin.signed", 1);
+  CHECK(FirmwarePanda(Type::CUATRO, 0x22).up_to_date());
+  for (const char *suffix : {"_tesla_wake", "_remote", "_hkg_remote", "_can_ignition_only",
+                             "_tesla_wake_can_ignition_only", "_remote_can_ignition_only", "_hkg_remote_can_ignition_only"}) {
+    const std::string filename = std::string("panda_h7") + suffix + ".bin.signed";
+    {
+      std::ofstream file(fs::path(directory) / "panda/board/obj" / filename, std::ios::binary);
+      const std::string content(256, 0x33);
+      file.write(content.data(), content.size());
+    }
+    setenv(serial_key, filename.c_str(), 1);
+    CHECK(FirmwarePanda(Type::CUATRO, 0x33).up_to_date() == (std::string(suffix) == "_tesla_wake"));
+    CHECK(!FirmwarePanda(Type::CUATRO, 0x22).up_to_date());
+    CHECK(!FirmwarePanda(Type::RED_PANDA_V2, 0x33).up_to_date());
+    if (std::string(suffix) == "_tesla_wake") {
+      setenv(map_key, "invalid", 1);
+      CHECK(!FirmwarePanda(Type::CUATRO, 0x33).up_to_date());
+      setenv(map_key, "1", 1);
+      setenv("STARPILOT_PANDA_FIRMWARE_NAME", filename.c_str(), 1);
+      CHECK(!FirmwarePanda(Type::CUATRO, 0x33).up_to_date());
+      unsetenv("STARPILOT_PANDA_FIRMWARE_NAME");
+      fs::remove(fs::path(directory) / "panda/board/obj" / filename);
+      CHECK(!FirmwarePanda(Type::CUATRO, 0x33).up_to_date());
+    }
+  }
+  unsetenv(serial_key);
+  unsetenv(map_key);
   CHECK(!FirmwarePanda(Type::UNKNOWN, 0x11).up_to_date());
   CHECK(!FirmwarePanda(Type::UNKNOWN, 0x22).up_to_date());
   fs::remove(fs::path(directory) / "panda/board/obj/panda.bin.signed");

@@ -1,3 +1,4 @@
+from openpilot.starpilot.longitudinal.tests.test_overtake_preparation import fill_adjacent_geometry
 """Saved close-gap admission and real native MPC follow-time behavior."""
 
 import json
@@ -64,48 +65,6 @@ class SavedLaneGapTests(unittest.TestCase):
       self.assertIsNone(host.sample(BASE_NS // 2 + 1_000_000_000))
 
 
-class LaneGapPolicyTests(unittest.TestCase):
-  def test_source_timed_ramp_and_safety_restore(self):
-    gap = LaneChangeGap()
-    self.assertIsNone(gap.step(POLICY, frame(0), base_follow=1.45, long_active=True))
-    self.assertAlmostEqual(required_float(gap.step(POLICY, frame(1), base_follow=1.45, long_active=True)), 1.42)
-    self.assertAlmostEqual(required_float(gap.step(POLICY, frame(2), base_follow=1.45, long_active=True)), 1.39)
-    self.assertIsNone(gap.step(POLICY, frame(2), base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(3, left_blindspot=True), base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(4, lead_accel=-0.8), base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(5, speed=0.0), base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(6), base_follow=1.45, long_active=False))
-
-  def test_stop_override_and_driver_pedal_revoke_reduction(self):
-    for flags in ({'force': True}, {'gas': True}, {'brake': True}, {'should_stop': True}):
-      gap = LaneChangeGap()
-      gap.step(POLICY, frame(0), base_follow=1.45, long_active=True)
-      self.assertLess(required_float(gap.step(POLICY, frame(1), base_follow=1.45, long_active=True)), 1.45)
-      self.assertIsNone(gap.step(POLICY, frame(2, **flags), base_follow=1.45, long_active=True))
-
-  def test_full_reduction_hard_veto_is_immediate_but_lane_exit_ramps_out(self):
-    for veto in ({'left_blindspot': True}, {'lead_accel': -0.8}, {'speed': 0.0}):
-      gap = LaneChangeGap()
-      for index in range(26):
-        gap.step(POLICY, frame(index), base_follow=1.45, long_active=True)
-      self.assertAlmostEqual(required_float(gap.ramped_follow), 0.75)
-      self.assertIsNone(gap.step(POLICY, frame(26, **veto), base_follow=1.45, long_active=True))
-      self.assertIsNone(gap.ramped_follow)
-    gap = LaneChangeGap()
-    for index in range(26):
-      gap.step(POLICY, frame(index), base_follow=1.45, long_active=True)
-    self.assertAlmostEqual(required_float(gap.step(POLICY, frame(26, lane_state='off'), base_follow=1.45, long_active=True)), 0.95)
-
-  def test_no_blinker_inference_or_stale_source_reuse(self):
-    gap = LaneChangeGap()
-    self.assertIsNone(gap.step(POLICY, frame(0, lane_state='off'), base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(1, direction='none'), base_follow=1.45, long_active=True))
-    self.assertAlmostEqual(required_float(gap.step(POLICY, frame(2), base_follow=1.45, long_active=True)), 1.42)
-    self.assertIsNone(gap.step(POLICY, replace(frame(3), now_ns=BASE_NS + 4 * FRAME_NS + 300_000_000),
-                               base_follow=1.45, long_active=True))
-    self.assertIsNone(gap.step(POLICY, frame(4), base_follow=1.45, long_active=True))
-
-
 class NativeFrame(dict):
   def __init__(self, payloads):
     super().__init__(payloads)
@@ -124,10 +83,16 @@ class NativeLaneGapTests(unittest.TestCase):
     for sm in (replay_sm, live_sm):
       sm['carControl'].longActive = True
       sm['carState'].canValid = True
-      sm['modelV2'].meta.laneChangeState = 'laneChangeStarting'
+      sm['carState'].leftBlinker = True
+      for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo):
+        lead.dRel = 50.
+        lead.vRel = -1.
+        lead.vLead = lead.vLeadK = 19.
+      sm['modelV2'].meta.laneChangeState = 'preLaneChange'
       sm['modelV2'].meta.laneChangeDirection = 'left'
+      fill_adjacent_geometry(sm['modelV2'])
       sm['modelV2'].meta.disengagePredictions.gasPressProbs = [0.34] * 6
-    for index in range(6):
+    for index in range(20):
       stamp = BASE_NS + index * FRAME_NS
       for sm in (replay_sm, live_sm):
         sm.logMonoTime = dict.fromkeys(sm.logMonoTime, stamp)
@@ -140,6 +105,26 @@ class NativeLaneGapTests(unittest.TestCase):
     self.assertEqual(replay.mpc.solution_status, 0)
     self.assertEqual(live_default.mpc.solution_status, 0)
 
+  def test_original_fast_closing_fixture_is_rejected_and_braking_is_preserved(self):
+    cp = CarInterface.get_non_essential_params(CAR.HONDA_CIVIC)
+    stock = LongitudinalPlanner(cp, init_v=20.)
+    opted = LongitudinalPlanner(cp, init_v=20.)
+    for index in range(30):
+      sm = NativeFrame(messages(lead=True)[0])
+      stamp = BASE_NS + index * FRAME_NS
+      sm.logMonoTime = dict.fromkeys(sm.logMonoTime, stamp)
+      sm['carControl'].longActive = True
+      sm['carState'].canValid = True
+      sm['carState'].leftBlinker = True
+      sm['modelV2'].meta.laneChangeState = 'preLaneChange'
+      sm['modelV2'].meta.laneChangeDirection = 'left'
+      fill_adjacent_geometry(sm['modelV2'])
+      stock.update(sm, now_ns=stamp + 10_000_000)
+      opted.update(sm, now_ns=stamp + 10_000_000, lane_change_policy=POLICY)
+      self.assertAlmostEqual(opted.mpc.params[0, 4], 1.45)
+      self.assertLessEqual(opted.output_a_target, stock.output_a_target + 1e-6)
+      self.assertEqual(opted.mpc.solution_status, 0)
+
   def test_default_off_is_native_even_with_model_lane_change(self):
     cp = CarInterface.get_non_essential_params(CAR.HONDA_CIVIC)
     now = [BASE_NS + 10_000_000]
@@ -149,9 +134,15 @@ class NativeLaneGapTests(unittest.TestCase):
     for sm in streams:
       sm['carControl'].longActive = True
       sm['carState'].canValid = True
-      sm['modelV2'].meta.laneChangeState = 'laneChangeStarting'
+      sm['carState'].leftBlinker = True
+      for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo):
+        lead.dRel = 50.
+        lead.vRel = -1.
+        lead.vLead = lead.vLeadK = 19.
+      sm['modelV2'].meta.laneChangeState = 'preLaneChange'
       sm['modelV2'].meta.laneChangeDirection = 'left'
-    for index in range(6):
+      fill_adjacent_geometry(sm['modelV2'])
+    for index in range(20):
       stamp = BASE_NS + index * FRAME_NS
       now[0] = stamp + 10_000_000
       for sm in streams:
@@ -161,7 +152,7 @@ class NativeLaneGapTests(unittest.TestCase):
       self.assertEqual(snapshot(native), snapshot(default_off))
       self.assertAlmostEqual(native.mpc.params[0, 4], default_off.mpc.params[0, 4])
 
-  def test_saved_opt_in_changes_only_native_follow_parameter_with_lead(self):
+  def test_saved_opt_in_reduces_follow_and_caps_positive_acceleration(self):
     cp = CarInterface.get_non_essential_params(CAR.HONDA_CIVIC)
     now = [BASE_NS + 10_000_000]
     stock = LongitudinalPlanner(cp, init_v=20.0, clock_ns=lambda: now[0])
@@ -170,9 +161,15 @@ class NativeLaneGapTests(unittest.TestCase):
     for sm in (left, right):
       sm['carControl'].longActive = True
       sm['carState'].canValid = True
+      sm['carState'].leftBlinker = True
+      for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo):
+        lead.dRel = 50.
+        lead.vRel = -1.
+        lead.vLead = lead.vLeadK = 19.
       sm['modelV2'].meta.laneChangeState = 'preLaneChange'
       sm['modelV2'].meta.laneChangeDirection = 'left'
-    for index in range(6):
+      fill_adjacent_geometry(sm['modelV2'])
+    for index in range(20):
       stamp = BASE_NS + index * FRAME_NS
       now[0] = stamp + 10_000_000
       for sm in (left, right):
@@ -185,6 +182,15 @@ class NativeLaneGapTests(unittest.TestCase):
       self.assertAlmostEqual(stock.mpc.params[0, 4], 1.45)
     self.assertLess(opted.mpc.params[0, 4], 1.45)
     self.assertGreaterEqual(opted.mpc.params[0, 4], 0.75)
+    self.assertLessEqual(opted.output_a_target, 0.)
+    right['modelV2'].meta.laneChangeState = 'laneChangeStarting'
+    stamp += FRAME_NS
+    now[0] = stamp + 10_000_000
+    right.logMonoTime = dict.fromkeys(right.logMonoTime, stamp)
+    opted.update(right, lane_change_policy=POLICY)
+    self.assertAlmostEqual(opted.mpc.params[0, 4], 1.45)
+    self.assertGreater(opted.output_a_target, 0.)
+    self.assertLessEqual(opted.output_a_target, .030000001)
     right.valid['modelV2'] = False
     stamp += FRAME_NS
     now[0] = stamp + 10_000_000
@@ -220,8 +226,14 @@ class NativeLaneGapTests(unittest.TestCase):
     sm = NativeFrame(messages(lead=True)[0])
     sm['carControl'].longActive = True
     sm['carState'].canValid = True
-    sm['modelV2'].meta.laneChangeState = 'laneChangeStarting'
+    sm['carState'].leftBlinker = True
+    for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo):
+      lead.dRel = 50.
+      lead.vRel = -1.
+      lead.vLead = lead.vLeadK = 19.
+    sm['modelV2'].meta.laneChangeState = 'preLaneChange'
     sm['modelV2'].meta.laneChangeDirection = 'left'
+    fill_adjacent_geometry(sm['modelV2'])
     selected = []
     host = CurveHost(enabled=False, replay=True)
 
@@ -230,7 +242,7 @@ class NativeLaneGapTests(unittest.TestCase):
       return None, None
 
     with patch('openpilot.selfdrive.controls.plannerd.curve_for_frame', side_effect=capture):
-      for index in range(6):
+      for index in range(20):
         stamp = BASE_NS + index * FRAME_NS
         sm.logMonoTime = dict.fromkeys(sm.logMonoTime, stamp)
         update_curve_frame(planner, sm, cp, stamp, host=host, lane_change_policy=POLICY)

@@ -42,25 +42,25 @@ class LeadInfoTests(unittest.TestCase):
     return self.owner.apply(FeatureSettingsRequest(row.key, row.source, value, related_source=row.related_source,
                                                    dependencies=row.dependencies))
 
-  def test_defaults_original_saved_combinations_and_marker_prerequisite(self):
+  def test_defaults_original_saved_combinations_independent_of_marker(self):
     self.assertEqual(self.params.get_default_value("LeadInfo"), False)
     self.assertEqual(self.params.get_default_value("LeadInfoMode"), 2)
     self.assertEqual(read_lead_info(self.params).mode, LeadInfoMode.OFF)
     self.assertEqual(self.row().value, "Off")
-    self.assertFalse(self.row().available)
+    self.assertTrue(self.row().available, "the lead text no longer needs the lead indicator")
+    self.assertEqual(self.row().dependencies, ())
     self.assertEqual(onroad_appearance(self.params).lead_info_mode, LeadInfoMode.OFF)
-    self.params.put_bool("HideLeadMarker", False, block=True)
-    self.assertTrue(self.row().available)
-    for flag, mode, expected in ((b"0", b"2", LeadInfoMode.OFF), (b"1", b"1", LeadInfoMode.DISTANCE),
-                                 (b"1", b"2", LeadInfoMode.SPEED), (b"1", b"0", LeadInfoMode.SPEED)):
-      with self.subTest(flag=flag, mode=mode):
-        Path(self.params.get_param_path("LeadInfo")).write_bytes(flag)
-        Path(self.params.get_param_path("LeadInfoMode")).write_bytes(mode)
-        self.assertEqual(read_lead_info(self.params).mode, expected)
-        self.assertEqual(onroad_appearance(self.params).lead_info_mode, expected)
-    self.params.put_bool("HideLeadMarker", True, block=True)
-    self.assertFalse(self.row().available)
-    self.assertEqual(onroad_appearance(self.params).lead_info_mode, LeadInfoMode.OFF)
+    for marker_hidden in (True, False):
+      self.params.put_bool("HideLeadMarker", marker_hidden, block=True)
+      self.assertTrue(self.row().available)
+      for flag, mode, expected in ((b"0", b"2", LeadInfoMode.OFF), (b"1", b"1", LeadInfoMode.DISTANCE),
+                                   (b"1", b"2", LeadInfoMode.SPEED), (b"1", b"0", LeadInfoMode.SPEED)):
+        with self.subTest(marker_hidden=marker_hidden, flag=flag, mode=mode):
+          Path(self.params.get_param_path("LeadInfo")).write_bytes(flag)
+          Path(self.params.get_param_path("LeadInfoMode")).write_bytes(mode)
+          self.assertEqual(read_lead_info(self.params).mode, expected)
+          self.assertEqual(onroad_appearance(self.params).lead_info_mode, expected)
+          self.assertEqual(onroad_appearance(self.params).show_lead_indicator, not marker_hidden)
 
   def test_manager_materializes_off_without_replacing_saved_choice(self):
     from openpilot.system.manager import manager
@@ -102,7 +102,12 @@ class LeadInfoTests(unittest.TestCase):
     self.assertTrue(self.choose("Off"))
     self.assertEqual((self.raw("LeadInfo"), self.raw("LeadInfoMode")), (b"0", b"0"))
     self.params.put_bool("HideLeadMarker", True, block=True)
-    self.assertFalse(self.choose("Distance"))
+    self.assertTrue(self.choose("Distance"), "a hidden lead indicator no longer blocks the lead text")
+    self.assertEqual((self.raw("LeadInfoMode"), self.raw("LeadInfo")), (b"1", b"1"))
+    stale = self.row()
+    self.assertFalse(self.owner.apply(FeatureSettingsRequest(stale.key, stale.source, "Speed", related_source=stale.related_source,
+                                                             dependencies=(("HideLeadMarker", b"1"),))),
+                     "requests carrying the retired marker dependency are refused")
 
   def test_invalid_and_unreadable_bytes_never_enable(self):
     self.params.put_bool("HideLeadMarker", False, block=True)

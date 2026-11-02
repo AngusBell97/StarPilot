@@ -10,7 +10,7 @@ from openpilot.common.basedir import BASEDIR
 
 from openpilot.common.params import Params
 
-from openpilot.selfdrive.ui.soundd import Soundd, AudibleAlert, CRITICAL_MAX, sound_list
+from openpilot.selfdrive.ui.soundd import Soundd, AudibleAlert, CRITICAL_MAX, sound_list, GPU_MODEL_READY
 
 from openpilot.starpilot.audio.sound_pack import read_wav, installed_packs, read_selection, migrate_removed_selection
 
@@ -31,7 +31,8 @@ def test_stock_every_event_current_upstream_mapping_and_callback(tmp_path):
   params = Params(str(tmp_path / 'params'))
   params.put('SoundPack', 'stock', block=True)
   sound = Soundd(params, pack_root=tmp_path / 'packs')
-  assert sound_list == EXPECTED
+  assert {key: value for key, value in sound_list.items() if key != GPU_MODEL_READY} == EXPECTED
+  assert sound_list[GPU_MODEL_READY] == ("model_ready.wav", 1, 1.0)
   root = Path(BASEDIR) / 'openpilot/selfdrive/assets/sounds'
   for alert, (filename, _loops, _gain) in EXPECTED.items():
     expected = read_wav(root / filename)

@@ -19,6 +19,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.ui.lib.prime_state import PrimeState
 from openpilot.selfdrive.selfdrived.alertmanager import OFFROAD_ALERTS
 from openpilot.system.ui.lib.application import gui_app
+from openpilot.starpilot.ui import burn_in
 from openpilot.common.hardware import HARDWARE, PC
 from openpilot.common.hardware.usb import cable_connected, get_usb_state, is_chestnut_usb_id
 from openpilot.starpilot.models.manager import ModelManager
@@ -588,6 +589,7 @@ class Device:
     if started_changed:
       self.invalidate_display_preferences()
     self._refresh_display_preferences()
+    self._update_burn_in()
 
     if started_changed:
       self._reset_interactive_timeout()
@@ -599,6 +601,15 @@ class Device:
 
     self._update_wakefulness()
     self._update_brightness()
+
+  def _update_burn_in(self):
+    prefs = self._display_preferences
+    if prefs.pixel_shift:
+      amplitude = burn_in.ORBIT_AMPLITUDE_LARGE if gui_app.big_ui() else burn_in.ORBIT_AMPLITUDE_COMPACT
+      gui_app.set_frame_offset(*burn_in.orbit_offset(time.monotonic(), amplitude))
+    elif gui_app.frame_offset != (0, 0):
+      gui_app.set_frame_offset(0, 0)
+    burn_in.dimmer.set_enabled(prefs.static_dim)
 
   def _start_brightness_thread(self):
     if self._brightness_thread is None or not self._brightness_thread.is_alive():

@@ -11,7 +11,7 @@ import json
 import pyray as rl
 
 from openpilot.starpilot.ui.onroad_customization import offset, rgba, widget_size
-from openpilot.starpilot.ui.onroad_state import OnroadState, manual_slc_confirmation, speed_limit_bounds
+from openpilot.starpilot.ui.onroad_state import AlertSize, OnroadState, manual_slc_confirmation, speed_limit_bounds
 from openpilot.starpilot.ui.onroad_widget_style import draw_control_card
 from openpilot.starpilot.ui.presentation import BitmapFonts, FontRole, Profile
 from openpilot.starpilot.ui.wheel_feedback import WheelFeedbackFade
@@ -78,24 +78,16 @@ class UnifiedSpeedWidget:
     border = rl.Color(*rgba(state.customization, 'cardBorder', 'large', 'cruise_limits'))
     text = rl.Color(*rgba(state.customization, 'text', 'large', 'cruise_limits'))
     if shown.mode != 'limit_only':
-      if manual_slc_confirmation(Profile.LARGE, state):
-        x = rect.x + PADDING
-        draw_caption(self.fonts, 'SET', x, rect.y + 19, unit=shown.unit, size=32)
-        size = 120
-        while size > 72 and self.fonts.measure(shown.max_text, FontRole.SET_SPEED, size).width > 148:
-          size -= 1
-        draw_ink(self.fonts, shown.max_text, FontRole.SET_SPEED, size, x, rect.y + 51, text)
+      x = rect.x + PADDING
+      if state.tesla_sync_caption and state.alert.size == AlertSize.NONE:
+        draw_ink(self.fonts, 'SET', FontRole.MEDIUM, 20, x, rect.y + 19, text)
+        draw_ink(self.fonts, state.tesla_sync_caption, FontRole.NORMAL, 19, x + 48, rect.y + 19, text)
       else:
-        center = rect.x + 120
-        draw_caption(self.fonts, 'SET', center, rect.y + 15, unit=shown.unit, centered=True)
-        size = 114.28
-        size *= min(1, 200 / max(1, self.fonts.measure(shown.max_text, FontRole.SET_SPEED, size).width))
-        left, right = self.fonts.horizontal_ink(shown.max_text, FontRole.SET_SPEED, size)
-        top, bottom = self.fonts.vertical_ink(shown.max_text, FontRole.SET_SPEED, size)
-        # The pinned DINish dash has 15 inked rows in its 200-pixel atlas cell.
-        number_height = size * self.fonts.profile.font_scale * 15 / 200 if shown.max_text == '–' else bottom - top
-        draw_ink(self.fonts, shown.max_text, FontRole.SET_SPEED, size, center - (left + right) / 2,
-                 rect.y + 101 - number_height / 2, text)
+        draw_caption(self.fonts, 'SET', x, rect.y + 19, color=text, unit=shown.unit)
+      size = 120
+      while size > 72 and self.fonts.measure(shown.max_text, FontRole.SET_SPEED, size).width > 148:
+        size -= 1
+      draw_ink(self.fonts, shown.max_text, FontRole.SET_SPEED, size, x, rect.y + 51, text)
     self.sign.render(state, defer_confirmation=True)
     if shown.mode == 'limit_only' and (bounds := speed_limit_bounds(Profile.LARGE, state)) is not None:
       draw_ink(self.fonts, shown.unit, FontRole.NORMAL, 24, bounds[2], bounds[3] - 32)

@@ -106,8 +106,9 @@ class TestSignalLane(unittest.TestCase):
     self.assertTrue(low.signal_scene)
     self.assertFalse(owner.update(frame(2, speed=4.9, left=False, right=False)).signal_scene)
     disabled = owner.update(replace(frame(3, speed=4.9), signal_lane_detection=False))
-    self.assertTrue(disabled.lane_available)
-    self.assertFalse(disabled.signal_scene)
+    # Disabled lane detection cannot establish an available adjacent lane.
+    self.assertFalse(disabled.lane_available)
+    self.assertTrue(disabled.signal_scene)
 
   def test_high_speed_known_false_without_width_and_invalid_inputs_unknown(self):
     owner = SignalLaneTracker()

@@ -8,7 +8,7 @@ from pathlib import Path
 from openpilot.starpilot.audio.sound_pack import DEFAULT_PACK, PACK_ROOT, installed_packs, read_selection
 from openpilot.starpilot.saved_document import commit_exact
 
-from openpilot.starpilot.audio.alert_volume import AUTO, MAX_RAW_BYTES, SPECS, VOLUMES, read_volume
+from openpilot.starpilot.audio.alert_volume import AUTO, DEFAULTS, MAX_RAW_BYTES, SPECS, VOLUMES, read_volume
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow, FeatureSettingsRequest, FeatureSettingsState
 
 AUTO_PREFIX = "sounds:auto:"
@@ -17,7 +17,7 @@ PACK_LABELS = {"starpilot": "StarPilot Sounds", "stock": "Stock Sounds"}
 
 def choices(key: str) -> tuple[str, ...]:
   minimum = SPECS[key][1]
-  return ("Auto",) + tuple(f"{value}%" for value in range(minimum, 101, 5))
+  return tuple(f"{value}%" for value in range(minimum, 101, 5)) + ("Auto",)
 
 
 class SoundsOwner:
@@ -48,6 +48,10 @@ class SoundsOwner:
         reason = (("StarPilot Auto keeps a 50% baseline; ramps to full volume" if selected == DEFAULT_PACK else
                    "Follows ambient sound; ramps to full volume") if saved.value == AUTO else
                   "Minimum starting level; still ramps to full volume")
+      if key == "GpuModelReadyVolume":
+        reason += ". 0% disables the one-shot GPU-ready chime; driving alerts take priority."
+      elif key == "SLCWarningVolume":
+        reason += ". 0% mutes limit-change audio; visual warnings remain."
       rows.append(FeatureRow(key, label, value, source=saved.raw, choices=("Auto",) if numeric else choices(key),
                              step=5.0 if saved.valid else 0.0, minimum=float(SPECS[key][1]), maximum=100.0,
                              unit="%" if saved.valid else "",
@@ -57,7 +61,7 @@ class SoundsOwner:
         rows.append(FeatureRow(AUTO_PREFIX + key, "Use Auto " + label, "Follow ambient sound", source=saved.raw,
                                available=parked and saved.readable, repair_value="Auto"))
     rows.append(pack_row)
-    defaults = dict.fromkeys(SPECS, 'Auto')
+    defaults = {key: str(DEFAULTS[key]) if key in DEFAULTS else 'Auto' for key in SPECS}
     defaults['SoundPack'] = PACK_LABELS.get(DEFAULT_PACK, DEFAULT_PACK)
     rows = tuple(replace(row, default_value=defaults[row.key]) if row.key in defaults else row for row in rows)
     return FeatureSettingsState(page="sounds", title="Sounds & Alerts",

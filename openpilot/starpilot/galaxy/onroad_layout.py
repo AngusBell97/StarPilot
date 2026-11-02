@@ -6,7 +6,6 @@ from collections.abc import Callable
 from openpilot.starpilot.saved_document import commit_exact
 from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.ui.appearance_owner import AppearanceOwner
-from openpilot.starpilot.ui.appearance_preferences import read_lead_info
 from openpilot.starpilot.ui.feature_settings_state import FeatureSettingsRequest
 from openpilot.starpilot.ui.onroad_customization import (
   MAX_BYTES, PARAM_KEY, customization_metadata, decode_document, default_document, validate_document,
@@ -56,13 +55,10 @@ class OnroadLayoutOwner:
         valid = False
     parked = self.parked()
     rows = self._display_rows()
-    lead_readable = read_lead_info(self.params).readable
     # The editor merges these into its draft as document["display"]; the saved layout never holds them.
     display = {
       "rows": [{"key": row.key, "label": row.label, "group": DISPLAY_GROUPS[row.key], "choices": list(row.choices),
-                # Lead info follows the draft's Lead indicator, not the saved one.
-                "available": row.available or row.key == "LeadInfo" and parked and lead_readable and bool(row.choices),
-                "reason": description(row), "requires": "HideLeadMarker" if row.key == "LeadInfo" else ""} for row in rows],
+                "available": row.available, "reason": description(row), "requires": ""} for row in rows],
       "values": {row.key: row.value for row in rows},
       "defaults": {row.key: row.default_value for row in rows if row.default_value is not None},
     }
@@ -117,10 +113,6 @@ class OnroadLayoutOwner:
 
   def _save_display(self, display, rows, session_valid) -> list[str]:
     changes = [key for key, value in display.items() if value != rows[key].value]
-    # Lead info can change only while the Lead indicator is shown.
-    if "HideLeadMarker" in changes and "LeadInfo" in changes:
-      changes.remove("LeadInfo")
-      changes.insert(changes.index("HideLeadMarker") + (display["HideLeadMarker"] == "On"), "LeadInfo")
     owner = AppearanceOwner(self.params, lambda: session_valid() and self.parked())
     failed = []
     for key in changes:

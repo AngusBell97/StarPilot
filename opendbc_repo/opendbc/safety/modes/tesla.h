@@ -2,8 +2,10 @@
 
 #include "opendbc/safety/declarations.h"
 #include "opendbc/safety/modes/tesla_screen_aol.h"
+#include "opendbc/safety/modes/tesla_speed_sync.h"
 
 static bool tesla_longitudinal = false;
+static bool tesla_coop_steering = false;
 static bool tesla_stock_aeb = false;
 
 // Only rising edges while controls are not allowed are considered for these systems:
@@ -103,11 +105,14 @@ static void tesla_rx_hook(const CANPacket_t *msg) {
     update_sample(&angle_meas, angle_meas_new);
 
     const int hands_on_level = msg->data[4] >> 6;  // EPAS3S_handsOnLevel
+    const int torsion_bar_torque = (((msg->data[2] & 0x0FU) << 8) | msg->data[3]) - 2050;  // 0.01 Nm
     const int eac_status = msg->data[6] >> 5;  // EPAS3S_eacStatus
     const int eac_error_code = msg->data[2] >> 4;  // EPAS3S_eacErrorCode
 
     // Disengage on normal user override, or if high angle rate fault from user overriding extremely quickly
-    steering_disengage = (hands_on_level >= 3) || ((eac_status == 0) && (eac_error_code == 9));
+    steering_disengage = (hands_on_level >= 3) ||
+                         (tesla_coop_steering && (SAFETY_ABS(torsion_bar_torque) > 500)) ||
+                         ((eac_status == 0) && (eac_error_code == 9));
   }
 
   // Vehicle speed (DI_speed)
@@ -164,6 +169,7 @@ static void tesla_rx_hook(const CANPacket_t *msg) {
   }
 
   tesla_screen_rx(msg, tesla_autopark);
+  tesla_sync_rx(msg);
 
   if (msg_matches(msg, 0x155U, 0U)) {
     vehicle_moving = !GET_BIT(msg, 41U);  // ESP_vehicleStandstillSts
@@ -192,7 +198,15 @@ static void tesla_rx_hook(const CANPacket_t *msg) {
   }
 }
 
+static void tesla_optional_rx(const CANPacket_t *msg) {
+  tesla_screen_optional_rx(msg);
+  tesla_sync_optional_rx(msg);
+}
+
 static bool tesla_tx_hook(const CANPacket_t *msg) {
+  if (msg->addr == 0x3C2U) {
+    return tesla_sync_tx(msg, tesla_stock_aeb, tesla_autopark, tesla_stock_lkas);
+  }
   const AngleSteeringLimits TESLA_STEERING_LIMITS = {
     .max_angle = 3600,  // 360 deg, EPAS faults above this
     .angle_deg_to_can = 10,
@@ -323,16 +337,20 @@ static safety_config tesla_init(uint16_t param) {
   };
 
   static const CanMsg TESLA_M3_Y_LONG_TX_MSGS[] = {
+    {0x3C2, 1, 8, .check_relay = false}, // SP-032: gated single-wheel-step capability
     {0x488, 0, 4, .check_relay = true, .disable_static_blocking = true},  // DAS_steeringControl
     {0x2b9, 0, 8, .check_relay = true, .disable_static_blocking = true},  // DAS_control
     {0x27D, 0, 3, .check_relay = true, .disable_static_blocking = true},  // APS_eacMonitor
   };
 
   tesla_longitudinal = false;
+  tesla_coop_steering = false;
 #ifdef ALLOW_DEBUG
   tesla_longitudinal = GET_FLAG(param, 1U);
+  tesla_coop_steering = GET_FLAG(param, 256U);
 #endif
-  tesla_screen_configure(param);
+  tesla_screen_configure(tesla_sync_param_valid(param) ? (param & ~2048U) : param);
+  tesla_sync_configure(param, tesla_longitudinal);
   tesla_stock_aeb = false;
   tesla_stock_lkas = false;
   tesla_stock_lkas_prev = false;
@@ -365,7 +383,7 @@ static safety_config tesla_init(uint16_t param) {
 const safety_hooks tesla_hooks = {
   .init = tesla_init,
   .rx = tesla_rx_hook,
-  .optional_rx = tesla_screen_optional_rx,
+  .optional_rx = tesla_optional_rx,
   .tx = tesla_tx_hook,
   .fwd = tesla_fwd_hook,
   .get_counter = tesla_get_counter,

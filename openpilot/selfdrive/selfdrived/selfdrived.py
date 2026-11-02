@@ -1651,6 +1651,16 @@ class SelfdriveD:
     self.experimental_mode = result.experimental
     self.conditional_status = result.status
     self.conditional_result = result
+    if configured and not result.accepted and now_ns >= getattr(self, 'conditional_next_diagnostic_ns', 0):
+      # Preserve the rejection path for drive diagnosis, at most once a second.
+      # Logging grants no mode authority and does not renew proposal freshness.
+      self.conditional_next_diagnostic_ns = now_ns + 1_000_000_000
+      proposal = self.sm['slcState'].conditionalMode
+      cloudlog.event('conditional.unavailable', rejection=self.conditional_consumer.rejection,
+                     authority=authority, baseline=baseline, proposal_status=str(proposal.status),
+                     proposal_sequence=int(proposal.sequence), proposal_model_ns=int(proposal.modelMonoTime),
+                     model_ns=model_ns, car_state_ns=car_state_ns, message_ns=message_ns,
+                     receipt_ns=receipt_ns, observed_ns=now_ns)
 
 
   def _decide_aol_axes(self, CS, intent, native, *, now_ns=0, ordinary_lag=False):

@@ -20,6 +20,7 @@ from openpilot.starpilot.ui.onroad_widget_style import draw_widget_frame
 from openpilot.starpilot.ui.wheel_feedback import WheelFeedbackFade
 from openpilot.starpilot.ui.speed_limit_widget import SpeedLimitWidget
 from openpilot.starpilot.ui.moon import draw_moon
+from openpilot.starpilot.ui.burn_in import dimmer
 
 
 @lru_cache(maxsize=128)
@@ -30,7 +31,7 @@ def _line_points(x1: float, y1: float, x2: float, y2: float) -> tuple:
 def _line(x1: float, y1: float, x2: float, y2: float, color: rl.Color, width: float = 3) -> None:
   # The native primitive uses the same active GL transform as the Python API.
   # Keep geometry in logical coordinates and pass the current color every draw.
-  rl.rl.DrawLineEx(*_line_points(x1, y1, x2, y2), width, color)
+  rl.rl.DrawLineEx(*_line_points(x1, y1, x2, y2), width, dimmer.color(color))
 
 
 def _curve_center(t: float) -> tuple[float, float]:
@@ -149,6 +150,8 @@ class CompactHudRenderer:
         speed_size -= 1
       self.fonts.draw(cruise, FontRole.SET_SPEED, speed_size, 17 + mx, -4 + my, color)
       self.fonts.draw("MAX", FontRole.SEMI_BOLD, 36, 25 + mx, 109 + my, color)
+      if state.tesla_sync_caption and state.alert.size == AlertSize.NONE:
+        self.fonts.draw(state.tesla_sync_caption, FontRole.NORMAL, 18, 25 + mx, 145 + my, color)
 
   def render_steering_wheel(self, state: OnroadState) -> None:
     color = self._feedback.update(state.wheel_acceleration, state.appearance.wheel_pedal_feedback, state.observed_ns, state.drive_frame)

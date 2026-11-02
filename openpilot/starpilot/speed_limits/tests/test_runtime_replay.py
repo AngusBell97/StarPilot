@@ -49,10 +49,15 @@ class ReplaySM:
     self.valid = dict.fromkeys(data, True)
     self.updated = dict.fromkeys(data, True)
     self.alive = dict.fromkeys(data, True)
+    self.freq_ok = dict.fromkeys(data, True)
     self.logMonoTime = dict.fromkeys(data, timestamp)
 
   def __getitem__(self, name):
     return self.data[name]
+
+  def all_checks(self, services=None):
+    return all(self.valid.get(name, False) and self.alive.get(name, False) and self.freq_ok.get(name, False)
+               for name in (self.data if services is None else services))
 
   def advance(self, timestamp):
     self.logMonoTime = dict.fromkeys(self.data, timestamp)
@@ -552,6 +557,8 @@ class RuntimeReplayTests(unittest.TestCase):
     from openpilot.cereal import messaging
     from openpilot.selfdrive.car import card
     now_ns = time.monotonic_ns()
+    # This is a deterministic command-order test, not an emulator speed test.
+    self.enterContext(mock.patch.object(card.time, 'monotonic_ns', return_value=now_ns))
     observation = SimpleNamespace(status=Status.VALID, speed_mps=30.0, observed_ns=now_ns - 20_000_000,
                                   valid_until_ns=now_ns + 1_000_000_000, episode=4)
     state = messaging.new_message('slcState')
@@ -911,6 +918,10 @@ class RuntimeReplayTests(unittest.TestCase):
   def test_card_runtime_consumed_press_hold_command_release(self):
     from openpilot.selfdrive.car import card
     now_ns = time.monotonic_ns()
+    # Advance logical card time independently of host/emulator execution speed.
+    from itertools import count
+    clock = count(now_ns + 1_000_000, 1_000_000)
+    self.enterContext(mock.patch.object(card.time, 'monotonic_ns', side_effect=lambda: next(clock)))
     source = self.sm['slcDashboardObservation']
     source.producerSessionId = 'card-producer'
     source.observedMonoTime = now_ns - 20_000_000
@@ -1078,9 +1089,7 @@ class RuntimeReplayTests(unittest.TestCase):
     self.assertIn('longitudinalPlan', services)
     state = next(message.slcState for service, message in publisher.sent if service == 'slcState')
     self.assertFalse(state.hasCeiling)
-    self.assertTrue(state.hasAccepted)
-    self.assertFalse(state.hasPending)
-    self.assertFalse(state.automaticAdoptionPending)
+    self.assertTrue(state.automaticAdoptionPending)
     self.assertEqual(state.observationKind, 'valid')
     self.assertEqual(state.frameMonoTime, 2_010_000_000)
 
@@ -1120,7 +1129,6 @@ class RuntimeReplayTests(unittest.TestCase):
       restored = read_params(params)
       self.assertTrue(restored.enabled)
       self.assertTrue(restored.acceptance.confirm_lower)
-      self.assertTrue(restored.acceptance.fallback_previous)
       self.assertEqual(restored.selection.slots[0], Source.MAP)
       self.assertEqual(restored.selection.slots[1], Source.DASHBOARD)
       self.assertFalse(restored.errors)
@@ -1180,7 +1188,7 @@ class RuntimeReplayTests(unittest.TestCase):
     self.assertEqual(runtime._observations(self.sm, self.cp, 9_100_000_000)[Source.DASHBOARD].kind, ObservationKind.STALE)
     self.assertEqual(stale.message.slcState.observationKind, 'stale')  # both configured slots use the expired dashboard
     self.assertFalse(stale.message.slcState.hasCeiling)
-    self.assertEqual(stale.result.acceptance.basis, 'previous_accepted')
+    self.assertEqual(stale.result.acceptance.basis, 'stale')
     self.assertEqual(stale.result.override.contribution_mps, 105 / 3.6)
     planner.update(self.sm, cruise_ceiling=stale.result.ceiling)
     self.assertEqual(planner.last_cruise_ceiling_status, 'absent')
@@ -1335,12 +1343,10 @@ class RuntimeReplayTests(unittest.TestCase):
     source.carStateLogMonoTime = 2_000_000_000
     matched = runtime.step(self.sm, self.cp, now_ns=2_000_000_000)
     first_identity = matched.result.selection.observation.candidate.observation_identity.value
-    self.assertTrue(matched.message.slcState.hasAccepted)
-    self.assertFalse(matched.message.slcState.hasPending)
+    self.assertTrue(matched.message.slcState.hasPending)
     self.sm.logMonoTime['carState'] = 2_010_000_000  # independent sockets deliver the next card tick first
     lagged = runtime.step(self.sm, self.cp, now_ns=2_010_000_000)
-    self.assertTrue(lagged.message.slcState.hasAccepted)
-    self.assertFalse(lagged.message.slcState.hasPending)
+    self.assertTrue(lagged.message.slcState.hasPending)
     source.producerSessionId = 'restarted-card'
     restarted = runtime.step(self.sm, self.cp, now_ns=2_010_000_000)
     second_identity = restarted.result.selection.observation.candidate.observation_identity.value

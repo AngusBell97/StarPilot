@@ -174,6 +174,21 @@ class LaneChangeFeatureTests(unittest.TestCase):
     self.assertAlmostEqual(read_saved(self.params).policy.close_gap_seconds, 0.8)
     self.assertFalse(self.owner.apply(stale))
 
+  def test_fast_close_pace_toggle_is_conditional_and_does_not_change_saved_speed(self):
+    from openpilot.starpilot.ui.lane_change_feature import FAST
+    self.cp.openpilotLongitudinalControl = True
+    with self.assertRaises(StopIteration):
+      self.row(FAST)
+    self.assertTrue(self.owner.apply(self.request(self.row(CLOSE))))
+    before = read_saved(self.params).policy.duration_s
+    self.assertEqual(self.row(FAST).value, "Off")
+    self.assertTrue(self.owner.apply(self.request(self.row(FAST))))
+    self.assertTrue(read_saved(self.params).policy.close_gap_fast_pace)
+    self.assertEqual(read_saved(self.params).policy.duration_s, before)
+    self.assertTrue(self.owner.apply(self.request(self.row(CLOSE), -1)))
+    with self.assertRaises(StopIteration):
+      self.row(FAST)
+
   def test_auto_saved_v3_and_fresh_parked_confirmation(self):
     self.assertEqual(self.row(AUTO).value, "Off")
     auto = self.request(self.row(AUTO))
@@ -185,7 +200,7 @@ class LaneChangeFeatureTests(unittest.TestCase):
     self.parked = True
     self.assertTrue(self.owner.apply(auto))
     self.assertTrue(read_saved(self.params).policy.auto_lane_change)
-    self.assertEqual(to_value(read_saved(self.params).policy)["version"], 5)
+    self.assertEqual(to_value(read_saved(self.params).policy)["version"], 6)
     self.assertTrue(self.owner.apply(self.request(self.row(DELAY))))
     self.assertEqual(read_saved(self.params).policy.auto_delay_s, 1.1)
     self.assertTrue(self.owner.apply(self.request(self.row(WIDTH))))
@@ -311,7 +326,7 @@ class LaneChangeFeatureTests(unittest.TestCase):
         self.assertIsNone(decode(raw))
         if len(raw) > 512:
           self.assertFalse(self.row(RESET).available)
-    self.assertEqual(to_value(LaneChangePolicy())["version"], 5)
+    self.assertEqual(to_value(LaneChangePolicy())["version"], 6)
     self.assertFalse(decode(b'{"version":1,"enabled":true,"minimumSpeedMps":8.9408,"onePerSignal":false}').auto_lane_change)
     with self.assertRaises(ValueError):
       to_value(LaneChangePolicy(minimum_speed_mps=int("9" * 350)))

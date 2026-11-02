@@ -292,6 +292,13 @@ struct MapdOut @0xa4f1eb3323f5f582 {
   sourceGeneration @32 :UInt64;
   producerSession @33 :UInt64;  # Random nonzero process session.
 
+  # SP-011: second confirmed boundary on the unique connected continuation.
+  # Zero means unavailable. Distances are from the current position in metres.
+  nextSpeedLimitEndDistance @34 :Float32;
+  followingSpeedLimit @35 :Float32;
+  followingSpeedLimitWayId @36 :Int64;
+  nextSpeedLimitWayId @37 :Int64;
+
   enum SampleStatus {
     unknown @0;
     noGps @1;

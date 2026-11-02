@@ -40,6 +40,8 @@ class SettingsGatewayTest(unittest.TestCase):
     temporary = tempfile.TemporaryDirectory()
     self.addCleanup(temporary.cleanup)
     self.params = Params(temporary.name)
+    # This suite exercises the original unit profile; mixed-unit defaults have separate coverage.
+    self.params.put("GalaxySmallDistanceUnits", 0, block=True)
     native = ToyotaInterface.get_non_essential_params(ToyotaCar.TOYOTA_COROLLA_TSS2)
     cp = SimpleNamespace(carFingerprint="TOYOTA_COROLLA_TSS2", openpilotLongitudinalControl=True,
                          pcmCruise=False, notCar=False, dashcamOnly=False, passive=False,
@@ -136,7 +138,7 @@ class SettingsGatewayTest(unittest.TestCase):
     cp = self.context.value.cp
     cp.carFingerprint = "TOYOTA_HIGHLANDER_TSS2"
     cp.pcmCruise = True
-    page = self.page("slc")
+    page = self.page("slc/offsets")
     index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Adopt fixed offsets")
     self.assertTrue(page["rows"][index]["available"])
     intent = self.gateway.preview(page["view"], index, 0, self.session, self.generation)
@@ -176,17 +178,19 @@ class SettingsGatewayTest(unittest.TestCase):
     first, second = self.page("lane"), self.page("lane")
     self.assertNotEqual(first["view"], second["view"])
     self.assertEqual(first["rows"], second["rows"])
-    first_row = first["rows"][0]
+    def master(page):
+      return next(row for row in page["rows"] if row["label"] == "Enable Lane Centering")
+    first_row = master(first)
     self.params.put_bool("LaneCentering", False, block=True)
-    row = self.page("lane")["rows"][0]
+    row = master(self.page("lane"))
     self.assertEqual(first_row["value"], row["value"])
     self.assertNotEqual(first_row["revision"], row["revision"])
     self.context.value = AuthorityContext(True, self.context.value.cp, b"different-vehicle")
-    changed_vehicle = self.page("lane")["rows"][0]
+    changed_vehicle = master(self.page("lane"))
     self.assertNotEqual(row["revision"], changed_vehicle["revision"])
     for token, generation in (("other-session", self.generation), (self.session, b"other-generation")):
       with self.subTest(token=token, generation=generation):
-        changed_session = self.gateway.page("lane", token, generation)["rows"][0]
+        changed_session = master(self.gateway.page("lane", token, generation))
         self.assertNotEqual(changed_vehicle["revision"], changed_session["revision"])
     with self.assertRaises(SettingsChanged):
       self.gateway.preview(changed_vehicle["revision"], 0, 1, self.session, self.generation)
@@ -212,8 +216,8 @@ class SettingsGatewayTest(unittest.TestCase):
   def test_direct_offset_slider_keeps_si_units_and_range(self):
     from openpilot.starpilot.speed_limits import offset_document as od
     self.params.put("SLCOffsetSchedule", od.to_value(od.adopt_legacy(False, (0.0,) * 7)), block=True)
-    page = self.page("slc")
-    index = next(i for i, row in enumerate(page["rows"]) if row["label"].endswith("offset"))
+    page = self.page("slc/offsets")
+    index = next(i for i, row in enumerate(page["rows"]) if row["label"].endswith("offset") and row["step"] > 0)
     self.assertEqual((page["rows"][index]["minimum"], page["rows"][index]["maximum"]), (-25, 99))
     intent = self.gateway.preview(page["view"], index, 0, self.session, self.generation, value=5)
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
@@ -457,20 +461,19 @@ class SettingsGatewayTest(unittest.TestCase):
       with self.subTest(replay=replay, vision=vision), mock.patch.dict(
           os.environ, {"SLC_REPLAY_RUNTIME": replay, "SLC_VISION_DEVELOPMENT": vision}):
         self.assertEqual(diagnostic_choice_enabled(os.environ), available)
-        rows = self.page("slc")["rows"]
+        rows = self.page("slc/sources")["rows"]
         primary = next(row for row in rows if row["label"] == "Primary source")
         secondary = next(row for row in rows if row["label"] == "Secondary source")
         self.assertIn("Vision", primary["choices"])
         self.assertIn("Vision", secondary["choices"])
         self.assertNotIn("require your confirmation", primary["reason"])
-        confirmation = next(row for row in rows if row["label"] == "Automatic adoption")
-        self.assertEqual(confirmation["value"], "On")
-        self.assertIn("immediately", confirmation["reason"])
-        self.assertIn("accepts", confirmation["reason"])
+        confirmation = next(row for row in self.page("slc/timing")["rows"] if row["label"] == "Confirm higher limits")
+        self.assertEqual(confirmation["value"], "Off")
+        self.assertIn("mapped distance timing", confirmation["reason"])
 
     with mock.patch.dict(os.environ, {"SLC_REPLAY_RUNTIME": "0", "SLC_VISION_DEVELOPMENT": "0"}):
-      # Vision needs no dev/replay flags.
-      page = self.page("slc")
+      # A normal finalized car offers Vision without development/replay flags.
+      page = self.page("slc/sources")
       index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Primary source")
       intent = self.gateway.preview(page["view"], index, 1, self.session, self.generation)
       self.assertEqual(intent["proposed"], "Vision")
@@ -481,7 +484,7 @@ class SettingsGatewayTest(unittest.TestCase):
       for withdrawal in ('passive', 'unavailable'):
         with self.subTest(withdrawal=withdrawal):
           self.context.value = original_context
-          page = self.page("slc")
+          page = self.page("slc/sources")
           index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Primary source")
           intent = self.gateway.preview(page["view"], index, 1, self.session, self.generation)
           self.assertEqual(intent["proposed"], "Vision")
@@ -501,7 +504,7 @@ class SettingsGatewayTest(unittest.TestCase):
       self.assertFalse(stock.openpilotLongitudinalControl)
       self.context.value = AuthorityContext(True, stock, stock.to_bytes())
       self.params.put_bool('SpeedLimitController', True, block=True)
-      page = self.page("slc")
+      page = self.page("slc/sources")
       index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Primary source")
       intent = self.gateway.preview(page["view"], index, 1, self.session, self.generation)
       self.assertEqual(intent["proposed"], "Vision")
@@ -790,7 +793,7 @@ class SettingsGatewayTest(unittest.TestCase):
     cp.openpilotLongitudinalControl = True
     cp.pcmCruise = False
     self.context.value = replace(self.context.value, cp=cp)
-    slc = self.page("slc")
+    slc = self.page("slc/offsets")
     adopt = next(i for i, row in enumerate(slc["rows"]) if row["label"] == "Adopt fixed offsets")
     intent = self.gateway.preview(slc["view"], adopt, 0, self.session, self.generation)
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
@@ -832,13 +835,21 @@ class SettingsGatewayTest(unittest.TestCase):
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
     self.assertTrue(read_lane_change(self.params).policy.close_gap)
     page = self.page("lane_change")
+    fast = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Faster lane change when close")
+    self.assertEqual(page["rows"][fast]["value"], "Off")
+    previous_pace = read_lane_change(self.params).policy.duration_s
+    fast_intent = self.gateway.preview(page["view"], fast, 1, self.session, self.generation)
+    self.assertTrue(self.gateway.confirm(fast_intent["intent"], self.session, self.generation))
+    self.assertTrue(read_lane_change(self.params).policy.close_gap_fast_pace)
+    self.assertEqual(read_lane_change(self.params).policy.duration_s, previous_pace)
+    page = self.page("lane_change")
     intent = self.gateway.preview(page["view"], gap, 1, self.session, self.generation)
     self.assertIn("to 0.8 seconds", intent["question"])
     self.assertIn("Changes refresh during this drive", intent["question"])
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
     self.assertEqual(read_lane_change(self.params).policy.close_gap_seconds, 0.8)
     self.assertEqual(self.page("lane_change")["rows"][gap]["value"], "0.8")
-    self.assertEqual(self.params.get("LaneChangePreferences")["version"], 5)
+    self.assertEqual(self.params.get("LaneChangePreferences")["version"], 6)
 
     saved = self.page("lane_change")
     revoke = self.gateway.preview(saved["view"], close, -1, self.session, self.generation)
@@ -1127,13 +1138,13 @@ class SettingsGatewayTest(unittest.TestCase):
     _, root = self._live_lane_context()
     for key, value, expected in (("LaneCentering", "On", b"1"),
                                  ("LaneCenteringPauseOnSignal", "Off", b"0"),
-                                 ("LaneCenterOffset", 0.15, b"0.15"),
+                                 ("LaneCenterOffset", 0.25, b"0.00635"),
                                  ("LaneCenteringE2EAuthority", 75, b"0.75"),
                                  ("LaneCenteringStrength", 105, b"1.575")):
       with self.subTest(key=key):
-        page = self.page("lane")
+        page = self.page("lane/preferences" if key in ("LaneCenteringE2EAuthority", "LaneCenteringStrength") else "lane")
         labels = {"LaneCentering": "Enable Lane Centering", "LaneCenteringPauseOnSignal": "Pause on signal",
-                  "LaneCenterOffset": "Lane offset", "LaneCenteringE2EAuthority": "Model path preference",
+                  "LaneCenterOffset": "Lane offset", "LaneCenteringE2EAuthority": "Maximum model path preference",
                   "LaneCenteringStrength": "Lane Centering Strength"}
         index = next(i for i, row in enumerate(page["rows"]) if row["label"] == labels[key])
         self.assertTrue(page["rows"][index]["available"])
@@ -1155,12 +1166,12 @@ class SettingsGatewayTest(unittest.TestCase):
       bad = car.CarParams.new_message(**tagged.to_dict())
       setattr(bad, flag, True)
       self.context.value = AuthorityContext(False, bad, bad.as_reader().as_builder().to_bytes())
-      self.assertFalse(any(row["available"] for row in self.page("lane")["rows"]))
+      self.assertFalse(any(row["available"] for row in self.page("lane")["rows"] if not row["page"]))
     self.context.value = AuthorityContext(False, SimpleNamespace(brand="unknown", carFingerprint="OTHER", notCar=False,
                                         dashcamOnly=False, passive=False), b"other")
     page = self.page("lane")
     rows = page["rows"]
-    self.assertFalse(next(row for row in rows if row["label"] == "Lane Centering Strength")["available"])
+    self.assertFalse(next(row for row in self.page("lane/preferences")["rows"] if row["label"] == "Lane Centering Strength")["available"])
     index = next(i for i, row in enumerate(rows) if row["label"] == "Enable Lane Centering")
     self.assertFalse(rows[index]["available"])
     with self.assertRaises(SettingsChanged):
@@ -1168,7 +1179,7 @@ class SettingsGatewayTest(unittest.TestCase):
 
   def test_live_lane_retains_range_session_source_and_cp_guards(self):
     tagged, root = self._live_lane_context()
-    page = self.page("lane")
+    page = self.page("lane/preferences")
     index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Lane Centering Strength")
     for value in (32, 201, float("nan")):
       with self.subTest(value=value), self.assertRaises(SettingsChanged):
@@ -1180,7 +1191,7 @@ class SettingsGatewayTest(unittest.TestCase):
     with self.assertRaises(SettingsChanged):
       self.gateway.confirm(intent["intent"], self.session, self.generation)
     self.context.value = AuthorityContext(False, tagged, tagged.as_reader().as_builder().to_bytes())
-    page = self.page("lane")
+    page = self.page("lane/preferences")
     intent = self.gateway.preview(page["view"], index, 0, self.session, self.generation, value=105)
     (root / "LaneCenteringStrength").write_bytes(b"1.1")
     self.assertFalse(self.gateway.confirm(intent["intent"], self.session, self.generation))
@@ -1200,13 +1211,13 @@ class SettingsGatewayTest(unittest.TestCase):
         (root / key).write_bytes(str(value).encode())
     self.gateway = SettingsGateway(Files(), self.context, clock=lambda: 100.0)
     self.context.value.cp.safetyConfigs = []
-    page = self.page("lane")
+    page = self.page("lane/preferences")
     index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Lane Centering Strength")
     self.assertFalse(page["rows"][index]["available"])
     with self.assertRaises(SettingsChanged):
       self.gateway.preview(page["view"], index, 0, self.session, self.generation, value=200)
     self.context.value = AuthorityContext(True, tagged, tagged.as_reader().as_builder().to_bytes())
-    page = self.page("lane")
+    page = self.page("lane/preferences")
     self.assertTrue(page["rows"][index]["available"])
     self.assertEqual((page["rows"][index]["minimum"], page["rows"][index]["maximum"]), (33, 200))
     intent = self.gateway.preview(page["view"], index, 0, self.session, self.generation, value=200)
@@ -1310,6 +1321,8 @@ class LiveContextTest(unittest.TestCase):
     temporary = tempfile.TemporaryDirectory()
     self.addCleanup(temporary.cleanup)
     self.params = Params(temporary.name)
+    # This suite exercises the original unit profile; mixed-unit defaults have separate coverage.
+    self.params.put("GalaxySmallDistanceUnits", 0, block=True)
     self.params.put_bool("IsOffroad", True, block=True)
     self.mono = 10_000_000_000
     self.boot = 20_000_000_000
@@ -1504,6 +1517,8 @@ class SettingsHttpTest(unittest.TestCase):
     temporary = tempfile.TemporaryDirectory()
     self.addCleanup(temporary.cleanup)
     self.params = Params(temporary.name)
+    # This suite exercises the original unit profile; mixed-unit defaults have separate coverage.
+    self.params.put("GalaxySmallDistanceUnits", 0, block=True)
     native = ToyotaInterface.get_non_essential_params(ToyotaCar.TOYOTA_COROLLA_TSS2)
     cp = SimpleNamespace(carFingerprint="TOYOTA_COROLLA_TSS2", openpilotLongitudinalControl=True,
                          pcmCruise=False, notCar=False, dashcamOnly=False, passive=False,

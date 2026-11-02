@@ -8,35 +8,45 @@ from openpilot.cereal.services import SERVICE_LIST
 from openpilot.common.realtime import DT_MDL
 from openpilot.starpilot.curve_speed.runtime import Frame, INPUT_MAX_AGE_NS, MODEL_MAX_AGE_NS, Runtime
 from openpilot.starpilot.curve_speed.target import CurveProfile
+from openpilot.starpilot.curve_speed.diagnostics import SmoothnessDiagnostics
 from openpilot.starpilot.lead_tracking import FILTER_THRESHOLD, FILTER_TIME_S, LeadDetector
 
 CLOCK_PAIR_MAX_SKEW_NS = 5_000_000
+CLOCK_REARM_DELTA_NS = 10_000_000
+CLOCK_MEMORY_NS = 1_000_000_000
+FAST_AGE_FLOOR_NS = 50_000_000
+REQUIRED_SERVICES = ('modelV2', 'carState', 'carControl', 'controlsState', 'selfdriveState', 'radarState')
 LEAD_WARMUP_FRAMES = math.ceil(math.log(1 - FILTER_THRESHOLD) / math.log(1 - DT_MDL / (FILTER_TIME_S + DT_MDL)))
 
 
-def clock_pair_ns() -> tuple[int, int] | None:
-  """Bracket BOOTTIME with Python MONOTONIC; never compare raw epochs."""
-  try:
-    before = time.monotonic_ns()
-    boot_clock = getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC)
-    boot = time.clock_gettime_ns(boot_clock)
-    after = time.monotonic_ns()
-  except OSError:
-    return None
-  return ((before + after) // 2, boot) if 0 <= after - before <= CLOCK_PAIR_MAX_SKEW_NS else None
+def clock_pair_ns(diagnostics=None) -> tuple[int, int] | None:
+  """Retry preempted clock brackets; a valid bracket bounds offset error to 2.5 ms."""
+  for attempt in range(3):
+    try:
+      before = time.monotonic_ns()
+      boot_clock = getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC)
+      boot = time.clock_gettime_ns(boot_clock)
+      after = time.monotonic_ns()
+    except OSError:
+      return None
+    if 0 <= after - before <= CLOCK_PAIR_MAX_SKEW_NS:
+      return ((before + after) // 2, boot)
+    if diagnostics is not None and attempt < 2:
+      diagnostics.count('pair_retry')
+  return None
 
 
 def _fresh(sm, service: str, now_ns: int) -> bool:
   stamp = sm.logMonoTime.get(service, 0)
   frequency = SERVICE_LIST[service].frequency
-  age_limit = min(INPUT_MAX_AGE_NS, int(2e9 / frequency)) if frequency > 0 else 0
+  age_limit = min(INPUT_MAX_AGE_NS, max(FAST_AGE_FLOOR_NS, int(2e9 / frequency))) if frequency > 0 else 0
   return (type(stamp) is int and 0 < stamp <= now_ns and now_ns - stamp <= age_limit and
           bool(sm.valid.get(service, False)) and bool(sm.alive.get(service, False)))
 
 
 def frame_from_submaster(sm, CP, now_ns: int, *, drive_id: int = 0) -> Frame:
   """Missing transport clears authority without manufacturing a no-lead claim."""
-  services = ('modelV2', 'carState', 'carControl', 'controlsState', 'selfdriveState', 'radarState')
+  services = REQUIRED_SERVICES
   current = all(_fresh(sm, name, now_ns) for name in services)
   model_ns = sm.logMonoTime.get('modelV2', 0)
   model_ns = model_ns if type(model_ns) is int else 0
@@ -64,11 +74,13 @@ class CurveHost:
   def __init__(self, document: object = None, *, enabled: bool = False, no_lead: bool = False,
                clock_pair=clock_pair_ns, replay: bool = False):
     self.runtime = Runtime(document, enabled=enabled, no_lead=no_lead)
+    self.diagnostics = SmoothnessDiagnostics()
     self.clock_pair = clock_pair
     self.replay = replay
     self.boot_offset_ns: int | None = None
     self.source_floor_ns = 0
-    self.leads = LeadDetector()
+    self.last_good_pair_ns = 0
+    self.leads = LeadDetector(allow_absent_path_offsets=True)
     self.lead_samples = 0
     self.lead_drive_id = 0
     self.previous_long_active = False
@@ -80,29 +92,41 @@ class CurveHost:
     self.previous_long_active = False
     self.previous_active_headway = None
 
-  def sample(self, sm, CP, now_ns: int, *, drive_id: int = 0, event=None, follow_time_s: float | None = None):
+  def sample(self, sm, CP, now_ns: int, *, drive_id: int = 0, event=None, follow_time_s: float | None = None, before_learning=None):
     frame = frame_from_submaster(sm, CP, now_ns, drive_id=drive_id)
+    for name in REQUIRED_SERVICES:
+      stamp = sm.logMonoTime.get(name, 0)
+      if type(stamp) is int and 0 < stamp <= now_ns:
+        self.diagnostics.maximum(name + '_age_ns', now_ns - stamp)
+      if not _fresh(sm, name, now_ns):
+        self.diagnostics.count(name + '_not_fresh')
     if drive_id and self.lead_drive_id and drive_id != self.lead_drive_id:
       self._reset_leads()
     if drive_id:
       self.lead_drive_id = drive_id
     if not self.replay:
-      pair = self.clock_pair()
+      pair = self.clock_pair(self.diagnostics) if self.clock_pair is clock_pair_ns else self.clock_pair()
       if pair is None or any(type(value) is not int or value <= 0 for value in pair):
-        self.boot_offset_ns = None
-        self.source_floor_ns = max(self.source_floor_ns, now_ns)
-        self.runtime.reset(drive_id=drive_id)
-        self._reset_leads()
-        return self.runtime.step(replace(frame, inputs_fresh=False), event=None)
+        self.diagnostics.count('pair_fail')
+        # A preempted read is not evidence of a suspend. Preserve memory only;
+        # this frame still has no speed authority and cannot teach the curve.
+        if not self.last_good_pair_ns or not 0 <= now_ns - self.last_good_pair_ns <= CLOCK_MEMORY_NS:
+          self.boot_offset_ns = None
+          self.source_floor_ns = max(self.source_floor_ns, now_ns)
+          self.runtime.reset(drive_id=drive_id)
+          self._reset_leads()
+        return self.runtime.step(replace(frame, inputs_fresh=False), event=event)
+      self.last_good_pair_ns = pair[0]
       offset = pair[1] - pair[0]
       rearmed = False
-      if self.boot_offset_ns is None or abs(offset - self.boot_offset_ns) > CLOCK_PAIR_MAX_SKEW_NS:
+      if self.boot_offset_ns is None or abs(offset - self.boot_offset_ns) > CLOCK_REARM_DELTA_NS:
         self.boot_offset_ns = offset
         self.source_floor_ns = pair[0]
         self.runtime.reset(drive_id=drive_id)
         self._reset_leads()
         rearmed = True
-      required = ('modelV2', 'carState', 'carControl', 'controlsState', 'selfdriveState', 'radarState')
+        self.diagnostics.count('rearm')
+      required = REQUIRED_SERVICES
       try:
         camera_eof = sm['modelV2'].timestampEof
         camera_age = pair[1] - camera_eof if type(camera_eof) is int and camera_eof > 0 else -1
@@ -115,9 +139,11 @@ class CurveHost:
       if (not camera_current or not 0 < frame.model_ns <= now_ns or
           pair[0] - frame.model_ns > MODEL_MAX_AGE_NS or not 0 <= pair[0] - now_ns <= INPUT_MAX_AGE_NS):
         frame = replace(frame, inputs_fresh=False)
+        self.diagnostics.count('camera_or_clock_age')
       if rearmed or any(type(sm.logMonoTime.get(name, 0)) is not int or sm.logMonoTime[name] <= self.source_floor_ns
              for name in required):
         frame = replace(frame, inputs_fresh=False)
+        self.diagnostics.count('source_barrier')
     if frame.inputs_fresh and frame.profile is not None:
       try:
         # Tracking precedes headway reset: the first inactive tick retains the prior headway,
@@ -148,4 +174,4 @@ class CurveHost:
                                         observed.tracked is not None else None)
       except (KeyError, AttributeError, TypeError, ValueError, OverflowError):
         self._reset_leads()
-    return self.runtime.step(frame, event=event)
+    return self.runtime.step(frame, event=event, before_learning=before_learning)

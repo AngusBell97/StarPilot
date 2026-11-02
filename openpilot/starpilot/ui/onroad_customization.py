@@ -8,7 +8,7 @@ from functools import lru_cache
 from typing import Any, NotRequired, TypedDict
 
 from openpilot.starpilot.saved_source import read_saved
-from openpilot.starpilot.ui.onroad_torque_geometry import maximum_footprint
+from openpilot.starpilot.ui.onroad_torque_geometry import maximum_footprint, lane_bar_footprint
 from openpilot.starpilot.ui.large_speed_geometry import confirmation_bounds, confirmation_footprint
 from openpilot.starpilot.ui.onroad_stopped_timer import timer_size
 from openpilot.starpilot.ui.large_speed_geometry import (WIDTH, CARD_HEIGHT, ACTION_WIDTH, ACTION_HEIGHT, ACTION_X, ACTION_Y,
@@ -108,7 +108,7 @@ PROFILES: dict[str, LayoutProfile] = {
 
 for _profile in PROFILES:
   PROFILES[_profile]['widgets']['speed_limit_actions']['note'] = (
-    'Accept / Reject appear inside a pending limit after tapping it. This placement controls Toyota guidance and re-adoption.')
+    'Accept / Reject appear inside a pending limit after tapping it. This placement controls Toyota guidance.')
   _owner = 'cruise_limits' if _profile == 'large' else 'speed_limit'
   PROFILES[_profile]['widgets'][_owner]['confirmation'] = confirmation_footprint(_profile)
 
@@ -199,6 +199,15 @@ _jetlink["default"].update(enabled=False, opacity=JETLINK_OPACITY[2])
 _jetlink["opacity"] = dict(zip(("min", "max", "default"), JETLINK_OPACITY, strict=True))
 _jetlink["note"] = "Shown while Jetlink is on: connection, device and host processing time. Opacity sets the card background."
 PROFILES["large"]["widgets"][JETLINK_WIDGET] = _jetlink
+LANE_BAR_WIDGET = "lane_centering_bar"
+for _profile, _data in PROFILES.items():
+  _bounds = _data["bounds"]
+  _x, _y, _width, _height = lane_bar_footprint(_bounds["x"], _bounds["y"], _bounds["width"], _bounds["height"], _data["width"])
+  _lane_bar = _widget("Lane centering bar", LANE_BAR_WIDGET, _width, _height, _x, _y)
+  _lane_bar["default"]["enabled"] = False
+  _lane_bar.update(layer="underlay", note="Blue fill shows lane-centering correction as a percentage of its current limit. Shown only while correcting; the background stays the same size.")
+  _data["widgets"][LANE_BAR_WIDGET] = _lane_bar
+
 # Restore the Dom road graphic in the gap between the speed card and main speed.
 # Center the road gauge above the driver monitor, below the speed-limit controls.
 # It has no background and appears only with a current selected source.
@@ -210,10 +219,36 @@ CEM_GAUGE_INSET = (44, 24)
 CEM_GAUGE_SIZE = (256, 276)
 PROFILES['large']['widgets'][CEM_GAUGE_WIDGET] = _widget('CEM road gauge', CEM_GAUGE_WIDGET, *CEM_GAUGE_SIZE,
                                                          56, 536)
+# Lead widgets: three text readouts and the follow-time ladder. They read the radar lead directly, so
+# they work with the lead indicator hidden, and they start disabled like every added widget.
+LEAD_SPEED_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_TIME_WIDGET = "lead_speed", "lead_distance", "lead_time"
+LEAD_INFO_WIDGETS = (LEAD_SPEED_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_TIME_WIDGET)
+LEAD_LADDER_WIDGET = "lead_time_ladder"
+LEAD_WIDGETS = (*LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET)
+LEAD_LADDER_SIZE = {"large": (150, 200), "compact": (72, 96)}
+_LEAD_TEXT_NOTES = {
+  LEAD_SPEED_WIDGET: "The lead car's speed from radar. Shown with or without the lead indicator.",
+  LEAD_DISTANCE_WIDGET: "Distance to the lead car from radar. Shown with or without the lead indicator.",
+  LEAD_TIME_WIDGET: ("Live follow time in profile seconds: the gap less the planner's 6 m stop margin, over your speed, "
+                     "so it compares with the personality profile's following value."),
+}
+for _profile, (_width, _height, _x, _top) in {"large": (300, 72, 780, 520), "compact": (118, 20, 158, 180)}.items():
+  for _index, (_key, _label) in enumerate(zip(LEAD_INFO_WIDGETS, ("Lead speed", "Lead distance", "Lead follow time"), strict=True)):
+    _lead_text = _widget(_label, _key, _width, _height, _x, _top + _index * _height)
+    _lead_text["default"]["enabled"] = False
+    _lead_text["note"] = _LEAD_TEXT_NOTES[_key]
+    PROFILES[_profile]["widgets"][_key] = _lead_text
+for _profile, (_x, _y) in {"large": (1640, 330), "compact": (400, 140)}.items():
+  _ladder = _widget("Lead follow ladder", LEAD_LADDER_WIDGET, *LEAD_LADDER_SIZE[_profile], _x, _y)
+  _ladder["default"]["enabled"] = False
+  _ladder["note"] = ("The bar at the top is the lead car, the dot is you and the white rung is the profile's follow time. "
+                     "The dot sits on the rung when you are at the target. The numbers are the live follow time and the target.")
+  PROFILES[_profile]["widgets"][LEAD_LADDER_WIDGET] = _ladder
 ROAD_BASE_WIDTH = 1860
 SIDEBAR_EXTRA = 300
 ANCHOR_SHIFT = {"steering_wheel": 1.0, NAV_CARD_WIDGET: 1.0, NAV_MAP_WIDGET: 1.0,
-                "current_speed": .5, "torque_bar": .5, MODE_WIDGET: .5, CLOCK_WIDGET: .5}
+                "current_speed": .5, "torque_bar": .5, LANE_BAR_WIDGET: .5, MODE_WIDGET: .5, CLOCK_WIDGET: .5,
+                **dict.fromkeys(LEAD_WIDGETS, .5)}
 for _key, _widget_data in PROFILES["large"]["widgets"].items():
   if _key in ANCHOR_SHIFT:
     _widget_data["anchorShift"] = ANCHOR_SHIFT[_key]
@@ -221,7 +256,8 @@ for _key, _widget_data in PROFILES["large"]["widgets"].items():
   _widget_data["bounds"] = {**_base, "x": _base["x"] - ANCHOR_SHIFT.get(_key, 0) * SIDEBAR_EXTRA, "width": _base["width"] + SIDEBAR_EXTRA}
   _widget_data["expandable"] = True
 # Older documents retain every saved placement and gain this independent widget.
-OPTIONAL_WIDGETS = frozenset({MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, CEM_GAUGE_WIDGET, NAV_CARD_WIDGET, NAV_MAP_WIDGET, JETLINK_WIDGET})
+OPTIONAL_WIDGETS = frozenset({LANE_BAR_WIDGET, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, CEM_GAUGE_WIDGET, NAV_CARD_WIDGET, NAV_MAP_WIDGET, JETLINK_WIDGET,
+                              *LEAD_WIDGETS})
 
 # The torque arc grows when the developer sidebar closes; protect both road widths.
 _torque = PROFILES['large']['widgets']['torque_bar']
@@ -235,17 +271,20 @@ _torque['confirmationObstacle'] = {
 
 # These editor sprites use the runtime components and their canonical assets/fonts.
 RUNTIME_PREVIEW_WIDGETS = {
-  "large": ("current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "driver_monitor", "speed_limit_actions"),
-  "compact": ("max_speed", "speed_limit", "steering_wheel", "conditional_mode", "following_distance",
+  "large": (LANE_BAR_WIDGET, "current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "driver_monitor", "speed_limit_actions"),
+  "compact": (LANE_BAR_WIDGET, "max_speed", "speed_limit", "steering_wheel", "conditional_mode", "following_distance",
               "model_confidence", "driver_monitor", "speed_limit_actions"),
 }
 
 _FRAME_COLORS = {"cardFill": "#00000000", "cardBorder": "#00000000"}
 _ACTION_COLORS = {"cardFill": "#0C1820EB", "cardBorder": "#A6DFBEFF", "text": "#FFFFFFFF"}
+_LEAD_COLORS = {**dict.fromkeys(LEAD_INFO_WIDGETS, {"text": "#FFFFFFFF"}),
+                LEAD_LADDER_WIDGET: {"cardFill": "#00000080", "text": "#FFFFFFFF"}}
 WIDGET_COLORS = {
   "large": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
     CLOCK_WIDGET: {"text": "#FFFFFFFF"},
+    **_LEAD_COLORS,
     CEM_GAUGE_WIDGET: {},
     "current_speed": {"text": None},
     "cruise_limits": {"cardFill": "#10191FFF", "cardBorder": "#35434DFF", "text": None},
@@ -256,6 +295,7 @@ WIDGET_COLORS = {
   "compact": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
     CLOCK_WIDGET: {"text": "#FFFFFFFF"},
+    **_LEAD_COLORS,
     "max_speed": {"text": None},
     "speed_limit_actions": {**_ACTION_COLORS, "text": "#F1F6F3FF"},
     "driver_monitor": _FRAME_COLORS,
@@ -269,9 +309,10 @@ WIDGET_COLORS = {
 # Back-to-front order used when a layout first opts into custom layers.
 DEFAULT_WIDGET_ORDER = {
   "large": (NAV_MAP_WIDGET, "pip_left", "pip_right", "cruise_limits", "speed_limit_actions", CEM_GAUGE_WIDGET, "current_speed",
-            "steering_wheel", "torque_bar", "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET),
-  "compact": ("pip_left", "pip_right", "speed_limit", "max_speed", "steering_wheel", "torque_bar",
-              "speed_limit_actions", "driver_monitor", *RAIL_WIDGETS, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET),
+            "steering_wheel", "torque_bar", LANE_BAR_WIDGET, "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET,
+            *LEAD_WIDGETS),
+  "compact": ("pip_left", "pip_right", "speed_limit", "max_speed", "steering_wheel", "torque_bar", LANE_BAR_WIDGET,
+              "speed_limit_actions", "driver_monitor", *RAIL_WIDGETS, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, *LEAD_WIDGETS),
 }
 
 

@@ -14,6 +14,7 @@ from openpilot.starpilot.longitudinal.upstream.mpc import T_IDXS as T_IDXS_MPC
 from openpilot.selfdrive.controls.lib.drive_helpers import CONTROL_N, get_accel_from_plan, should_stop
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX, V_CRUISE_UNSET
 from openpilot.common.swaglog import cloudlog
+from openpilot.starpilot.car.tesla import dash_speed as tesla_dash_speed
 
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
 A_CRUISE_MAX_BP = [0., 10.0, 25., 40.]
@@ -56,6 +57,7 @@ def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, angle_steers, CP, dt, 
 class LongitudinalPlanner:
   def __init__(self, CP, init_v=0.0, init_a=0.0, dt=DT_MDL):
     self.CP = CP
+    self.dash_speed_enabled = tesla_dash_speed.enabled(CP)  # Model 3/Y with system long: hold the dash on the set speed
     self.mpc = LongitudinalMpc(dt=dt)
     self.fcw = False
     self.dt = dt
@@ -79,6 +81,8 @@ class LongitudinalPlanner:
     v_ego = sm['carState'].vEgo
     v_cruise_kph = min(sm['carState'].vCruise, V_CRUISE_MAX)
     v_cruise = v_cruise_kph * CV.KPH_TO_MS
+    if self.dash_speed_enabled and sm['carState'].vCruise != V_CRUISE_UNSET:
+      v_cruise = tesla_dash_speed.planner_target(v_cruise)  # hold what the Tesla dash shows as the set speed
     if sm['controlsState'].forceDecel:
       v_cruise = 0.0
 

@@ -17,6 +17,8 @@ RELEASE_DEBOUNCE = 0.25
 MAX_LATERAL_ACCEL = 4.0
 MAX_PROFILE_POINTS = 129
 MAX_STEP_SECONDS = 0.2
+OPENING_GAIN = 0.15
+OPENING_NOISE = 0.01
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,7 @@ class CurveProfile:
 class Envelope:
   speed_mps: float
   binding_distance_m: float
+  apex_speed_mps: float | None = None
 
 
 def evaluate(profile: CurveProfile, comfort: LearnedCurve, cruise_mps: float, *, weather_reduction: float = 0.0) -> Envelope:
@@ -75,7 +78,7 @@ def evaluate(profile: CurveProfile, comfort: LearnedCurve, cruise_mps: float, *,
     apex_speed = min(max(math.sqrt(lateral / denominator), MIN_SPEED), math.sqrt(MAX_LATERAL_ACCEL / denominator))
     allowed = math.sqrt(apex_speed**2 + (2 * APPROACH_DECEL) * distance)
     if allowed < result.speed_mps:
-      result = Envelope(allowed, float(distance))
+      result = Envelope(allowed, float(distance), apex_speed)
   return result
 
 
@@ -86,11 +89,20 @@ class TargetFilter:
     self.target: float | None = None
     self._filtered = 0.0
     self._release_seconds = 0.0
+    self._opening_samples: list[float] = []
+    self._opening_active = False
+    self._nominal_target: float | None = None
+
+  def clear_opening(self) -> None:
+    self._opening_samples.clear()
+    self._opening_active = False
 
   def reset(self) -> None:
     self.target = None
     self._filtered = 0.0
     self._release_seconds = 0.0
+    self.clear_opening()
+    self._nominal_target = None
 
   def step(self, envelope: Envelope, *, ego_mps: float, cruise_mps: float, dt: float) -> float:
     if (not finite_number(ego_mps) or ego_mps < 0 or not finite_number(cruise_mps) or cruise_mps <= 0 or
@@ -98,7 +110,17 @@ class TargetFilter:
         not finite_number(envelope.speed_mps) or envelope.speed_mps <= 0 or envelope.speed_mps > cruise_mps):
       self.reset()
       raise ValueError("invalid target input or discontinuous time")
+    # An early release is a temporary output adjustment, not new slowing
+    # history. Restore the unmodified filter trajectory before the next step.
+    if self.target is not None and self._nominal_target is not None:
+      self.target = min(self.target, self._nominal_target)
     raw = envelope.speed_mps
+    if self._opening_samples and raw < self._opening_samples[-1] - OPENING_NOISE:
+      self._opening_active = False
+    self._opening_samples = (self._opening_samples + [raw])[-3:]
+    opening = (len(self._opening_samples) == 3 and
+               all(b > a + OPENING_NOISE for a, b in zip(self._opening_samples, self._opening_samples[1:])) and
+               raw - self._opening_samples[0] >= OPENING_GAIN)
     if self.target is None:
       self.target = min(cruise_mps, max(raw, ego_mps + EGO_HEADROOM))
       self._filtered = self.target
@@ -109,6 +131,13 @@ class TargetFilter:
     self.target = min(max(desired, self.target - TARGET_DOWN_RATE * dt), self.target + TARGET_UP_RATE * dt)
     if self._release_seconds >= RELEASE_DEBOUNCE:
       self.target = max(self.target, min(raw, ego_mps))
+    # Three fresh improving envelopes may release filter lag immediately.
+    # The complete current profile still bounds speed; the planner separately
+    # shapes acceleration, so this is not a step in commanded acceleration.
+    self._opening_active = self._opening_active or opening
+    self._nominal_target = min(self.target, cruise_mps)
+    if self._opening_active:
+      self.target = max(self.target, min(raw, ego_mps + EGO_HEADROOM))
     # Driver lowering cruise is an immediate cap, independent of filter history.
     self.target = min(self.target, cruise_mps)
     return self.target

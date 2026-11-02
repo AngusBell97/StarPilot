@@ -116,8 +116,8 @@ def test_transform_guard_preserves_render_projection_updates(renderer, monkeypat
 
   sm = Messages(carOutput=SimpleNamespace(actuatorsOutput=SimpleNamespace(torque=0)),
                 selfdriveState=SimpleNamespace(experimentalMode=False),
-                extrinsicsCalibration=SimpleNamespace(height=[]), modelV2=object())
-  monkeypatch.setattr(model_renderer, "ui_state", SimpleNamespace(sm=sm, started_frame=0))
+                extrinsicsCalibration=SimpleNamespace(height=[]), modelV2=SimpleNamespace(position=SimpleNamespace(x=[0., 10.], y=[0., 0.], z=[0., 0.])))
+  monkeypatch.setattr(model_renderer, "ui_state", SimpleNamespace(sm=sm, started_frame=0, display_time_ns=lambda: 1_000_000_000, params=None))
   renderer._torque_filter = Mock()
   renderer._path = SimpleNamespace(raw_points=np.array([[10, 0, 0]], dtype=np.float32))
   renderer._lead_indicator_enabled = False
@@ -227,9 +227,9 @@ def test_large_render_preserves_lead_cadence_and_lane_invalidation(renderer, mon
     valid = {"radarState": True}
 
   sm = Messages(selfdriveState=SimpleNamespace(experimentalMode=False),
-                extrinsicsCalibration=SimpleNamespace(height=[]), modelV2=object(),
+                extrinsicsCalibration=SimpleNamespace(height=[]), modelV2=SimpleNamespace(position=SimpleNamespace(x=[0., 10.], y=[0., 0.], z=[0., 0.])),
                 radarState=SimpleNamespace(leadOne=None))
-  monkeypatch.setattr(model_renderer, "ui_state", SimpleNamespace(sm=sm, started_frame=0))
+  monkeypatch.setattr(model_renderer, "ui_state", SimpleNamespace(sm=sm, started_frame=0, display_time_ns=lambda: 1_000_000_000, params=None))
   view = object.__new__(LargeModelRenderer)
   view.lead_display = None
   view._path = ModelPoints(raw_points=np.array([[10, 0, 0]], dtype=np.float32))

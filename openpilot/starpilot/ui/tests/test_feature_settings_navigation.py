@@ -522,11 +522,10 @@ class FeatureNavigationTests(unittest.TestCase):
     self.assertEqual(actions, [FeatureUiAction("scroll")])
 
   def test_boolean_both_action_halves_preserve_requests_and_source_evidence(self):
-    for value, source, desired in (("Off", b"0", "On"), ("On", b"1", "Off"),
-                                   ("Off (saved mode 0 or 1)", b"1", "On")):
+    for value, source, desired in (("Off", b"0", "On"), ("On", b"1", "Off")):
       for x in (1800, 1990):
         with self.subTest(value=value, x=x):
-          row = FeatureRow("SLCFallback" if value.startswith("Off (") else "LaneCentering", "Switch", value,
+          row = FeatureRow("LaneCentering", "Switch", value,
                            source, ("Off", "On"), available=True, dependencies=(("master", b"1"),))
           state = FeatureSettingsState(page="lane", rows=(row,))
           actions = []
@@ -648,10 +647,17 @@ class FeatureNavigationTests(unittest.TestCase):
         adapter.open("slc")
         slc = pushed[-1]
         self.assertFalse(any(item.text in ('confirm lower limits', 'confirm higher limits') for item in slc.items))
-        adoption = card(slc, "automatic adoption")
+        self.assertFalse(any(item.text == 'automatic adoption' for item in slc.items))
+        card(slc, "timing and confirmation").click()
+        timing = pushed[-1]
         self.assertFalse(params.get_bool('SLCConfirmation'))
-        adoption.click()
-        self.assertTrue(params.get_bool('SLCConfirmation'))
+        card(timing, "confirm lower limits").click()
+        self.assertTrue(params.get_bool('SLCConfirmationLower'))
+        self.assertFalse(params.get_bool('SLCConfirmationHigher'))
+        card(timing, "confirm higher limits").click()
+        self.assertTrue(params.get_bool('SLCConfirmationHigher'))
+        self.assertTrue(params.get_bool('SLCConfirmationLower'))
+        self.assertFalse(params.get_bool('SLCConfirmation'))
         self.assertFalse(any(item.text in ('confirm lower limits', 'confirm higher limits') for item in slc.items))
 
         adapter.open("aggressive/acceleration")

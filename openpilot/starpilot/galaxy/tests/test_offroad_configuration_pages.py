@@ -70,7 +70,7 @@ class TestOffroadConfigurationPages(unittest.TestCase):
     context = self.context.sample()
     self.assertFalse(context.cp.openpilotLongitudinalControl)
     self.assertTrue(context.configuration_longitudinal)
-    page = self.page('slc')
+    page = self.page('slc/offsets')
     index = next(i for i, row in enumerate(page['rows']) if row['label'] == 'Adopt fixed offsets')
     self.assertTrue(page['rows'][index]['available'])
     intent = self.gateway.preview(page['view'], index, 0, 'session', b'generation')
@@ -80,8 +80,16 @@ class TestOffroadConfigurationPages(unittest.TestCase):
     self.assertFalse(self.context.sample().cp.openpilotLongitudinalControl)
     self.assert_no_car_cache()
 
+  def test_retired_fallback_is_absent_from_galaxy_without_rewriting_saved_bytes(self):
+    path = Path(self.params.get_param_path('SLCFallback'))
+    for raw in (b'0', b'1', b'2', b'broken'):
+      with self.subTest(raw=raw):
+        path.write_bytes(raw)
+        self.assertFalse(any(row['label'] == 'Previous accepted limit' for row in self.page('slc')['rows']))
+        self.assertEqual(path.read_bytes(), raw)
+
   def test_saved_and_manual_contexts_expose_expected_core_settings(self):
-    offsets = self.page('slc')
+    offsets = self.page('slc/offsets')
     index = next(i for i, row in enumerate(offsets['rows']) if row['label'] == 'Adopt fixed offsets')
     intent = self.gateway.preview(offsets['view'], index, 0, 'session', b'generation')
     self.assertTrue(self.gateway.confirm(intent['intent'], 'session', b'generation'))
@@ -90,7 +98,8 @@ class TestOffroadConfigurationPages(unittest.TestCase):
       'conditional': ('Saved driving mode',),
       'conditional/cem': ('Speed threshold', 'Speed with lead', 'Stop lights'),
       'lane_change': ('Allow lane changes', 'Minimum lane-change speed', 'Automatic Lane Changes', 'Lane Change Speed'),
-      'slc': ('Speed Limit Controller', 'Automatic adoption', 'Previous accepted limit'),
+      'slc': ('Speed Limit Controller', 'Show speed limit signs'),
+      'slc/timing': ('Confirm lower limits', 'Confirm higher limits'),
       'profiles': ('Short press', 'Hold', 'Force Stop', 'Selected Acceleration Profile', 'Selected Deceleration Profile'),
       'torque': ('Steering Controller', 'Turn Assist', 'Lat Accel', 'Friction'),
       'wheel': ('Distance long press', 'MODE press', 'Star button'),

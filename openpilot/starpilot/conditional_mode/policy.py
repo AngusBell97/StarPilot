@@ -7,9 +7,11 @@ qualifying fresh scene and vehicle authority.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import StrEnum
 import math
+
+from openpilot.starpilot.conditional_mode.open_road import OpenRoad
 
 
 MPH_TO_MPS = 0.44704
@@ -19,6 +21,8 @@ CEM_EXIT_BUFFER_S = 0.25
 CEM_SLOW_LEAD_HOLD_S = 1.5
 CEM_OPEN_ROAD_HANDOFF_S = 0.75
 CEM_STOP_RELEASE_SUPPRESS_S = 2.0
+CURVE_CLEAR_S = 2.0
+SPEED_EXIT_MARGIN_MPS = 1.0 * MPH_TO_MPS
 CCM_SPEED_CONFIRM_S = 0.35
 CCM_LEAD_CONFIRM_S = 1.0
 CCM_LAUNCH_CONFIRM_S = 0.0
@@ -49,7 +53,7 @@ class Reason(StrEnum):
   CEM_CURVE = 'cem_curve'
   CEM_LEAD = 'cem_lead'
   CEM_STOP = 'cem_stop'
-  CEM_SPEED_LIMIT = 'cem_speed_limit'
+  CEM_SPEED_LIMIT = 'cem_speed_limit'  # Historical route labels only.
   CEM_HOLD = 'cem_hold'
   CCM_SPEED = 'ccm_speed'
   CCM_LEAD = 'ccm_lead'
@@ -92,13 +96,14 @@ class SceneEvidence:
   set_speed_mps: float | None = None
   lead: LeadEvidence | None = None
   following_lead: bool | None = None
+  speed_lead_present: bool | None = None
   left_blinker: bool | None = None
   right_blinker: bool | None = None
   lane_available: bool | None = None
   curve_detected: bool | None = None
+  curve_raw: bool | None = None
   slow_lead_detected: bool | None = None
   stop_light_detected: bool | None = None
-  slc_experimental: bool | None = None
   standstill: bool | None = None
   traffic_mode: bool | None = None
   stop_sign_confirmed: bool | None = None
@@ -110,6 +115,13 @@ class SceneEvidence:
   standstill_stop_hold: bool | None = None
   launch_forced_exit: bool | None = None
   launch_lead: bool | None = None
+  tesla_open_road: bool = False
+  open_road_observed_s: float | None = None
+  open_road_model_s: float | None = None
+  open_road_model_accel: float | None = None
+  open_road_model_stop: bool | None = None
+  open_road_headway_s: float | None = None
+  open_road_lateral_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +141,7 @@ class ModeSettings:
   ccm_set_speed_margin_mps: float = 3 * MPH_TO_MPS
   ccm_lead: bool = True
   ccm_launch: bool = False
+  ccm_allow_chill_in_bends: bool = False
 
 
 @dataclass(frozen=True)
@@ -171,8 +184,14 @@ def _valid_settings(settings: ModeSettings) -> bool:
     settings.cem_stop,
     settings.ccm_lead,
     settings.ccm_launch,
+    settings.ccm_allow_chill_in_bends,
   )
   return all(_finite(value, high=70.0) for value in numeric) and all(_bool(value) for value in flags)
+
+
+def active_settings_key(choice: ModeChoice, settings: ModeSettings) -> tuple:
+  prefix = 'ccm_' if choice is ModeChoice.CCM else 'cem_'
+  return tuple(getattr(settings, f.name) for f in fields(settings) if f.name.startswith(prefix))
 
 
 def restore_manual_status(choice: ModeChoice, session_code: int, persisted_code: int, persist: bool) -> ManualIntent:
@@ -272,6 +291,10 @@ class ConditionalModePolicy:
   def reset(self) -> None:
     self.choice = ModeChoice.STOCK
     self.last_now: float | None = None
+    self.last_settings: ModeSettings | None = None
+    self.curve_held = False
+    self.curve_cem_current = False
+    self.curve_clear_since: float | None = None
     self._reset_cem()
     self.ccm_candidate: Reason | None = None
     self.ccm_candidate_since = 0.0
@@ -281,7 +304,17 @@ class ConditionalModePolicy:
     self.ccm_hold_until = 0.0
     self.ccm_false_since: float | None = None
 
+  def reset_transition(self, *, settings_edit: bool = False) -> None:
+    # Preserve bend evidence across a temporary authority/data interruption.
+    # An interruption cancels clearance; it cannot count as observed clear time.
+    curve_held, cem_current, clear_since = self.curve_held, self.curve_cem_current, self.curve_clear_since
+    self.reset()
+    self.curve_held = curve_held
+    if settings_edit:
+      self.curve_cem_current, self.curve_clear_since = cem_current, clear_since
+
   def _reset_cem(self) -> None:
+    self.open_road = OpenRoad()
     self.cem_hold_until = 0.0
     self.cem_false_since: float | None = None
     self.cem_active = False
@@ -293,6 +326,8 @@ class ConditionalModePolicy:
     self.cem_previous_stop_hold = False
     self.cem_stop_release_pending = False
     self.cem_launch_suppress_until = 0.0
+    self.cem_speed_active = False
+    self.cem_speed_until = 0.0
 
   @staticmethod
   def _decision(requested: bool, authority: Authority, qualified: bool, warm: bool, reason: Reason, status: int) -> Decision:
@@ -317,9 +352,16 @@ class ConditionalModePolicy:
     if not _finite(now_s, high=1e12) or (self.last_now is not None and now_s < self.last_now):
       self.reset()
       return self._decision(False, authority, False, False, Reason.UNAVAILABLE, 0)
-    if choice is not self.choice or (self.last_now is not None and now_s - self.last_now > SCENE_MAX_AGE_S):
+    if choice is not self.choice:
       self.reset()
       self.choice = choice
+    elif self.last_now is not None and now_s - self.last_now > SCENE_MAX_AGE_S:
+      self.reset_transition()
+      self.choice = choice
+    if self.last_settings is not None and active_settings_key(choice, settings) != active_settings_key(choice, self.last_settings):
+      self.reset_transition(settings_edit=True)
+      self.choice = choice
+    self.last_settings = settings
     self.last_now = now_s
     authority_valid = all(
       _bool(value)
@@ -332,8 +374,16 @@ class ConditionalModePolicy:
     if choice not in (ModeChoice.CEM, ModeChoice.CCM, ModeChoice.STOCK) or not qualified or not _valid_settings(settings):
       self.reset()
       return self._decision(False, authority, False, False, Reason.UNAVAILABLE, 0)
+    if warm and _scene_current(now_s, scene):
+      self._update_curve(now_s, scene)
+    else:
+      self.curve_clear_since = None
+      self.curve_cem_current = False
     if (warm and authority.driving_enabled and authority.long_active and
         _scene_current(now_s, scene) and scene.committed_stop is True):
+      self.open_road.reset()
+      if choice is ModeChoice.CEM and self._speed_trigger(scene, settings):
+        self.cem_speed_until = now_s + CEM_HOLD_S
       return self._decision(True, authority, True, warm, Reason.CEM_STOP, 8)
     if not isinstance(manual, ManualIntent):
       manual = ManualIntent.NONE
@@ -348,7 +398,9 @@ class ConditionalModePolicy:
         and (self.cem_previous_standstill and self.cem_previous_stop_hold or self.cem_stop_release_pending)
       ):
         suppress_until = now_s + CEM_STOP_RELEASE_SUPPRESS_S
+      curve_held, clear_since, cem_current = self.curve_held, self.curve_clear_since, self.curve_cem_current
       self.reset()
+      self.curve_held, self.curve_clear_since, self.curve_cem_current = curve_held, clear_since, cem_current
       self.choice = choice
       self.last_now = now_s
       if choice is ModeChoice.CEM:
@@ -366,20 +418,43 @@ class ConditionalModePolicy:
       return self._decision(choice is ModeChoice.CCM, authority, qualified, warm, Reason.SCENE_UNAVAILABLE, 0)
     return self._cem(now_s, authority, warm, scene, settings) if choice is ModeChoice.CEM else self._ccm(now_s, authority, warm, scene, settings)
 
+  def _update_curve(self, now_s: float, scene: SceneEvidence) -> None:
+    if scene.curve_detected is True:
+      self.curve_held = True
+      self.curve_cem_current = True
+      self.curve_clear_since = None
+    elif scene.curve_detected is False and scene.curve_raw is False:
+      if self.curve_clear_since is None:
+        self.curve_clear_since = now_s
+      if now_s - self.curve_clear_since >= CURVE_CLEAR_S:
+        self.curve_held = False
+    else:
+      # Unknown is not clear; CCM separately vetoes unavailable evidence.
+      self.curve_clear_since = None
+
+  def _speed_trigger(self, scene: SceneEvidence, settings: ModeSettings) -> bool:
+    lead = scene.speed_lead_present
+    limit = (settings.cem_speed_with_lead_mps if lead is True else settings.cem_speed_mps if lead is False
+             else min(settings.cem_speed_mps, settings.cem_speed_with_lead_mps))
+    # When the lead class is unknown only the overlap of both rules is certain.
+    # Enter exactly below the selected limit; release above a small speed band.
+    margin = SPEED_EXIT_MARGIN_MPS if self.cem_speed_active else 0.0
+    self.cem_speed_active = bool(limit > 0.0 and scene.speed_mps is not None and scene.speed_mps < limit + margin)
+    return self.cem_speed_active
+
   def _cem_trigger(self, scene: SceneEvidence, settings: ModeSettings, *, launch_suppressed: bool = False) -> Reason | None:
     speed = scene.speed_mps
     if speed is None:
       return None
     lead = scene.lead
     following = scene.following_lead
-    if not launch_suppressed and _bool(following) and speed >= 1.0:
-      limit = settings.cem_speed_with_lead_mps if following else settings.cem_speed_mps
-      if limit > speed:
-        return Reason.CEM_SPEED
+    if self._speed_trigger(scene, settings):
+      return Reason.CEM_SPEED
     set_speed = scene.set_speed_mps
     if (
       not launch_suppressed
       and settings.cem_open_road
+      and not scene.tesla_open_road
       and lead is not None
       and _lead_valid(lead)
       and _bool(following)
@@ -398,19 +473,21 @@ class ConditionalModePolicy:
       and not scene.lane_available
     ):
       return Reason.CEM_SIGNAL
-    if settings.cem_curves and scene.curve_detected is True and _bool(following) and (settings.cem_curves_with_lead or not following):
+    if settings.cem_curves and self.curve_held and self.curve_cem_current and (settings.cem_curves_with_lead or scene.speed_lead_present is False):
       return Reason.CEM_CURVE
     if not launch_suppressed and settings.cem_lead and scene.slow_lead_detected is True and speed <= 35.31:
       return Reason.CEM_LEAD
     if settings.cem_stop and (scene.stop_light_detected is True or scene.forcing_stop is True):
       return Reason.CEM_STOP
-    if scene.slc_experimental is True:
-      return Reason.CEM_SPEED_LIMIT
     return None
 
   def _cem(self, now_s: float, authority: Authority, warm: bool, scene: SceneEvidence, settings: ModeSettings) -> Decision:
     committed = settings.cem_stop and scene.forcing_stop is True and authority.driving_enabled and authority.long_active
-    if not _bool(scene.standstill) or (scene.standstill and not committed and not _bool(scene.standstill_stop_hold)):
+    speed_requested = self._speed_trigger(scene, settings)
+    if speed_requested:
+      self.cem_speed_until = now_s + CEM_HOLD_S
+    speed_hold = scene.speed_lead_present is None and now_s < self.cem_speed_until
+    if not _bool(scene.standstill) or (scene.standstill and settings.cem_stop and not committed and not speed_requested and not speed_hold and not _bool(scene.standstill_stop_hold)):
       self._reset_cem()
       return self._decision(False, authority, True, warm, Reason.SCENE_UNAVAILABLE, 0)
     released = not scene.standstill and (self.cem_previous_standstill and self.cem_previous_stop_hold or self.cem_stop_release_pending)
@@ -421,8 +498,15 @@ class ConditionalModePolicy:
       self.cem_active = False
       self.cem_stop_release_pending = False
     if scene.standstill:
-      held = committed or scene.standstill_stop_hold is True
-      self.cem_hold_until = self.cem_slow_lead_until = self.cem_open_road_until = 0.0
+      self.open_road.reset()
+      stop_held = committed or settings.cem_stop and scene.standstill_stop_hold is True
+      speed_held = speed_requested or speed_hold
+      if speed_requested:
+        self.cem_hold_until = now_s + CEM_HOLD_S
+      elif not speed_hold:
+        self.cem_hold_until = 0.0
+      held = stop_held or speed_held
+      self.cem_slow_lead_until = self.cem_open_road_until = 0.0
       self.cem_false_since = None
       self.cem_previous_open_road = False
       if held:
@@ -433,11 +517,24 @@ class ConditionalModePolicy:
         self.cem_launch_suppress_until = now_s + CEM_STOP_RELEASE_SUPPRESS_S
       self.cem_active = held
       self.cem_previous_standstill = True
-      self.cem_previous_stop_hold = held
-      self.cem_active_reason = Reason.CEM_STOP if held else Reason.NO_TRIGGER
-      return self._decision(held, authority, True, warm, self.cem_active_reason, 8 if held else 0)
+      self.cem_previous_stop_hold = stop_held
+      self.cem_active_reason = Reason.CEM_STOP if stop_held else Reason.CEM_SPEED if speed_held else Reason.NO_TRIGGER
+      return self._decision(held, authority, True, warm, self.cem_active_reason, 8 if stop_held else 6 if speed_held else 0)
     self.cem_previous_standstill = self.cem_previous_stop_hold = False
-    trigger = self._cem_trigger(scene, settings, launch_suppressed=now_s < self.cem_launch_suppress_until)
+    launch_suppressed = now_s < self.cem_launch_suppress_until
+    if (scene.tesla_open_road is True and settings.cem_open_road and not launch_suppressed and
+        authority.driving_enabled and authority.long_active):
+      open_road_active = self.open_road.step(now_s, scene)
+    else:
+      self.open_road.reset()
+      open_road_active = False
+    trigger = self._cem_trigger(scene, settings, launch_suppressed=launch_suppressed)
+    # Preserve independent condition holds; an already-confirmed Open Road
+    # release must not acquire an extra generic mode hold of its own.
+    if scene.tesla_open_road and self.cem_active_reason is Reason.CEM_OPEN_ROAD:
+      self.cem_hold_until = 0.0
+      self.cem_false_since = None
+      self.cem_active = False
     if trigger is not None:
       self.cem_hold_until = now_s + CEM_HOLD_S
       self.cem_false_since = None
@@ -449,7 +546,7 @@ class ConditionalModePolicy:
         self.cem_false_since = now_s
       elif not self.cem_active:
         self.cem_false_since = None
-    if not settings.cem_open_road:
+    if scene.tesla_open_road or not settings.cem_open_road:
       self.cem_open_road_until = 0.0
     elif self.cem_previous_open_road and _open_road_handoff(scene):
       self.cem_open_road_until = now_s + CEM_OPEN_ROAD_HANDOFF_S
@@ -471,6 +568,9 @@ class ConditionalModePolicy:
     )
     self.cem_previous_open_road = trigger is Reason.CEM_OPEN_ROAD
     reason = trigger if trigger is not None else Reason.CEM_HOLD if self.cem_active else Reason.NO_TRIGGER
+    if open_road_active and not self.cem_active:
+      self.cem_active = True
+      self.cem_active_reason = reason = Reason.CEM_OPEN_ROAD
     status_reason = self.cem_active_reason if self.cem_active else Reason.NO_TRIGGER
     status = {
       Reason.CEM_CURVE: 3,
@@ -478,7 +578,6 @@ class ConditionalModePolicy:
       Reason.CEM_SIGNAL: 5,
       Reason.CEM_SPEED: 6,
       Reason.CEM_OPEN_ROAD: 6,
-      Reason.CEM_SPEED_LIMIT: 7,
       Reason.CEM_STOP: 8,
     }.get(status_reason, 0)
     return self._decision(self.cem_active, authority, True, warm, reason, status)
@@ -492,7 +591,6 @@ class ConditionalModePolicy:
       scene.left_blinker,
       scene.right_blinker,
       scene.traffic_mode,
-      scene.slc_experimental,
       scene.curve_detected,
       scene.slow_lead_detected,
       scene.stop_light_detected,
@@ -501,9 +599,12 @@ class ConditionalModePolicy:
       scene.adjacent_lead_ambiguous,
       scene.low_speed_stop_scene,
     )
-    launch = settings.ccm_launch and scene.launch_candidate is True
-    hard_veto = veto_fields[1:-1]
-    if any(value is True for value in hard_veto) or (scene.standstill is True and not launch) or (scene.low_speed_stop_scene is True and not launch):
+    launch = settings.ccm_launch and speed < 15.0 * MPH_TO_MPS and scene.launch_candidate is True
+    hard_veto = (scene.left_blinker, scene.right_blinker, scene.traffic_mode, 
+                 scene.slow_lead_detected, scene.stop_light_detected, scene.stop_sign_confirmed,
+                 scene.forcing_stop, scene.adjacent_lead_ambiguous)
+    curve_veto = not settings.ccm_allow_chill_in_bends and (self.curve_held or scene.curve_detected is True)
+    if curve_veto or any(value is True for value in hard_veto) or (scene.standstill is True and not launch) or (scene.low_speed_stop_scene is True and not launch):
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None
@@ -513,7 +614,8 @@ class ConditionalModePolicy:
       self.ccm_candidate = None
       self.ccm_false_since = None
       return self._decision(True, authority, True, warm, Reason.SCENE_UNAVAILABLE, 0)
-    if settings.ccm_launch and (not _bool(scene.launch_candidate) or not _bool(scene.launch_forced_exit) or launch and not _bool(scene.launch_lead)):
+    launch_relevant = speed <= 15.0 * MPH_TO_MPS or self.ccm_active_reason is Reason.CCM_LAUNCH
+    if settings.ccm_launch and launch_relevant and (not _bool(scene.launch_candidate) or not _bool(scene.launch_forced_exit) or launch and not _bool(scene.launch_lead)):
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None

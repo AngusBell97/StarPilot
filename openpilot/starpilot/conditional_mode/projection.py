@@ -16,12 +16,15 @@ from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.modeld.constants import ModelConstants
 from openpilot.selfdrive.controls.lib.desire_helper import LANE_CHANGE_SPEED_MIN
 from openpilot.starpilot.conditional_mode.chill_scene import ChillLead, ChillSceneDetector, ChillSceneFrame, ChillSceneObservation
+from openpilot.starpilot.conditional_mode.speed_lead import SpeedLeadSelector
 from openpilot.starpilot.conditional_mode.curve import CurveDetector, frozen_raw_curve
-from openpilot.starpilot.lead_tracking import LeadDetector, LeadObservation
+from openpilot.starpilot.lead_tracking import LeadDetector, LeadObservation, _path_at_distance
 from openpilot.starpilot.conditional_mode.policy import Authority, LeadEvidence, SceneEvidence
+from openpilot.starpilot.conditional_mode.open_road import TESLAS
 from openpilot.starpilot.conditional_mode.preferences import CEMOptions
 from openpilot.starpilot.conditional_mode.signal_lane import MonoSource, SignalLaneFrame, SignalLaneTracker
 from openpilot.starpilot.conditional_mode.slower_lead import SlowerLeadDetector, SlowerLeadFrame
+from openpilot.starpilot.conditional_mode.launch_release import TeslaLaunchRelease, tesla_stationary_zero
 from openpilot.starpilot.conditional_mode.stop import FORD_STOP_NAMES, StopFrame, StopLead, StopLightDetector, StopObservation
 from openpilot.starpilot.conditional_mode.turn_scene import committed_turn_scene
 from openpilot.starpilot.model_geometry import (
@@ -87,9 +90,9 @@ class ConditionalOwnerContext:
   committed_turn_scene: ObservedBool | None = None
   red_light: ObservedBool | None = None
   plan_forcing_stop: ObservedBool | None = None
-  slc_experimental: ObservedBool | None = None
   plan_should_stop: ObservedBool | None = None
   plan_allow_throttle: ObservedBool | None = None
+  plan_accel: ObservedFloat | None = None
 
 
 @dataclass(frozen=True)
@@ -154,7 +157,9 @@ def _field(source, field: str):
     return None
 
 
-def _ego_speed(car) -> float | None:
+def _ego_speed(car, cp=None) -> float | None:
+  if tesla_stationary_zero(car, cp):
+    return 0.0
   speed = _number(_field(car, 'vEgo'), low=-STANDSTILL_SPEED_NOISE_MPS, high=80.0)
   if speed is None or speed >= 0.0:
     return speed
@@ -302,7 +307,10 @@ class SceneProjector:
     self.barrier_mono_ns = 0
     self.curve_detector = CurveDetector()
     self.lead_detector = LeadDetector()
+    self.speed_lead_selector = SpeedLeadSelector()
     self.stop_detector = StopLightDetector()
+    self.tesla_launch = TeslaLaunchRelease()
+    self.launch_diagnostic = {}
     self.slower_lead_detector = SlowerLeadDetector()
     self.chill_detector = ChillSceneDetector()
     self.signal_lane_tracker = SignalLaneTracker()
@@ -317,7 +325,10 @@ class SceneProjector:
   def _empty(self) -> ProjectedScene:
     self.curve_detector.reset()
     self.lead_detector.reset()
+    self.speed_lead_selector.reset()
     self.stop_detector.invalidate()
+    self.tesla_launch.reset()
+    self.launch_diagnostic = {}
     self.slower_lead_detector.reset()
     self.chill_detector.reset()
     self.signal_lane_tracker.reset()
@@ -439,7 +450,7 @@ class SceneProjector:
       longitudinal_plan = sm['longitudinalPlan'] if 'longitudinalPlan' in fresh else None
     except (KeyError, TypeError, ValueError, OverflowError):
       return self._empty()
-    speed = _ego_speed(car) if car is not None and _field(car, 'canValid') is True and _field(car, 'canTimeout') is False else None
+    speed = _ego_speed(car, cp) if car is not None and _field(car, 'canValid') is True and _field(car, 'canTimeout') is False else None
     cruise_kph = _number(_field(car, 'vCruise'), high=V_CRUISE_UNSET_KPH) if speed is not None else None
     cruise = cruise_kph * KPH_TO_MPS if cruise_kph is not None and 0 < cruise_kph < V_CRUISE_UNSET_KPH else None
     curvature = _number(_field(controls, 'curvature'), low=-1.0, high=1.0) if controls is not None else None
@@ -456,7 +467,7 @@ class SceneProjector:
         stop_horizon = horizon
         model_should_stop = _boolean(_field(_field(model, 'action'), 'shouldStop'))
         if (horizon is None and self.stop_detector.committed and model_should_stop is False and speed is not None and
-            standstill_release_speed(_field(car, 'standstill'), _field(car, 'vEgo'), _field(car, 'vEgoRaw'))):
+            (standstill_release_speed(_field(car, 'standstill'), _field(car, 'vEgo'), _field(car, 'vEgoRaw')) or tesla_stationary_zero(car, cp))):
           # A stationary model can backstep millimeters near its origin before
           # projecting forward. Use that endpoint only to clear an existing stop;
           # Curve geometry and cold stop acquisition retain strict validation.
@@ -539,7 +550,6 @@ class SceneProjector:
     committed_turn, turn_stamp = owner_bool(context.committed_turn_scene)
     red_light, red_stamp = owner_bool(context.red_light)
     plan_forcing_stop, plan_forcing_stamp = owner_bool(context.plan_forcing_stop)
-    slc_experimental, _ = owner_bool(context.slc_experimental)
     plan_should_stop, plan_should_stop_stamp = owner_bool(context.plan_should_stop)
     plan_allow_throttle, plan_allow_throttle_stamp = owner_bool(context.plan_allow_throttle)
     model_stamp = _source_stamp(sm, 'modelV2') if model_transport_current else None
@@ -604,7 +614,29 @@ class SceneProjector:
       stop_lead = StopLead(lead.present, lead.distance_m, lead.speed_mps, lead.radar, lead.model_probability, lead_observation.tracked)
     launch_horizon = stop_horizon if stop_horizon is not None else (
       _standstill_clear_horizon(model) if model_transport_current else None)
-    stationary_launch_clear = _stationary_launch_clear(model, car, lead, launch_horizon)
+    native_accel, native_accel_stamp = _owner_float(context.plan_accel, now_mono_ns, self.barrier_mono_ns, high=10.)
+    native_model_stamp = sm.logMonoTime.get('modelV2')
+    native_clear = bool(plan_should_stop is False and plan_allow_throttle is True and native_accel is not None and native_accel > .1 and
+                        plan_should_stop_stamp == plan_allow_throttle_stamp == native_accel_stamp == native_model_stamp)
+    release_current = bool(model_transport_current and car_valid and radar is not None and control is not None and selfdrive is not None and
+                           _field(control, 'enabled') is True and _field(control, 'longActive') is True and
+                           _field(selfdrive, 'enabled') is True and _field(controls, 'forceDecel') is False)
+    if not release_current:
+      self.tesla_launch.invalidate()
+    tesla_launch_clear = release_current and self.tesla_launch.sample(
+      car=car, cp=cp, model=model, radar=radar, stamp=native_model_stamp, now=now_mono_ns,
+      horizon=launch_horizon, native_clear=native_clear, tracked=lead_observation.tracked)
+    stationary_launch_clear = (tesla_launch_clear if _field(cp, 'carFingerprint') in TESLAS else
+                               _stationary_launch_clear(model, car, lead, launch_horizon))
+    self.launch_diagnostic = dict(
+      model_ns=native_model_stamp, release_current=bool(release_current), native_clear=native_clear,
+      native_accel=native_accel, native_should_stop=plan_should_stop, native_throttle=plan_allow_throttle,
+      native_accel_ns=native_accel_stamp, native_stop_ns=plan_should_stop_stamp,
+      native_throttle_ns=plan_allow_throttle_stamp, stationary_proof=bool(stationary_launch_clear),
+      tesla_proof=bool(tesla_launch_clear), launch_horizon=launch_horizon,
+      tracked=lead_observation.tracked, sign=sign, dashboard_sign=dashboard_sign,
+      forcing=forcing, pedal=pedal, stop_observed_s=stop_stamp)
+
     if stationary_launch_clear:
       # Continue a proven stationary launch after its stop commitment clears.
       # This bounded geometry cannot acquire a stop or qualify curve/lead data.
@@ -628,8 +660,12 @@ class SceneProjector:
       dashboard_stop_sign=dashboard_sign,
       pedal_override=pedal,
       model_tick_mono_s=model_stamp / 1e9 if model_stamp is not None else None,
-      model_should_stop=current_stop,
+      # A fresh model stop bit remains a veto after release even when the
+      # strictly monotonic geometry is temporarily unavailable during creep.
+      model_should_stop=(_boolean(_field(_field(model, 'action'), 'shouldStop'))
+                         if model_transport_current and self.stop_detector.released_at_standstill else current_stop),
       stationary_launch_clear=stationary_launch_clear,
+      native_departure_clear=bool(tesla_launch_clear),
       longitudinal_stop_active=bool(_field(control, 'longActive') is True and _field(selfdrive, 'enabled') is True and
         _field(controls, 'longControlState') == structs.CarControl.Actuators.LongControlState.stopping),
       standstill_path_extent_m=(_standstill_path_extent(model) if model_transport_current and car_valid and
@@ -737,17 +773,36 @@ class SceneProjector:
       # and receipt age cannot be renewed by repeated SubMaster polling; the
       # separate curve detector independently requires fresh controls/model.
       observed = min(float(sm.logMonoTime['carState']) / 1e9, float(sm.recv_time['carState']))
+    open_road_lateral = None
+    if lead is not None and lead.present and lead.distance_m is not None and model is not None:
+      path = _path_at_distance(model, lead.distance_m)
+      y_rel = _number(_field(_field(radar, 'leadOne'), 'yRel'), low=-50., high=50.)
+      if path is not None and y_rel is not None:
+        open_road_lateral = y_rel + path[1]
     scene = SceneEvidence(
+      tesla_open_road=(_field(cp, 'carFingerprint') in TESLAS and _field(cp, 'openpilotLongitudinalControl') is True),
+      open_road_observed_s=minimum_stamp(model_stamp, car_stamp, radar_stamp),
+      open_road_model_s=model_stamp / 1e9 if model_stamp is not None else None,
+      open_road_model_accel=(_number(_field(_field(model, 'action'), 'desiredAcceleration'), low=-10., high=10.)
+                            if model_transport_current else None),
+      open_road_model_stop=(_boolean(_field(_field(model, 'action'), 'shouldStop')) if model_transport_current else None),
+      open_road_headway_s=(selected_t_follow_s if headway_fresh and selected_t_follow_observed_mono_ns == sm.logMonoTime.get('modelV2') else None),
+      open_road_lateral_m=open_road_lateral,
       observed_mono_s=observed,
       speed_mps=speed,
       set_speed_mps=cruise,
       lead=qualified_lead,
       following_lead=lead_observation.following,
+      speed_lead_present=self.speed_lead_selector.step(
+        _field(radar, 'leadOne'),
+        observed_ns=min(model_stamp, car_stamp, radar_stamp) if all(x is not None for x in (model_stamp, car_stamp, radar_stamp)) else None,
+        now_ns=now_mono_ns, fresh=model_transport_current and car_valid and radar is not None),
       left_blinker=_boolean(_field(car, 'leftBlinker')) if car_valid else None,
       right_blinker=_boolean(_field(car, 'rightBlinker')) if car_valid else None,
       lane_available=lane_available,
       standstill=_boolean(_field(car, 'standstill')) if car_valid else None,
       curve_detected=filtered_curve,
+      curve_raw=(raw_curve or raw_road) if curve_usable and model_transport_current else None,
       slow_lead_detected=slower_observation.detected,
       stop_light_detected=stop_observation.light_detected,
       standstill_stop_hold=stop_observation.standstill_hold,
@@ -755,7 +810,6 @@ class SceneProjector:
       stop_sign_confirmed=sign,
       committed_stop=self.stop_detector.committed if stop_observation.light_detected is not None else None,
       forcing_stop=forcing,
-      slc_experimental=slc_experimental,
       low_speed_stop_scene=chill_observation.low_speed_stop_scene,
       launch_candidate=chill_observation.launch_candidate,
       launch_forced_exit=True if chill_observation.forced_exit else False if chill_observation.launch_candidate is not None else None,

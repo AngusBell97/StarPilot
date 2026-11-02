@@ -21,7 +21,6 @@ class AppearanceSession(Protocol):
 
 SLC_VISUAL_LABELS = {
   "ShowSpeedLimits": "show speed limits",
-  "SLCConfirmation": "automatic adoption",
 }
 
 

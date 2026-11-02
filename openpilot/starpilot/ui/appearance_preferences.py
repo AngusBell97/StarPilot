@@ -192,7 +192,8 @@ def onroad_appearance(params: Any) -> OnroadAppearance:
     use_vienna_sign=values["UseVienna"] is True,
     show_stock_confidence_ball=values["StockConfidenceBallWidget"] is True,
     show_lead_indicator=values["HideLeadMarker"] is False,
-    lead_info_mode=saved_lead_info.mode if values["HideLeadMarker"] is False and saved_lead_info.mode is not None else LeadInfoMode.OFF,
+    # Lead Info is its own display choice; it no longer needs the lead indicator to be shown.
+    lead_info_mode=saved_lead_info.mode if saved_lead_info.mode is not None else LeadInfoMode.OFF,
     lead_info_metric=metric,
     camera_view=camera_view if camera_view is not None else CameraViewChoice.STANDARD,
     driver_camera_on_reverse=values["DriverCamera"] is True,

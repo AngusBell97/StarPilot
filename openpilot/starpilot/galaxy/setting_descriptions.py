@@ -19,14 +19,15 @@ DESCRIPTIONS = {
   'lane_change:auto': 'Starts a lane change after the signal delay without a steering nudge, when the adjacent lane and blind spot are clear.',
   'lane_change:delay': 'Sets the waiting time after signaling before an automatic lane change can begin.',
   'lane_change:width': 'Sets the minimum detected width of the adjacent lane for an automatic lane change.',
-  'lane_change:close_gap': 'Temporarily reduces following time during a lane change when the lane and lead gap are clear.',
-  'lane_change:close_gap_seconds': 'Sets following time while Close lane-change gap is active. Higher values leave more space.',
+  'lane_change:close_gap': 'Smoothly eases mild following deceleration after signaling when the projected gap permits, then allows normal acceleration as lane movement starts. Existing acceleration is preserved; close or braking leads, stops and Experimental model braking retain priority.',
+  'lane_change:close_gap_fast_pace': 'Temporarily uses Lane Change Speed 10 when starting an eligible close approach, based on gap and closing speed. Your saved speed and steering limits stay unchanged.',
+  'lane_change:close_gap_seconds': 'Sets the minimum following-time reserve for preparation and early-response checks. Closing speed and lead braking may require more space; both detected leads remain protected.',
   'lane_change:reset': 'Restores the default lane-change assistance, signal timing, pace and gap settings.',
-  'LaneCentering': 'Uses detected lane lines to help keep the vehicle centered in its lane.',
-  'LaneCenteringPauseOnSignal': 'Pauses lane-centering correction while a turn signal is on.',
-  'LaneCenterOffset': 'Moves the lane-centering target left or right of the detected lane center.',
+  'LaneCentering': 'Add lane-centering correction to the driving model’s steering using detected lane lines and road edges.',
+  'LaneCenteringPauseOnSignal': 'Gradually remove lane-centering correction while a turn signal is on, allowing the driving model to guide the path. Lane centering can resume when the signal is off.',
+  'LaneCenterOffset': 'Shift the target position left or right when centring between two boundaries. Negative values move it left; positive values move it right. This does not affect clearance correction away from a single boundary.',
   'LaneCenteringE2EAuthority': 'Lets a confident driving-model path reduce lane-centering correction when the model path differs from the lane center.',
-  'LaneCenteringStrength': 'Sets the strength of lane-centering correction. 100% is normal; higher values strengthen it.',
+  'LaneCenteringStrength': 'Set how much correction lane centering requests. Higher values request more correction; lower values request less. Strength controls the amount requested, while Correction response time controls how quickly it changes. Increasing strength does not raise the maximum correction limit.',
   'PauseLateralSpeed': 'Pauses steering assistance below this speed. Zero disables the speed-based pause.',
   'PauseLateralOnSignal': 'Limits the low-speed steering pause to times when a turn signal is on.',
   'LateralResumeDelay': 'Waits before resuming steering after signaling ends, if speed fell below half the steering-pause threshold.',
@@ -55,6 +56,7 @@ DESCRIPTIONS = {
   'profile:global_braking': 'Chooses the braking response used by personalities set to Selected Profile.',
   'reset_profiles': 'Restores the default acceleration, braking and following curves and presets.',
   'CurveSpeedController': 'Adjusts cruise speed for curves ahead using available learned cornering preferences.',
+  'CurveSteeringLoadSlowdown': 'With CSC on, slows above 95% on the estimated steering-load bar, up to 1.2 m/s2. From zero, full braking takes 0.5s; release from full braking to zero takes 2s. Actual braking follows demand, with a smooth return to normal control. Keeps your selected cruise speed. Stronger lead, map and vision braking still wins. Also works with a lead; this is not a guarantee of steering capacity.',
   'CurveSpeedControllerNoLead': 'Pauses curve-speed adjustments while following a lead vehicle.',
   'ShowCSCStatus': 'Shows when Curve Speed Controller is adjusting speed on the driving screen.',
   'curve_reset': 'Deletes saved cornering learning so Curve Speed Controller can learn your preferences again.',
@@ -63,7 +65,6 @@ DESCRIPTIONS = {
   'SLCConfirmation': 'Auto adopts new limits immediately. With Automatic adoption off, + accepts and − declines within 10 seconds.',
   'SLCPriority1': 'Chooses the first source checked for a fresh speed limit.',
   'SLCPriority2': 'Chooses the source used when the primary source has no fresh speed limit.',
-  'SLCFallback': 'Keeps the previously accepted speed limit when sources are unavailable, until another limit is accepted.',
   'slc_adopt': 'Keeps the current speed-limit offset schedule fixed when display units change.',
   'slc_reset': 'Resets saved speed-limit offsets while retaining valid configured speed ranges.',
   'reset_driver_monitoring': 'Clear saved wheel-side detection. Automatic detection restarts on the next drive.',
@@ -106,6 +107,8 @@ DESCRIPTIONS = {
   'ScreenTimeout': 'Sets how long the parked screen remains on after interaction.',
   'ScreenTimeoutOnroad': 'Sets the wait after interaction before returning to the driving view or turning off the screen if configured.',
   'KeepScreenOnGpuLoading': 'Keeps the driving screen visible while an eGPU model loads. Manual Screen Off still works.',
+  'BurnInPixelShift': 'Burn-in protection. Moves the whole comma screen picture by one pixel every 45 seconds, never more than 2 pixels from centre, so fixed text, icons and the border do not sit on the same pixels all drive.',
+  'BurnInStaticDim': 'Burn-in protection. HUD items and the border that have not changed for 10 seconds fade to 75% opacity over 20 seconds. Any change, such as a new set speed or engagement state, brings them straight back to full brightness. Alerts are never dimmed.',
   'TurnOffCommaScreen': 'Pauses comma UI rendering to reduce CPU and GPU use. Tap once to wake the screen.',
   'SoundPack': 'Chooses the sounds used for driving alerts and chimes.',
   'WarningImmediateVolume': 'Sets the starting volume of immediate warnings. These warnings still ramp to full volume.',
@@ -163,7 +166,7 @@ CONDITIONS = {
   'speed_mps': 'Sets the speed threshold for automatic mode switching without a tracked lead vehicle.',
   'speed_with_lead_mps': 'Sets the speed threshold for automatic mode switching while tracking a lead vehicle.',
   'signal_speed_mps': 'Requests Experimental below this speed while signaling, subject to the configured adjacent-lane check.',
-  'open_road': 'Requests Experimental on an open road without a tracked lead vehicle.',
+  'open_road': 'Requests Experimental on an open road without a tracked lead. On Tesla Model 3/Y, entry needs 2 seconds at set speed with a fresh model that is not braking or stopping. Returns to Chill after more than 1 mph below set speed for over 2 seconds, or after stable following for 0.5 seconds. Other CEM conditions still apply.',
   'curves': 'Requests Experimental for curves without a tracked lead vehicle.',
   'curves_with_lead': 'Requests Experimental for curves while tracking a lead vehicle.',
   'lead': 'Uses a tracked lead vehicle as a condition for automatic mode switching.',
@@ -182,6 +185,8 @@ CONDITIONS = {
 
 def purpose(row):
   key = row.key
+  if key == "SpeedLimitController" and row.reason.startswith("On uses an independent comma set speed"):
+    return row.reason
   if key in DESCRIPTIONS:
     return DESCRIPTIONS[key]
   if key.startswith(('wheel:', 'conditional:button:')):
@@ -246,6 +251,8 @@ def purpose(row):
 
 def description(row):
   """Keep actual error/prerequisite information after the setting's purpose."""
+  if row.key == 'LaneCenteringE2EAuthority' and row.label == 'Maximum model path preference':
+    return row.reason
   base = purpose(row)
   if base is None:
     return row.reason

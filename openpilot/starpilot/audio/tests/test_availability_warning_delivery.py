@@ -8,7 +8,7 @@ from openpilot.common.prefix import OpenpilotPrefix
 from openpilot.selfdrive.selfdrived.alertmanager import AlertManager
 from openpilot.selfdrive.selfdrived.events import Alert, ET, Priority, VisualAlert
 from openpilot.selfdrive.selfdrived.selfdrived import SelfdriveD
-from openpilot.selfdrive.ui.soundd import Soundd, AudibleAlert
+from openpilot.selfdrive.ui.soundd import SlcWarning, Soundd, AudibleAlert
 from openpilot.starpilot.audio.axis_alerts import AxisAlerts
 from openpilot.starpilot.audio.availability_warning import AvailabilityWarningDelivery
 
@@ -45,6 +45,9 @@ class TestAvailabilityWarningDelivery(unittest.TestCase):
   def sound(self):
     sound = Soundd.__new__(Soundd)
     sound.axis_alerts = AxisAlerts()
+    sound.slc_warning = SlcWarning()
+    sound.slc_warning_playing = False
+    sound.slc_warning_volume = 0.
     sound.current_alert = sound.current_sound = AudibleAlert.none
     sound.current_sound_frame = 0
     sound.pending_stop = False

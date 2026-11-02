@@ -167,7 +167,7 @@ class TestEuvLongitudinal(unittest.TestCase):
         with self.assertRaises(Registered):
           Controls()
       self.assertEqual(captured['services'].count('deviceState'), 1)
-      self.assertEqual(captured['services'].count('radarState'), int(alpha))
+      self.assertEqual(captured['services'].count('radarState'), 1)
       for service in ('deviceState',) + (('radarState',) if alpha else ()):
         for ignored in ('ignore_alive', 'ignore_valid', 'ignore_avg_freq'):
           self.assertIn(service, captured['options'][ignored])

@@ -155,8 +155,8 @@ class TestOnroadLayoutDisplay(unittest.TestCase):
     snapshot = self.owner.snapshot()
     self.assertEqual(snapshot['document'], default_document())
     rows = {row['key']: row for row in snapshot['display']['rows']}
-    self.assertEqual(rows['LeadInfo']['requires'], 'HideLeadMarker')
-    self.assertTrue(rows['LeadInfo']['available'], 'editable once the draft shows the Lead indicator')
+    self.assertEqual(rows['LeadInfo']['requires'], '')
+    self.assertTrue(rows['LeadInfo']['available'], 'editable without the Lead indicator')
     self.assertEqual({rows[key]['group'] for key in ('ShowBrakeStatus', 'StockConfidenceBallWidget')}, {'widget'})
     self.assertFalse({'HideSpeed', 'RainbowPath', 'StoppedTimer', 'EnableTorqueBarWidget'} & rows.keys())
     self.assertEqual(snapshot['display']['values']['HideLeadMarker'], 'Off')

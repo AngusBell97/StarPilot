@@ -34,13 +34,14 @@ class StatusPublisher:
     self.sequence = 0
 
   def attach(self, event, host, result, planner, *, now_ns: int, model_ns: int, persistence_status: str,
-             road_curvature: float | None = None):
+             road_curvature: float | None = None, applied: bool | None = None):
     curve_only = event is None
     if event is None:
       event = messaging.new_message('slcState')
       event.valid = True
       event.logMonoTime = now_ns
     runtime = host.runtime
+    applied = bool(planner.last_curve_ceiling_applied) if applied is None else applied
     self.sequence += 1
     # Zero storage values have meaning only behind their explicit presence bit.
     event.slcState.curve = {
@@ -50,8 +51,8 @@ class StatusPublisher:
       'documentValid': bool(runtime.document_valid),
       'hasCandidate': result.candidate_mps is not None, 'candidateMps': float(result.candidate_mps or 0.0),
       'hasCeiling': result.ceiling_mps is not None, 'ceilingMps': float(result.ceiling_mps or 0.0),
-      'applied': bool(planner.last_curve_ceiling_applied),
-      'controlling': bool(runtime.was_controlling and planner.last_curve_ceiling_applied),
+      'applied': applied,
+      'controlling': bool(runtime.was_controlling and applied),
       'training': bool(result.training), 'calibrationProgress': float(result.progress),
       'comfortAccel': float(runtime.curve.average_comfort), 'bindingDistance': float(result.binding_distance_m),
       'reason': result.reason if result.ceiling_mps is not None else result.learning_reason,

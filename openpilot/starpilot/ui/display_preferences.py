@@ -11,9 +11,17 @@ BRIGHTNESS = ("ScreenBrightness", "ScreenBrightnessOnroad")
 TIMEOUTS = ("ScreenTimeout", "ScreenTimeoutOnroad")
 GPU_LOADING = "KeepScreenOnGpuLoading"
 SCREEN_OFF = "TurnOffCommaScreen"
+PIXEL_SHIFT = "BurnInPixelShift"
+STATIC_DIM = "BurnInStaticDim"
+BURN_IN = (PIXEL_SHIFT, STATIC_DIM)
 CUSTOM_KEYS = (*BRIGHTNESS, *TIMEOUTS)
-KEYS = (MASTER, *CUSTOM_KEYS, SCREEN_OFF, GPU_LOADING)
+KEYS = (MASTER, *CUSTOM_KEYS, SCREEN_OFF, GPU_LOADING, *BURN_IN)
+# On/off choices, and those that work whether or not custom display settings are on.
+BOOLEAN_KEYS = (MASTER, SCREEN_OFF, GPU_LOADING, *BURN_IN)
+STANDALONE_KEYS = (SCREEN_OFF, GPU_LOADING, *BURN_IN)
 SCREEN_OFF_DESCRIPTION = "Pauses Comma UI rendering to save CPU/GPU. Tap once to wake."
+PIXEL_SHIFT_DESCRIPTION = "Burn-in protection: moves the whole picture a pixel at a time, at most 2 pixels, every 45 seconds."
+STATIC_DIM_DESCRIPTION = "Burn-in protection: HUD items and the border that stay the same for 10 seconds fade slightly over 20 seconds until they change."
 MAX_RAW_BYTES = 16
 AUTO = 101
 
@@ -31,7 +39,7 @@ class SavedChoice:
 
 
 def default_value(key: str, *, large: bool) -> int:
-  if key in (MASTER, SCREEN_OFF, GPU_LOADING):
+  if key in BOOLEAN_KEYS:
     return 0
   if key in BRIGHTNESS:
     return AUTO
@@ -64,7 +72,7 @@ def read_choice(params: Any, key: str, *, large: bool) -> SavedChoice:
   if not raw or not raw.isascii() or not raw.isdigit() or (len(raw) > 1 and raw[0] == ord("0")):
     return SavedChoice(raw, None)
   value = int(raw)
-  if key in (MASTER, SCREEN_OFF, GPU_LOADING):
+  if key in BOOLEAN_KEYS:
     return SavedChoice(raw, value if value in (0, 1) else None)
   if key in BRIGHTNESS:
     return SavedChoice(raw, value if 5 <= value <= 100 or value in (0, AUTO) else None,
@@ -81,6 +89,8 @@ class DisplayPreferences:
   driving_brightness: int = AUTO
   parked_timeout: int = 30
   driving_timeout: int = 10
+  pixel_shift: bool = False
+  static_dim: bool = False
 
 
 def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
@@ -89,9 +99,15 @@ def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
   master = read_choice(params, MASTER, large=large)
   screen_off = read_choice(params, SCREEN_OFF, large=large)
   turn_off_screen = screen_off.valid and screen_off.value == 1
+  burn_in = {}
+  for key in BURN_IN:
+    choice = read_choice(params, key, large=large)
+    burn_in[key] = choice.valid and choice.value == 1
+  pixel_shift, static_dim = burn_in[PIXEL_SHIFT], burn_in[STATIC_DIM]
   if not master.valid or master.value != 1:
     return DisplayPreferences(keep_screen_on_gpu_loading=keep_gpu, turn_off_screen=turn_off_screen,
-                              driving_timeout=default_value("ScreenTimeoutOnroad", large=large))
+                              driving_timeout=default_value("ScreenTimeoutOnroad", large=large),
+                              pixel_shift=pixel_shift, static_dim=static_dim)
   values = {key: read_choice(params, key, large=large) for key in CUSTOM_KEYS}
   def effective(key: str) -> int:
     saved = values[key]
@@ -100,4 +116,5 @@ def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
                             parked_brightness=effective("ScreenBrightness"),
                             driving_brightness=effective("ScreenBrightnessOnroad"),
                             parked_timeout=effective("ScreenTimeout"),
-                            driving_timeout=effective("ScreenTimeoutOnroad"))
+                            driving_timeout=effective("ScreenTimeoutOnroad"),
+                            pixel_shift=pixel_shift, static_dim=static_dim)

@@ -59,16 +59,13 @@ class AppearanceOwner:
         continue
       if key == "LeadInfo":
         saved = read_lead_info(self.params)
-        marker = read_visibility(self.params, "HideLeadMarker")
         valid = saved.mode is not None and saved.readable
-        marker_on = marker.readable and marker.value is False
+        # Independent of the lead indicator: the text draws from radar whether or not the marker is shown.
         rows.append(FeatureRow(key, LABELS[key], LEAD_INFO_LABELS[saved.mode] if valid else "Invalid saved choice",
                                source=saved.flag.raw, related_source=saved.mode_raw,
-                               choices=LEAD_INFO_LABELS if valid else (), available=parked and saved.readable and marker_on,
-                               reason="Turn on Lead Indicator first" if not marker_on else
-                                      "Saved choice cannot be read" if not saved.readable else
+                               choices=LEAD_INFO_LABELS if valid else (), available=parked and saved.readable,
+                               reason="Saved choice cannot be read" if not saved.readable else
                                       "Choose Off to repair" if not valid else "",
-                               dependencies=(("HideLeadMarker", marker.raw),),
                                repair_value="Off" if saved.readable and not valid else ""))
         continue
       saved = read_visibility(self.params, key)
@@ -136,11 +133,8 @@ class AppearanceOwner:
     if request.value not in LEAD_INFO_LABELS:
       return False
     saved = read_lead_info(self.params)
-    marker = read_visibility(self.params, "HideLeadMarker")
     if (not saved.readable or saved.flag.raw != request.expected or saved.mode_raw != request.related_source or
-        not marker.readable or marker.value is not False or
-        request.dependencies != (("HideLeadMarker", marker.raw),) or
-        saved.mode is None and request.value != "Off"):
+        request.dependencies or saved.mode is None and request.value != "Off"):
       return False
 
     desired_mode = str(LEAD_INFO_LABELS.index(request.value)).encode()
@@ -149,10 +143,8 @@ class AppearanceOwner:
 
     def authorized(expected_flag: bytes | None, expected_mode: bytes | None) -> bool:
       current = read_lead_info(self.params)
-      current_marker = read_visibility(self.params, "HideLeadMarker")
       return (self.parked() and current.readable and current.flag.raw == expected_flag and
-              current.mode_raw == expected_mode and current_marker.readable and current_marker.value is False and
-              current_marker.raw == marker.raw)
+              current.mode_raw == expected_mode)
 
     def write(key: str, raw: bytes, expected: bytes | None, expected_flag: bytes | None,
               expected_mode: bytes | None) -> bool:

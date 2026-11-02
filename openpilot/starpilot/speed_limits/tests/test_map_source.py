@@ -249,7 +249,7 @@ class MapSourceTests(unittest.TestCase):
         self.assertEqual(tracker.step(valid, received=True, now_boot_ns=now+6).kind,
                          'matched_limit_unqualified')
 
-  def test_unqualified_map_cannot_replace_accepted_fallback(self):
+  def test_unqualified_map_cannot_replace_accepted_history(self):
     result = ms.MapTracker().step(v2_frame(), received=True, now_boot_ns=456_100_000_000)
     observations = {source: acc.Observation(acc.ObservationKind.ABSENT) for source in sel.Source}
     observations[sel.Source.MAP] = result.observation
@@ -260,12 +260,27 @@ class MapSourceTests(unittest.TestCase):
     prior = acc.AcceptedLimit(prior_candidate, 'drive', 0)
     authority = acc.Authority(acc.Mode.COMBINED, acc.LongitudinalOwner.SYSTEM, True, True, False, False)
     decision = acc.step(acc.new_session('drive', prior), chosen.observation, authority,
-                        acc.Policy(fallback_previous=True), now_ns=456_100_000_000)
-    self.assertEqual(decision.control_target_mps, prior_candidate.speed_mps)
-    self.assertEqual(decision.basis, 'previous_accepted')
+                        acc.Policy(), now_ns=456_100_000_000)
+    self.assertIsNone(decision.control_target_mps)
+    self.assertEqual(decision.basis, 'unknown')
     self.assertEqual(decision.state.accepted, prior)
     self.assertIsNone(decision.history_write)
 
 
 if __name__ == '__main__':
   unittest.main()
+
+
+class LoadedTileDiagnosticTests(unittest.TestCase):
+  def test_unmatched_loaded_tile_never_supplies_limit_and_can_recover(self):
+    frame=v2_frame();now=456_100_000_000
+    for status,kind in [('noMatch','loss'),('unknown','unknown')]:
+      tracker=ms.MapTracker()
+      loss=replace(frame,status=status,event_valid=False,speed_mps=0.,way_id=0,tile_loaded=True)
+      result=tracker.step(loss,received=True,now_boot_ns=now)
+      self.assertEqual(result.kind,kind)
+      self.assertEqual(result.observation.kind,acc.ObservationKind.UNKNOWN)
+      self.assertIsNone(result.speed_mps)
+      if status=='noMatch':self.assertTrue(tracker.diagnostic(now_boot_ns=now).frame.tile_loaded)
+      recovered=replace(frame,event_mono_ns=frame.event_mono_ns+1,computed_mono_ns=frame.computed_mono_ns+1)
+      self.assertEqual(tracker.step(recovered,received=True,now_boot_ns=now+1).kind,'matched_limit_unqualified')

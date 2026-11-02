@@ -40,6 +40,36 @@ SIGNAL_LANE_HELP = {
                            "Experimental only when there is no adjacent lane.",
   "signal_lane_width_m": "Minimum width of the space beside your car that counts as a lane, rather than a turn.",
 }
+OPTION_HELP = {
+  "cem": {
+    "speed_mps": "Experimental below this speed when no primary lead is detected. Separate from the with-lead threshold; 0 disables this condition. Includes stops and departures. Returns to Chill after clearing a small speed band.",
+    "speed_with_lead_mps": "Experimental below this speed with a confidently detected primary lead, including slow queues. Separate from the no-lead threshold; 0 disables this condition.",
+    "signal_speed_mps": "Experimental below this speed while signalling. Lane detection can restrict this to turns; 0 disables the signal condition.",
+    "open_road": "Experimental on a qualified clear road near set speed. A nearby lead or lower model acceleration ends this condition; other enabled conditions can still keep Experimental active.",
+    "curves": "Request Experimental for detected bends. Requires sustained clear-road evidence before releasing. Include curves with a lead using the option below.",
+    "curves_with_lead": "Allow the Curves condition when following a lead too. Requires Curves to be on; it does not enable other lead triggers.",
+    "lead": "Enable the slower and stopped lead conditions below. Does not disable the separate speed-with-lead threshold or native braking.",
+    "slower_lead": "Request Experimental when a qualified slower lead requires it. Requires Lead vehicle to be on.",
+    "stopped_lead": "Request Experimental for a nearby stopped lead. Requires Lead vehicle to be on.",
+    "stop_lights": "Enable automatic model-based stop detection. Model stop time must be above 0. An already committed stop stays protected until a qualified release.",
+    "model_stop_s": "Look-ahead time for model-based stopping. Larger values detect stops earlier; 0 disables this condition. Requires Stop lights to be on.",
+  },
+  "ccm": {
+    "speed_mps": "Minimum speed for Chill with no lead, while below set speed by the configured margin. 0 means no minimum speed; scene and stop protections still apply.",
+    "speed_with_lead_mps": "Minimum speed for Chill with a stable, non-braking lead. Requires Lead vehicle. 0 means no minimum speed; protective conditions still win.",
+    "set_speed_margin_mps": "Required gap below set speed for the no-lead Chill condition. 0 allows it up to set speed. Does not change the stable-lead condition.",
+    "lead": "Allow Chill with a stable lead above the with-lead threshold. Slower or braking leads, signals and stops request Experimental immediately. Bends follow Allow Chill in bends.",
+    "allow_chill_in_bends": "Let an otherwise eligible Chill request continue through bends. CSC still limits corner speed when enabled. Does not force acceleration or override lead, stop, signal or missing-data checks. Off holds Experimental until the bend is clear.",
+    "launch_assist": "Allow a qualified Chill departure from very low speed when the model and lead show it is clear to go. Off keeps ordinary Experimental stop/departure behavior. This option applies only to Conditional Chill.",
+  },
+}
+OPTION_LABELS = {
+  "cem": {"speed_mps": "Experimental below: no lead", "speed_with_lead_mps": "Experimental below: with lead"},
+  "ccm": {"allow_chill_in_bends": "Allow Chill in bends", "speed_mps": "Chill above: no lead", "speed_with_lead_mps": "Chill above: with lead"},
+}
+SIGNAL_LANE_HELP["signal_lane_detection"] = "When on, restrict the signal condition to turns without an adjacent lane. When off, signalling below the configured speed requests Experimental regardless of adjacent lanes."
+SIGNAL_LANE_HELP["signal_lane_width_m"] = "Minimum adjacent lane width for filtering the signal condition. 0 disables this width filter; the signal speed threshold still applies."
+
 MEDIA_LABELS = ("MODE press", "MODE long press", "MODE very long press",
                 "Star button", "Star button long press", "Star button very long press")
 
@@ -201,20 +231,22 @@ class ConditionalFeature:
         continue
       value = getattr(option, name)
       key = PREFIX + section + ":" + name
+      label = OPTION_LABELS.get(section, {}).get(name, LABELS.get(name, name))
+      help_text = SIGNAL_LANE_HELP.get(name, OPTION_HELP.get(section, {}).get(name, ""))
       if name in BOOLEAN_FIELDS[section]:
-        rows.append(FeatureRow(key, LABELS[name], "On" if value else "Off", document, ("Off", "On"),
+        rows.append(FeatureRow(key, label, "On" if value else "Off", document, ("Off", "On"),
                                default_value="On" if getattr(getattr(decode_preferences(stock_document()), section), name) else "Off",
-                               available=allowed, reason=SIGNAL_LANE_HELP.get(name, "") if allowed else unavailable,
+                               available=allowed, reason=help_text if allowed else unavailable,
                                dependencies=dependencies))
       elif name in NUMBER_FIELDS[section]:
         displayed = display_number(name, value, metric)
         unit = _unit(name, metric)
-        rows.append(FeatureRow(key, LABELS[name], _display(displayed) if valid_units else "Invalid saved units", document,
+        rows.append(FeatureRow(key, label, _display(displayed) if valid_units else "Invalid saved units", document,
                                default_value=_display(display_number(name, getattr(getattr(decode_preferences(stock_document()), section), name), metric)),
                                step=0.1 if name == "model_stop_s" else 1.0 if valid_units else 0.0,
                                minimum=0.0, maximum=max(field_limit(section, name, metric), float(_display(displayed))),
                                unit=unit if valid_units else "",
-                               available=allowed and valid_units, reason=SIGNAL_LANE_HELP.get(name, "") if allowed and valid_units else
+                               available=allowed and valid_units, reason=help_text if allowed and valid_units else
                                "Invalid saved units" if not valid_units else unavailable,
                                dependencies=dependencies, display_unit=unit if valid_units else ""))
     return rows

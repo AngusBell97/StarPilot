@@ -36,6 +36,7 @@ class VehicleStartupPreferences:
   volt_sng: bool = False
   gm_auto_hold: bool = False
   volt_one_pedal: bool = False
+  tesla_cooperative: bool = field(default=False, kw_only=True)
   tesla_screen: bool = False
   tesla_screen_brake: bool = False
   gm_camera_pedal: bool = True
@@ -104,7 +105,10 @@ class VehicleStartupPreferences:
                   read_saved(params, 'AlwaysOnLateral', 8) == (b'1', True) and
                   read_saved(params, 'TeslaAOLScreenTap', 8) == (b'1', True))
     screen_brake = read_saved(params, 'TeslaAOLDisengageOnBrake', 8) == (b'1', True)
-    return cls(vw_stock_long=vw_stock_long,
+    cooperative = bool(enabled and readable and safe in (None, b'0') and
+                       read_saved(params, 'IsReleaseBranch', 8) in ((None, True), (b'0', True)) and
+                       read_saved(params, 'TeslaCooperativeSteering', 8) == (b'1', True))
+    return cls(tesla_cooperative=cooperative, vw_stock_long=vw_stock_long,
                subaru_smoothing=smoothing, subaru_avh_startup=bool(enabled and readable and safe in (None, b"0") and
                     read_saved(params, "IsReleaseBranch", 8) in ((None, True), (b"0", True)) and
                     read_saved(params, "SubaruAvhStartup", 8) == (b"1", True)),
@@ -193,6 +197,8 @@ class VehicleStartupPreferences:
     prepare_stock(cp, self.tesla_preap_stock, self.tesla_preap_radar, self.tesla_preap_pedal)
     from opendbc.car.tesla.screen_button import apply_screen_button
     apply_screen_button(cp, self.tesla_screen, self.tesla_screen_brake)
+    from opendbc.car.tesla.coop_preferences import apply_cooperative
+    apply_cooperative(cp, self.tesla_cooperative)
     self._prepare_honda_radar(cp)
     from opendbc.car.chrysler.brake_hold import apply_brake_hold
     apply_brake_hold(cp, self.jeep_brake_hold)
@@ -238,6 +244,8 @@ class VehicleStartupPreferences:
     prepare_stock(cp, self.tesla_preap_stock, self.tesla_preap_radar, self.tesla_preap_pedal)
     from opendbc.car.tesla.screen_button import apply_screen_button
     apply_screen_button(cp, self.tesla_screen, self.tesla_screen_brake)
+    from opendbc.car.tesla.coop_preferences import apply_cooperative
+    apply_cooperative(cp, self.tesla_cooperative)
     self._prepare_honda_radar(cp)
     from opendbc.car.chrysler.brake_hold import apply_brake_hold
     apply_brake_hold(cp, self.jeep_brake_hold)

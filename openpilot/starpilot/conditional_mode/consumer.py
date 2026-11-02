@@ -90,6 +90,8 @@ class ModeConsumer:
       return self._reject('car_state_barrier', fallback)
     if car_state_ns > now_ns or now_ns - car_state_ns > LIFETIME_NS:
       return self._reject('car_state_age', fallback, now_ns)
+    if choice is ModeChoice.CCM:
+      fallback = ConsumerResult(True, False, 'unavailable')
     value = observation(state, now_ns)
     # Rejections below preserve the last sequence to reject old or altered samples after gaps.
     if value is None:

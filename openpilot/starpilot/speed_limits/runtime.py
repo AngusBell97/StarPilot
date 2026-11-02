@@ -1,5 +1,8 @@
 """One plannerd-owned SLC lifecycle over real, typed replayable observations."""
 
+from openpilot.starpilot.common.slc_warning import AcceptedChangeWarning
+from openpilot.starpilot.longitudinal.slc_coast import accepted_easing
+
 import math
 import uuid
 from dataclasses import dataclass, replace
@@ -13,7 +16,13 @@ from openpilot.starpilot.speed_limits import composition as comp
 from openpilot.starpilot.speed_limits import selection as sel
 from openpilot.starpilot.speed_limits import speed_domain as sd
 from openpilot.starpilot.speed_limits.runtime_settings import Settings
+from openpilot.starpilot.speed_limits.manual_targets import PerLimitTargets
 from openpilot.starpilot.speed_limits.map_observation import MapSource, copy_frame
+from openpilot.starpilot.speed_limits.mapped_timing import MappedTiming, ShortMapZone
+from openpilot.starpilot.speed_limits.preview_continuity import AcceptedPreviewHold
+from openpilot.starpilot.speed_limits.reengagement import Engagement, CurrentLimitZone
+from openpilot.starpilot.speed_limits.preview_rollback import PreviewRollback
+from openpilot.starpilot.speed_limits.transition_comfort import TransitionComfort
 from openpilot.starpilot.speed_limits.vision.observation import clock_pair_ns, vision_observation
 
 
@@ -119,6 +128,26 @@ class Runtime:
     self.settings = settings
     self.is_metric = is_metric
     self.map_source = MapSource()
+    self.mapped = MappedTiming()
+    self.warning_event = None
+    self.short_zones = ShortMapZone()
+    self.preview_hold = AcceptedPreviewHold()
+    self.raw_map_observation = None
+    self.engagement = Engagement()
+    self.manual_targets = PerLimitTargets()
+    self.memory_recall_pending = False
+    self.memory_was_engaged = False
+    self.current_zone = CurrentLimitZone()
+    self.rollback = PreviewRollback()
+    self.rollback_target = None
+    self.comfort = TransitionComfort()
+    self.comfort_request = None
+    self.comfort_limits = None
+    self.easing_request = None
+    self.command_mapped_approach = False
+    self.current_observations = {}
+    self.command_kind = 'adoptAcceptedLimit'
+    self.reengage_target = None
     self.vision_enabled = vision_enabled
     # Exact saved Vision opt-in may grant control; source identity and current
     # driver confirmation remain independent requirements for each episode.
@@ -130,6 +159,7 @@ class Runtime:
     self._last_vision_eof_boot = 0
     self._last_vision_episode = 0
     self.session_id = session_id or uuid.uuid4().hex
+    self.accepted_warning = AcceptedChangeWarning(self.session_id)
     self.state = comp.new_session(self.session_id)
     self.ledger = arb.new_ledger(self.session_id)
     self.last_action_result: arb.Result | None = None
@@ -138,6 +168,7 @@ class Runtime:
     self.last_cruise_producer: str | None = None
     self.last_command_id = 0
     self.command_status = ''
+    self.command_interrupted = False
     self._command_ui_sequence = 0
     self._ui_receipt = None
     self.command_issued_ns = 0
@@ -154,12 +185,33 @@ class Runtime:
 
   def reset(self) -> None:
     self.map_source.reset()
+    self.mapped = MappedTiming()
+    self.warning_event = None
+    self.short_zones = ShortMapZone()
+    self.preview_hold = AcceptedPreviewHold()
+    self.raw_map_observation = None
+    self.engagement = Engagement()
+    self.manual_targets = PerLimitTargets()
+    self.memory_recall_pending = False
+    self.memory_was_engaged = False
+    self.current_zone = CurrentLimitZone()
+    self.rollback = PreviewRollback()
+    self.rollback_target = None
+    self.comfort = TransitionComfort()
+    self.comfort_request = None
+    self.comfort_limits = None
+    self.easing_request = None
+    self.command_mapped_approach = False
+    self.current_observations = {}
+    self.command_kind = 'adoptAcceptedLimit'
+    self.reengage_target = None
     self.vision_diagnostic = acc.Observation(acc.ObservationKind.UNKNOWN)
     self._last_vision_producer = ''
     self._last_vision_frame = 0
     self._last_vision_eof_boot = 0
     self._last_vision_episode = 0
     self.session_id = uuid.uuid4().hex
+    self.accepted_warning = AcceptedChangeWarning(self.session_id)
     self.state = comp.new_session(self.session_id)
     self.ledger = arb.new_ledger(self.session_id)
     self.last_action_result = None
@@ -169,6 +221,7 @@ class Runtime:
     # Keep the SET deadline: the previous session's command may still be in flight.
     self.last_command_id = 0
     self.command_status = ''
+    self.command_interrupted = False
     self._command_ui_sequence = 0
     self._ui_receipt = None
     self.command_issued_ns = 0
@@ -187,6 +240,8 @@ class Runtime:
         raise ValueError('SLC display units must be Boolean')
       self.is_metric = is_metric
     changed_offsets = offsets != self.settings.offsets
+    if changed_offsets:
+      self.rollback.cancel()
     self.settings = replace(self.settings, offsets=offsets)
     # Renew actions for new offsets/units without forgetting driver choices.
     acceptance = replace(self.state.acceptance, observation=acc.Observation(acc.ObservationKind.UNKNOWN),
@@ -197,6 +252,7 @@ class Runtime:
     if changed_offsets:
       self.command_status = ''
       self.commanded_acceptance = None
+      self.command_interrupted = False
 
   def _event_current(self, event: CruiseEvent, sm, now_ns: int) -> bool:
     return (bool(event.producer_session) and 0 < event.observed_ns <= now_ns and
@@ -277,9 +333,18 @@ class Runtime:
             abs(event.selected_mps - self.command_target_mps) > 0.5):
           return
         self.command_status = 'applied'
+        if self.command_kind == 'reengageZone':
+          self.engagement.applied()
+          self.state = replace(self.state, override=replace(self.state.override, persistent_selected_mps=event.selected_mps))
+          if self.commanded_acceptance is not None and not self.command_mapped_approach:
+            self.manual_targets.remember(event.selected_mps, self.commanded_acceptance.candidate.speed_mps)
+        restored_override = self.rollback.acknowledged(command_id=self.last_command_id,
+          selected=event.selected_mps, kind=self.command_kind)
+        if restored_override is not None:
+          self.state = replace(self.state, override=replace(self.state.override, persistent_selected_mps=restored_override))
         self.set_speed_after_ns = event.observed_ns
         if self.commanded_acceptance == self.state.acceptance.accepted:
-          self.state = replace(self.state, override=replace(self.state.override, applied_selected_mps=event.selected_mps))
+          self.state = replace(self.state, override=replace(self.state.override, applied_selected_mps=(None if restored_override is not None else event.selected_mps)))
       else:
         self.command_status = 'rejected'
         self.set_speed_after_ns = event.observed_ns
@@ -291,6 +356,7 @@ class Runtime:
   def _observations(self, sm, CP, now_ns: int, now_boot_ns: int | None = None) -> dict[sel.Source, acc.Observation]:
     unknown = acc.Observation(acc.ObservationKind.UNKNOWN)
     values = dict.fromkeys(sel.Source, unknown)
+    current_map = unknown
     if (_fresh(sm, "carState", now_ns) and not sm["carState"].canTimeout and
         _fresh(sm, 'slcDashboardObservation', now_ns)):
       evidence = sm['slcDashboardObservation']
@@ -342,9 +408,35 @@ class Runtime:
         values[sel.Source.MAP] = self.map_source.step(frame, received=received,
           now_boot_ns=pair[1], transport_alive=bool(sm.alive.get('mapdOut', False)),
           drive_session=self.session_id, car_fingerprint=str(CP.carFingerprint))
+        cs = sm['carState']
+        self.raw_map_observation = values[sel.Source.MAP]
+        current_map, timing_frame = self.short_zones.project(values[sel.Source.MAP],
+          self.map_source.tracker.diagnostic(now_boot_ns=pair[1]).frame,
+          now_ns=now_ns, speed=float(cs.vEgo),
+          enabled=bool(self.settings.enabled and _fresh(sm, 'carState', now_ns) and cs.canValid and not cs.canTimeout),
+          allow_start=not self.mapped.approach.active)
+        self.mapped.profile = getattr(self, 'braking_profile', self.mapped.profile)
+        timing_enabled = bool(self.settings.enabled and _fresh(sm, 'carState', now_ns) and cs.canValid and not cs.canTimeout)
+        held = self.preview_hold.keep(timing_frame, accepted=self.state.acceptance.accepted,
+          now_boot_ns=pair[1], speed=float(cs.vEgo), enabled=timing_enabled)
+        if held is not None:
+          values[sel.Source.MAP] = held
+          self.mapped.current = False  # Retention is not fresh current-road authority or a new warning.
+        else:
+          values[sel.Source.MAP] = self.mapped.project(current_map, timing_frame,
+            now_ns=now_ns, now_boot_ns=pair[1], speed=float(cs.vEgo), acceleration=float(cs.aEgo),
+            cluster_delta=max(0., float(cs.vEgoCluster)-float(cs.vEgo)), settings=self.settings,
+            enabled=timing_enabled, target_override=(self.manual_targets.target(timing_frame.next_speed_mps, now_ns)
+              if timing_frame is not None and self.settings.custom.remember_manual and self.settings.custom.reengage else None))
+          self.preview_hold.observe(timing_frame,values[sel.Source.MAP],active=self.mapped.current and self.mapped.approach.active)
       else:
         self.map_source.reset()
-        values[sel.Source.MAP] = acc.Observation(acc.ObservationKind.STALE)
+        self.short_zones = ShortMapZone()
+        self.preview_hold = AcceptedPreviewHold()
+        self.raw_map_observation = acc.Observation(acc.ObservationKind.STALE)
+        values[sel.Source.MAP] = self.raw_map_observation
+    self.current_observations = dict(values)
+    self.current_observations[sel.Source.MAP] = current_map
     # Vision still requires its independent source-specific qualification.
     return values
 
@@ -414,8 +506,105 @@ class Runtime:
     if cruise_event is not None and request is None:
       action, action_id = self._physical_action(cruise_event, sm, now_ns)
     frame = self._frame(sm, CP, now_ns, now_boot_ns, action, adopt, classified)
+    selected = sel.select_limit(frame.observations, frame.selection_policy)
+    if selected.selected_source is sel.Source.MAP and self.mapped.current:
+      frame = replace(frame, acceptance_policy=replace(frame.acceptance_policy, automatic_adoption_ns=0))
+    accepted_before = self.state.acceptance.accepted
+    if (selected.selected_source is sel.Source.DASHBOARD and
+        frame.selection_policy.mode is sel.SelectionMode.ORDERED and
+        frame.selection_policy.slots[0] is sel.Source.MAP and accepted_before is not None and
+        accepted_before.candidate.source == sel.Source.MAP.value and
+        selected.observation.candidate is not None and
+        abs(selected.observation.candidate.speed_mps-accepted_before.candidate.speed_mps) >= .1):
+      # Five continuous seconds of conflicting fallback. A returning map
+      # observation cancels the pending candidate through normal acceptance.
+      # Explicit confirmation/adoption keeps its existing authority path.
+      frame = replace(frame, acceptance_policy=replace(frame.acceptance_policy, automatic_adoption_ns=5_000_000_000))
+    raw_selection = sel.select_limit(self.current_observations, frame.selection_policy)
+    raw = raw_selection.observation.candidate
+    producer = None
+    if raw is not None:
+      producer = (self.mapped.source_key if raw_selection.selected_source is sel.Source.MAP else
+                  str(sm['slcDashboardObservation'].producerSessionId) if raw_selection.selected_source is sel.Source.DASHBOARD else
+                  str(sm['slcVisionObservation'].vision.producerSessionId) if raw_selection.selected_source is sel.Source.VISION else '')
+    zone_source, zone_producer, zone_limit = (raw.source if raw is not None else None,
+                                             producer, raw.speed_mps if raw is not None else None)
+    if raw_selection.selected_source is sel.Source.MAP and raw is not None:
+      self._zone_map_seen_ns = now_ns
+    elif (frame.selection_policy.mode is sel.SelectionMode.ORDERED and
+          frame.selection_policy.slots[0] is sel.Source.MAP and
+          accepted_before is not None and accepted_before.candidate.source == sel.Source.MAP.value and
+          self.current_zone.limit is not None and
+          0 <= now_ns-getattr(self, '_zone_map_seen_ns', -5_000_000_001) < 5_000_000_000):
+      # Preserve driver memory during the already agreed map-loss grace period.
+      # A pending dashboard candidate has not established a new current zone.
+      # This retains no source authority and cannot itself issue a command.
+      zone_source, zone_producer, zone_limit = ('map', self.current_zone.producers.get('map'), self.current_zone.limit)
+    zone = self.current_zone.observe(zone_source, zone_producer, zone_limit)
+    fresh = all(_fresh(sm, name, now_ns) for name in ('carState','selfdriveState','carControl'))
+    engaged = bool(frame.host.selfdrive_enabled and sm['carControl'].enabled and CP.openpilotLongitudinalControl)
+    manual = classified.change.selected_mps if classified is not None and classified.change is not None else None
+    memory_enabled = bool(self.settings.enabled and self.settings.custom.remember_manual and self.settings.custom.reengage)
+    if not memory_enabled:
+      self.memory_recall_pending = False
+    if fresh:
+      if memory_enabled and engaged and not self.memory_was_engaged:
+        self.memory_recall_pending = True
+      if not engaged:
+        self.memory_recall_pending = False
+      self.memory_was_engaged = engaged
+    if manual is not None or action is not None or adopt is not None:
+      self.memory_recall_pending = False
+    # Count actual current limits, including short zones suppressed only for
+    # target planning. Lookahead and fallback grace cannot age or reset memory.
+    memory_observations = dict(self.current_observations)
+    if self.raw_map_observation is not None:
+      memory_observations[sel.Source.MAP] = self.raw_map_observation
+    memory_current = sel.select_limit(memory_observations, frame.selection_policy).observation.candidate
+    self.manual_targets.observe(now_ns, memory_current.speed_mps if memory_current is not None else None,
+                                enabled=memory_enabled, fresh=fresh)
+    if manual is not None and fresh:
+      self.manual_targets.remember(manual)
+    if action is not None or adopt is not None:
+      self.manual_targets.forget()
+      if accepted_before is not None:self.manual_targets.forget(accepted_before.candidate.speed_mps)
+    frame = replace(frame, per_limit_memory=memory_enabled)
+    self.engagement.observe(now_ns=now_ns, zone=zone, enabled=engaged, fresh=fresh,
+      selected=frame.host.driver_v_cruise_kph/3.6, manual=manual,
+      remember=self.settings.custom.remember_manual, match=self.settings.enabled and self.settings.custom.reengage,
+      explicit=action is not None or adopt is not None)
+    map_observation = self.current_observations.get(sel.Source.MAP)
+    map_current = (map_observation.candidate if map_observation is not None and
+                   map_observation.kind is acc.ObservationKind.VALID else None)
+    clock_pair = clock_pair_ns() if now_boot_ns is None else (now_ns, now_boot_ns)
+    map_frame = self.map_source.tracker.diagnostic(now_boot_ns=clock_pair[1]).frame if clock_pair is not None else None
+    map_fresh = (map_frame is not None and map_current is not None and
+                 0 <= clock_pair[1]-map_frame.event_mono_ns <= 250_000_000 and
+                 self.mapped.current)
+    self.rollback.observe(now_ns=now_ns, enabled=engaged and self.settings.enabled,
+      fresh=fresh, selected=frame.host.driver_v_cruise_kph/3.6, manual=manual,
+      explicit=action is not None or adopt is not None, current=map_current,
+      map_selected=selected.selected_source is sel.Source.MAP, map_fresh=map_fresh,
+      preview=self.mapped.approach.active, preview_identity=self.mapped.identity,
+      upcoming=self.mapped.upcoming, accepted=self.state.acceptance.accepted,
+      previous_override=self.state.override.persistent_selected_mps)
+    if self.rollback.ready and (self.state.acceptance.accepted is None or
+                                self.state.acceptance.accepted.candidate != map_current):
+      # Restore only qualified acceptance, preserving current ledger and monotonic
+      # decision/presentation counters. The current way supplies fresh identity.
+      prior = replace(self.state.acceptance, observation=acc.Observation(acc.ObservationKind.UNKNOWN),
+        accepted=acc.AcceptedLimit(map_current, self.session_id, now_ns),
+        pending=None, presentation=None, timer_running=False, received_speed_mps=map_current.speed_mps)
+      self.state = replace(self.state, acceptance=prior)
     result = comp.step(self.state, frame)
     self.state = result.state
+    accepted_action = result.acceptance.action_receipt if result.acceptance is not None else None
+    adopted_action = result.acceptance.adoption_receipt if result.acceptance is not None else None
+    if not result.errors and ((accepted_action is not None and accepted_action.consumed and
+                              action is not None and action.kind is acc.ActionKind.ACCEPT) or
+                             (adopted_action is not None and adopted_action.consumed)):
+      self.rollback.checkpoint = None
+      self.rollback.ready = False
     action_result = None
     if action_id is not None:
       if result.acceptance is not None:
@@ -427,6 +616,36 @@ class Runtime:
     commanded_before = self.commanded_acceptance
     command = self._command(result, sm, now_ns, old_pending, action, adopt)
     result = replace(result, state=self.state)
+    self.comfort_request = self.comfort.step(result, frame, settings=self.settings.custom, limits=self.comfort_limits,
+      selected=float(sm['carState'].vCruise)/3.6, speed=float(sm['carState'].vEgoCluster),
+      acknowledged=self.command_status == 'applied' and self.commanded_acceptance == result.state.acceptance.accepted,
+      selected_acknowledged=self.command_status == 'applied' and not self.command_interrupted and
+                            abs(float(sm['carState'].vCruise)/3.6-self.command_target_mps)<=.15,
+      manual=classified is not None, reengage=self.command_kind in ('reengageZone', 'previewRollback'))
+    self.easing_request = accepted_easing(result, frame, selected=float(sm['carState'].vCruise)/3.6,
+      acknowledged=self.command_status == 'applied' and self.commanded_acceptance == result.state.acceptance.accepted and
+                   self.command_kind != 'previewRollback', manual=classified is not None, approach=self.command_mapped_approach)
+    map_selected = result.selection is not None and result.selection.selected_source is sel.Source.MAP
+    upcoming = self.mapped.upcoming
+    # Confirmation direction follows posted limits, as in the acceptance owner.
+    # The selected speed includes offsets and can lie above an upcoming higher limit.
+    confirm = (map_current is None or
+               (self.settings.acceptance.confirm_lower if upcoming < map_current.speed_mps else
+                self.settings.acceptance.confirm_higher))
+    adjusted = sd.adjusted_limit(upcoming, self.settings.offsets) if upcoming >= 1 else None
+    self.mapped.warn(now_ns, eligible=bool(map_selected and frame.authority.can_control and not confirm and
+                     result.state.override.persistent_selected_mps is None and not sm['carState'].gasPressed and not frame.host.force_decel),
+      target_change=adjusted is not None and abs(adjusted-float(sm['carState'].vCruise)/3.6)>.1,
+      speed=float(sm['carState'].vEgo), settings=self.settings)
+    accepted = result.state.acceptance.accepted
+    accepted_speed = accepted.candidate.speed_mps if accepted is not None else None
+    announced = (map_selected and accepted_speed is not None and
+                 abs(accepted_speed-self.mapped.upcoming) < .1 and
+                 self.mapped.warning_identity in self.mapped.warning.announced)
+    sudden = self.accepted_warning.update(now_ns/1e9, accepted_speed,
+      eligible=bool(self.settings.enabled and engaged and fresh and frame.authority.can_control),
+      announced=announced)
+    self.warning_event = sudden or self.mapped.warning_event
     message = self._message(now_ns, result, sm, frame)
     if command is not None and (request is not None or commanded_before != self.commanded_acceptance):
       self._command_ui_sequence = request.sequence_id if request is not None else 0
@@ -440,16 +659,43 @@ class Runtime:
 
   def _command(self, result: comp.Result, sm, now_ns: int, old_pending,
                action: acc.DriverAction | None, adopt: acc.AdoptRequest | None):
+    self.reengage_target = None
+    self.rollback_target = self.rollback.target
+    if self.rollback.blocks_commands:
+      return None
     decision = result.acceptance
+    if (decision is not None and decision.state.pending is not None and
+        self.commanded_acceptance == decision.state.accepted and self.command_status in ('issued', 'expired', 'rejected')):
+      # Retaining the old accepted limit preserves driver memory, but must not
+      # revive a command interrupted by another candidate. Explicit adoption
+      # or a genuinely new acceptance can establish a new command.
+      self.command_interrupted = True
     if (decision is None or decision.basis not in ('accepted', 'driver_accept', 'driver_adopt') or
         decision.state.accepted is None or decision.state.pending is not None or decision.authority is None or
         not decision.authority.can_control or result.coordinate is None or
         result.domain is None or result.domain.context is None or result.selection is None or
         result.selection.observation.candidate is None or
         result.selection.observation.candidate.speed_mps != decision.state.accepted.candidate.speed_mps or
-        result.state.override.persistent_selected_mps is not None):
+        (result.state.override.persistent_selected_mps is not None and not self.engagement.pending and not self.memory_recall_pending and self.rollback_target is None)):
       return None
     target = result.domain.context.effective_cluster_mps
+    resume = self.engagement.resolve(limit_target=target, provisional=self.mapped.approach.active,
+                                     now_ns=now_ns)
+    recalled = self.manual_targets.target(decision.state.accepted.candidate.speed_mps, now_ns)
+    new_limit = (self.commanded_acceptance is None or
+                 abs(self.commanded_acceptance.candidate.speed_mps-decision.state.accepted.candidate.speed_mps)>=.1)
+    if recalled is not None and (new_limit or self.engagement.pending or self.memory_recall_pending) and action is None and adopt is None:
+      resume = recalled
+    # Re-engagement may precede source recovery. The cache supplies intent only;
+    # all current acceptance/authority checks above must pass before consuming it.
+    self.memory_recall_pending = False
+    self.reengage_target = resume
+    kind = 'reengageZone' if resume is not None else 'adoptAcceptedLimit'
+    if resume is not None:target = resume
+    if self.rollback_target is not None:
+      target = self.rollback_target
+      kind = 'previewRollback'
+      self.reengage_target = None
     if self.toyota_eligible:
       row = self.toyota_projection
       accepted = decision.state.accepted
@@ -466,15 +712,24 @@ class Runtime:
     if (not _number(target, positive=True) or not _number(selected_kph, positive=True) or
         selected_kph >= 255 or not V_CRUISE_MIN / 3.6 <= target <= V_CRUISE_MAX / 3.6):
       return None
+    if ((resume is not None or self.rollback_target is not None) and self.command_status == 'issued' and self.command_kind == kind and
+        self.commanded_acceptance == decision.state.accepted and abs(target-self.command_target_mps)<.001 and
+        abs(selected_kph/3.6-self.command_expected_mps)<.1):
+      return None
     if sd.set_speed_matches(target, selected_kph, float(sm['carState'].vCruiseCluster), self.is_metric):
       if not self._set_speed_ready(sm):
         return None
       self.commanded_acceptance = decision.state.accepted
       self.command_status = 'applied'
+      if resume is not None:
+        self.engagement.applied()
+        self.state = replace(self.state, override=replace(self.state.override, persistent_selected_mps=selected_kph/3.6))
+        if not self.mapped.approach.active:
+          self.manual_targets.remember(selected_kph/3.6, decision.state.accepted.candidate.speed_mps)
       self.state = replace(self.state, override=replace(self.state.override, applied_selected_mps=selected_kph / 3.6))
       return None
-    if self.commanded_acceptance == decision.state.accepted and decision.adoption is None:
-      if self.command_status in ('issued', 'applied') or abs(selected_kph / 3.6 - self.command_expected_mps) > 0.1:
+    if self.commanded_acceptance == decision.state.accepted and decision.adoption is None and resume is None and self.rollback_target is None:
+      if self.command_interrupted or self.command_status in ('issued', 'applied') or abs(selected_kph / 3.6 - self.command_expected_mps) > 0.1:
         return None
     evidence = sm['slcDashboardObservation']
     expiry = now_ns + int(2e9 / SERVICE_LIST['slcState'].frequency)
@@ -488,17 +743,21 @@ class Runtime:
     self.commanded_acceptance = decision.state.accepted
     self.last_command_id += 1
     self.command_status = 'issued'
+    self.command_interrupted = False
+    self.command_kind = kind
+    self.command_mapped_approach = bool(self.mapped.approach.active and result.selection.selected_source is sel.Source.MAP)
     self.command_issued_ns = now_ns
     self.command_expiry_ns = expiry
     self.set_speed_after_ns = max(self.set_speed_after_ns, expiry)
     self.command_expected_mps = selected_kph / 3.6
     self.command_target_mps = target
     self.command_card_producer = str(sm['slcDashboardObservation'].producerSessionId)
+    self.rollback.issued(command_id=self.last_command_id, target=target, kind=kind)
     command = messaging.new_message('slcCruiseCommand')
     command.valid = True
     command.logMonoTime = now_ns
     record = command.slcCruiseCommand
-    record.kind = 'adoptAcceptedLimit'
+    record.kind = kind
     record.source = result.selection.selected_source.value
     record.sessionId = self.session_id
     record.commandId = self.last_command_id
@@ -529,7 +788,8 @@ class Runtime:
       enabled_sources.add(sel.Source.ONLINE)
     rows = state.init('sourceReadings', len(sel.Source))
     for row, source in zip(rows, sel.Source, strict=True):
-      observation = frame.observations.get(source)
+      observation = (self.raw_map_observation if source is sel.Source.MAP and (self.short_zones.active or self.preview_hold.active) else
+                     frame.observations.get(source))
       row.source = source.value
       row.enabled = bool(self.settings.display and source in enabled_sources)
       row.observationKind = observation.kind.value if observation is not None else 'unknown'
@@ -590,6 +850,16 @@ class Runtime:
       state.offset = float(state.presentationAdjustedLimit) - float(state.speedLimit)
     if shown is not None:
       state.presentationId = shown.presentation_id
+    warning = self.warning_event
+    state.changeWarningId = warning['id'] if warning else ''
+    state.changeWarningIssuedMonoTime = int(warning['issued']*1e9) if warning else 0
+    state.changeWarningDeadlineMonoTime = int(warning['deadline']*1e9) if warning else 0
+    state.warningPinned = bool(self.mapped.warning_pin.get('warningPinned', False))
+    state.warningPinId = self.mapped.warning_pin.get('warningPinId', '')
+    state.warningPinIssuedMonoTime = int(self.mapped.warning_pin.get('warningPinIssued', 0)*1e9)
+    state.mapApproachActive = self.mapped.approach.active and state.source == 'map'
+    state.mapBoundaryDistance = self.mapped.remaining if self.mapped.current else 0.
+    state.mapTriggerDistance = self.mapped.trigger if self.mapped.current else 0.
     state.status = result.status
     if state.source == 'dashboard' and state.observationKind == 'valid':
       evidence = sm['slcDashboardObservation']
@@ -603,6 +873,10 @@ class Runtime:
       state.sourceEpisode = int(evidence.episode)
       state.sourceObservedMonoTime = int(evidence.observedMonoTime)
       state.sourceValidUntilMonoTime = int(evidence.validUntilMonoTime)
+    state.hasReengageTarget = self.reengage_target is not None and self.command_kind == 'reengageZone'
+    state.reengageTarget = self.reengage_target or 0.
+    state.hasRollbackTarget = self.rollback_target is not None and self.command_kind == 'previewRollback'
+    state.rollbackTarget = self.rollback_target or 0.
     state.commandId = self.last_command_id
     state.commandStatus = self.command_status
     receipt = result.acceptance.action_receipt or result.acceptance.adoption_receipt if result.acceptance else None

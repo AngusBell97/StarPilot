@@ -18,12 +18,16 @@ SCREEN_OFF = "__starpilot_controller_action__:toggle_screen_off"
 TRAFFIC = "__starpilot_controller_action__:traffic_mode"
 SWITCHBACK = "__starpilot_controller_action__:switchback_mode"
 CYCLE_PERSONALITY = "__starpilot_controller_action__:cycle_driving_personality"
+# Moves the active profile's custom following curve at the current speed by 0.05 s per press.
+FOLLOW_GAP_UP = "__starpilot_controller_action__:follow_gap_increase"
+FOLLOW_GAP_DOWN = "__starpilot_controller_action__:follow_gap_decrease"
+FOLLOW_GAP_LABELS = {FOLLOW_GAP_UP: "Increase Follow Gap", FOLLOW_GAP_DOWN: "Decrease Follow Gap"}
 
 # Saved preference shortcuts retain the current owner's authority and dependencies.
 FEATURE_KEYS = {
-  "slc": ("SpeedLimitController", "ShowSpeedLimits", "SLCConfirmation", "SLCConfirmationHigher", "SLCConfirmationLower", "SLCFallback"),
+  "slc": ("SpeedLimitController", "ShowSpeedLimits", "SLCConfirmation", "SLCConfirmationHigher", "SLCConfirmationLower"),
   "lane": ("LaneCentering", "LaneCenteringPauseOnSignal"),
-  "curve": ("CurveSpeedController", "CurveSpeedControllerNoLead", "ShowCSCStatus"),
+  "curve": ("CurveSpeedController", "CurveSpeedControllerNoLead", "CurveSteeringLoadSlowdown", "ShowCSCStatus"),
   "aol": ("AlwaysOnLateral", "NostalgiaMode"),
   "profiles": ("CustomPersonalities",),
 }
@@ -64,7 +68,8 @@ def mapped_actions(feature_snapshot, feature_apply, appearance_snapshot, appeara
   for key, label in ((INCREASE_SPEED, "Increase Set Speed"), (DECREASE_SPEED, "Decrease Set Speed"),
                      (SET_SPEED, "Set Speed To"), (FORCE_COAST, "Force Coasting"),
                      (PULSE_GLIDE, "Pulse and Glide"), (DISENGAGE, "Disengage Openpilot"),
-                     (TRAFFIC, "Traffic Mode"), (SWITCHBACK, "Switchback Mode"), (SCREEN_OFF, "Toggle Screen Off"), (SELFIE, "Selfie")):
+                     (TRAFFIC, "Traffic Mode"), (SWITCHBACK, "Switchback Mode"), (SCREEN_OFF, "Toggle Screen Off"), (SELFIE, "Selfie"),
+                     *FOLLOW_GAP_LABELS.items()):
     actions[key] = FavoriteAction(key, label, kind="toggle" if key in (TRAFFIC, SWITCHBACK, SCREEN_OFF) else "action",
                                   reason="Use the qualified control on the device", section="Driving")
   return actions if requested_keys is None else {key: action for key, action in actions.items() if key in requested_keys}

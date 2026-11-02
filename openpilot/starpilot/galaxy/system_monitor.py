@@ -6,6 +6,7 @@ import pwd
 import shutil
 import threading
 import time
+import uuid
 from pathlib import Path
 
 
@@ -20,6 +21,7 @@ class SystemMonitor:
     self.previous = {}
     self.cpu_previous = {}
     self.previous_time = None
+    self.source_id = uuid.uuid4().hex
 
   def sample(self):
     with self.lock:
@@ -32,7 +34,8 @@ class SystemMonitor:
 
   def _sample(self):
     now = self.clock()
-    comparable = self.previous_time is not None and now > self.previous_time
+    interval = now - self.previous_time if self.previous_time is not None else None
+    comparable = interval is not None and 0 < interval <= 10
     cpu_now, cores = {}, []
     overall = capacity = None
     for line in (self.root / 'stat').read_text().splitlines():
@@ -86,7 +89,8 @@ class SystemMonitor:
         if capacity and previous is not None and current >= previous:
           cpu = round(min(100, (current - previous) / capacity * 100), 1)
         rows.append({'pid': identity[0], 'name': name.removeprefix('/data/openpilot/'), 'user': user,
-                     'kernel': not args, 'state': fields[0], 'cpu': cpu,
+                     'kernel': bool(int(fields[6]) & 0x00200000), 'state': fields[0], 'cpu': cpu,
+                     'instanceId': f'{self.source_id}:{identity[0]}:{identity[1]}',
                      'memoryMiB': round(max(0, int(fields[21])) * self.page_size / 1048576, 1)})
         process_ticks[identity] = current
       except (OSError, ValueError, IndexError):
@@ -115,7 +119,9 @@ class SystemMonitor:
       raise ValueError('Invalid sample time')
     result = {
       'schemaVersion': 1, 'mode': 'local-runtime', 'source': 'Local Linux system telemetry',
-      'sampledAt': sampled_at, 'cpuPercent': overall, 'cores': cores,
+      'sampledAt': sampled_at, 'sampleMono': now, 'sourceId': self.source_id,
+      'intervalSeconds': interval if comparable else None,
+      'cpuPercent': overall, 'cores': cores,
       'memory': {'totalMiB': round(total / 1024, 1),
                  'usedMiB': round(used / 1024, 1) if used is not None else None,
                  'availableMiB': round(available / 1024, 1) if available is not None else None,

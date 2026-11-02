@@ -205,10 +205,12 @@ class ModelRenderer(Widget):
 
     if lead_ready and getattr(self, '_paint', True):
       self._draw_lead_indicator()
-      if self._lead_vehicles[0].bar.size and self._lead_vehicles[0].info is not None:
-        text = self._format_lead_info(self._lead_vehicles[0].info, self._lead_info_mode, self._lead_info_metric)
-        if text:
-          self._draw_lead_info(rect, text)
+    # The lead text is independent of the marker: it reads the same lead source directly.
+    if self._lead_info_mode and getattr(self, '_paint', True):
+      info = self._lead_candidates(sm)[0][3]
+      text = self._format_lead_info(info, self._lead_info_mode, self._lead_info_metric) if info is not None else ""
+      if text:
+        self._draw_lead_info(rect, text)
 
   @staticmethod
   def _draw_lead_info(rect: rl.Rectangle, text: str) -> None:
@@ -246,7 +248,8 @@ class ModelRenderer(Widget):
     self._road_edge_stds = np.array(model.roadEdgeStds, dtype=np.float32)
     self._acceleration_x = np.array(model.acceleration.x, dtype=np.float32)
 
-  def _update_leads(self, sm):
+  def _lead_candidates(self, sm):
+    """(valid, camera distance, lateral offset, source) for the two leads, from the plan's own lead source."""
     plan = sm['longitudinalPlan']
     model = sm['modelV2']
     e2e = (sm.valid['longitudinalPlan'] and sm.valid['modelV2'] and
@@ -266,6 +269,10 @@ class ModelRenderer(Widget):
       leads.append((valid, distance, float(info.yRel) if valid else 0.0, info if valid else None))
     if leads[0][0] and leads[1][0] and abs(leads[1][1] - leads[0][1]) < 3.0:
       leads[1] = (False, 0.0, 0.0, None)
+    return leads
+
+  def _update_leads(self, sm):
+    leads = self._lead_candidates(sm)
 
     ss, cs = sm['selfdriveState'], sm['carState']
     available = ss.enabled or ss.engageable or cs.brakePressed or getattr(self, '_render_lateral_active', False)

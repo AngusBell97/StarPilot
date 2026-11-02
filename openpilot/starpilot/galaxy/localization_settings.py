@@ -1,5 +1,6 @@
 """Global display units and the initial driver-monitoring wheel side."""
 
+from openpilot.starpilot.galaxy import slider_units
 from openpilot.starpilot.saved_document import commit_exact
 from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.speed_limits import offset_document as od
@@ -18,9 +19,8 @@ class LocalizationSettingsOwner:
     return self.authorized() and self.parked() and not self.params.get_bool("IsDriverViewEnabled")
 
   def snapshot(self):
-    rows = []
+    rows = slider_units.rows(self.params, self.authorized())
     for key, label, reason in (
-      ("IsMetric", "Use Kilometers (km/h)", "On uses kilometers; Off uses miles. Saved speed-limit offsets keep their physical values."),
       ("IsRhdDetected", "Right-Hand Drive", "Sets the initial driver-monitoring side for the next drive. Automatic wheel-side detection continues."),
     ):
       raw, readable = read_saved(self.params, key, 8)
@@ -38,10 +38,12 @@ class LocalizationSettingsOwner:
       rows.append(FeatureRow(key, label, ("On" if raw == b"1" else "Off") if valid else "Invalid saved value",
                              raw, ("Off", "On") if valid else (), available=valid and allowed,
                              reason=reason if valid else "Invalid saved value", default_value="Off"))
-    return FeatureSettingsState("localization", "Localization", "Units and steering-wheel side for every vehicle.",
+    return FeatureSettingsState("localization", "Localization", "Galaxy slider units only; the comma’s unit setting and driving display stay unchanged.",
                                 tuple(rows), self.parked())
 
   def apply(self, request):
+    if request.key in slider_units.SPECS:
+      return slider_units.apply(self.params, request, self.authorized)
     if request.value not in ("Off", "On") or request.expected not in (None, b"0", b"1") or not self.authorized():
       return False
     if request.key == "IsMetric":

@@ -2,16 +2,17 @@
 
 from dataclasses import replace
 import math
+from numbers import Real
 import re
+import time
 
 from openpilot.starpilot.conditional_mode.host import ConditionalModeHost, HostProposal
 from openpilot.starpilot.conditional_mode.manual import Button, Gesture, ManualSession, Press, ioniq6_media_eligible, read_button_map
 from openpilot.starpilot.conditional_mode.manual_saved import ManualSavedOwner
 from openpilot.starpilot.conditional_mode.policy import ManualIntent, ModeChoice
 from openpilot.starpilot.conditional_mode.preferences import ManualState, manual_for_drive
-from openpilot.starpilot.conditional_mode.projection import ConditionalOwnerContext, ObservedBool
+from openpilot.starpilot.conditional_mode.projection import ConditionalOwnerContext, ObservedBool, ObservedFloat
 from openpilot.starpilot.conditional_mode.runtime_settings import ConditionalSettingsOwner, SettingsSnapshot
-from openpilot.starpilot.conditional_mode.slc_fallback import evaluate_runtime
 from openpilot.starpilot.conditional_mode.status import StatusPublisher, settings_fingerprint
 from openpilot.starpilot.conditional_mode.ui_action import current_authority, exact_settings, observation as ui_observation
 
@@ -24,6 +25,85 @@ LEGACY_SCENE_OWNERS = frozenset((
 ))
 
 
+AUTHORITY_SERVICES = ('carControl', 'selfdriveState')
+
+
+class AuthoritySnapshot:
+  """Keep the model/plan frame fixed; independently refresh axis evidence."""
+
+  def __init__(self, source):
+    self.source = source
+    self.payloads = {}
+    for name in ('logMonoTime', 'recv_time', 'seen', 'valid', 'alive'):
+      setattr(self, name, dict(getattr(source, name)))
+
+  def __getitem__(self, service):
+    return self.payloads[service] if service in self.payloads else self.source[service]
+
+  def __getattr__(self, name):
+    return getattr(self.source, name)
+
+
+class AuthorityRefresher:
+  """Retain consumed authority packets at their original receipt time."""
+
+  def __init__(self, sockets):
+    # Independent subscriptions: never consume the native planner's sockets.
+    self.sockets = sockets
+    self.latest = {}
+
+  def reset(self):
+    self.latest.clear()
+
+  def close(self):
+    self.latest.clear()
+    self.sockets.clear()
+
+  def sample(self, sm, receive, *, monotonic=time.monotonic):
+    """One nonblocking read per conflated socket, without renewing old receipts.
+
+    This is a separate projection view, not another model/planner update. An
+    unavailable socket preserves its original source/receipt, so the projector's
+    unchanged freshness bound still rejects it. New invalid, backwards or future
+    messages cannot resurrect previous authority. The caller samples its paired
+    evaluation clock after these reads, including all elapsed planner work.
+    """
+    view = AuthoritySnapshot(sm)
+    for service in AUTHORITY_SERVICES:
+      previous = self.latest.get(service)
+      if previous is not None and previous[0].logMonoTime <= sm.logMonoTime[service]:
+        self.latest.pop(service)
+        previous = None
+      event = receive(self.sockets[service])
+      if event is not None:
+        receipt = monotonic()
+        previous_stamp = max(sm.logMonoTime[service], previous[0].logMonoTime if previous is not None else 0)
+        stamp = int(event.logMonoTime)
+        # The independent socket can legitimately deliver the same source
+        # frame already in the native snapshot. Keep that snapshot and receipt;
+        # an invalid duplicate still vetoes this evaluation. A late duplicate
+        # must not hide newer cached invalid/disengaged evidence either.
+        if stamp < sm.logMonoTime[service] or stamp == sm.logMonoTime[service] and event.valid:
+          sample = previous
+        else:
+          sample = ((previous[0], previous[1], False) if previous is not None and stamp < previous[0].logMonoTime else
+                    (event, receipt, bool(event.valid and previous_stamp < stamp <= int(receipt * 1e9))))
+          self.latest[service] = sample
+      else:
+        sample = previous
+      if sample is None:
+        continue
+      event, receipt, valid = sample
+      view.payloads[service] = getattr(event, service)
+      view.logMonoTime[service] = int(event.logMonoTime)
+      view.recv_time[service] = receipt
+      view.seen[service] = True
+      # _fresh checks both original timestamps on every projection.
+      view.alive[service] = True
+      view.valid[service] = valid
+    return view
+
+
 def selected_follow_time(planner) -> float | None:
   """Read the time the native MPC actually selected in this model cycle."""
   try:
@@ -34,14 +114,11 @@ def selected_follow_time(planner) -> float | None:
 
 
 class ConditionalPlannerHost:
-  def __init__(self, params, *, enabled_scene_owners: frozenset[str] = frozenset(), slc_runtime_enabled: bool | None = None):
+  def __init__(self, params, *, enabled_scene_owners: frozenset[str] = frozenset()):
     if not enabled_scene_owners <= LEGACY_SCENE_OWNERS:
       raise ValueError('unknown conditional scene owner')
     self.params = params
     self.enabled_scene_owners = enabled_scene_owners
-    if slc_runtime_enabled is not None and type(slc_runtime_enabled) is not bool:
-      raise ValueError('invalid SLC runtime capability')
-    self.slc_runtime_enabled = slc_runtime_enabled
     self.settings = ConditionalSettingsOwner(params)
     self.mode = ConditionalModeHost()
     self.status = StatusPublisher()
@@ -53,6 +130,7 @@ class ConditionalPlannerHost:
     self.pending_manual_revision = 0
     self.queued_manual_states: dict[int, tuple[ManualState, int]] = {}
     self.last_saved_manual: tuple[ManualState, int] | None = None
+    self.retained_manual = None
     self.manual_key: tuple | None = None
     self.card_session: str | None = None
     self.card_last_sequence = 0
@@ -73,6 +151,7 @@ class ConditionalPlannerHost:
     self.queued_manual_states.clear()
     self.last_saved_manual = None
     self.manual_key = None
+    self.retained_manual = None
     self.card_session = None
     self.card_last_sequence = 0
 
@@ -96,7 +175,7 @@ class ConditionalPlannerHost:
   def _manual_event(self, event, snapshot: SettingsSnapshot, choice: ModeChoice, drive_id: int,
                     sm, cp, now_ns: int) -> None:
     try:
-      if self.manual_saved.conflicted or event is None or not event.valid or str(event.slcCruiseEvent.kind) != 'conditionalMode':
+      if not self.manual.ready or self.manual_saved.conflicted or event is None or not event.valid or str(event.slcCruiseEvent.kind) != 'conditionalMode':
         return
       receipt = event.slcCruiseEvent.manualMode
       session = str(receipt.sessionId)
@@ -182,7 +261,7 @@ class ConditionalPlannerHost:
 
   def sample(self, sm, cp, planner, *, now_mono_ns: int, now_boot_ns: int, sample_skew_ns: int,
              drive_id: int, manual: ManualState | None = None,
-             owner_context: ConditionalOwnerContext | None = None, slc_runtime=None, slc_output=None,
+             owner_context: ConditionalOwnerContext | None = None,
              native_plan_valid: bool = False,
              manual_event=None,
              ui_event=None,
@@ -203,19 +282,14 @@ class ConditionalPlannerHost:
       gas = getattr(sm['carState'], 'gasPressed', None)
       if context.pedal_override is None and type(gas) is bool:
         context = replace(context, pedal_override=ObservedBool(gas, sm.logMonoTime['carState']))
-    slc_flag = None
-    if self.slc_runtime_enabled is False and self._fresh_service(sm, 'modelV2', drive_id, now_mono_ns):
-      slc_flag = ObservedBool(False, sm.logMonoTime['modelV2'])
-    elif self.slc_runtime_enabled is not False and slc_runtime is not None and slc_output is not None:
-      diagnostic = evaluate_runtime(slc_runtime, slc_output)
-      if type(diagnostic.proposed_experimental) is bool and type(diagnostic.frame_mono_ns) is int:
-        slc_flag = ObservedBool(diagnostic.proposed_experimental, diagnostic.frame_mono_ns)
     plan_stamp = sm.logMonoTime.get('modelV2')
     plan_owned = native_plan_valid is True and type(plan_stamp) is int and 0 < plan_stamp <= now_mono_ns
     should_stop = getattr(planner, 'output_should_stop', None)
     allow_throttle = getattr(planner, 'allow_throttle', None)
+    accel = getattr(planner, 'output_a_target', None)
     context = replace(
-      context, slc_experimental=slc_flag,
+      context,
+      plan_accel=ObservedFloat(float(accel), plan_stamp) if plan_owned and isinstance(accel, Real) and not isinstance(accel, bool) and math.isfinite(accel) else None,
       plan_should_stop=ObservedBool(should_stop, plan_stamp) if plan_owned and type(should_stop) is bool else None,
       plan_allow_throttle=ObservedBool(allow_throttle, plan_stamp) if plan_owned and type(allow_throttle) is bool else None,
     )
@@ -225,7 +299,20 @@ class ConditionalPlannerHost:
         verdict.selection.choice in (ModeChoice.CEM, ModeChoice.CCM) and snapshot.preferences is not None):
       choice = verdict.selection.choice
       key = (drive_id, snapshot.owner_token, snapshot.revision, choice)
+      options = snapshot.preferences.cem if choice is ModeChoice.CEM else snapshot.preferences.ccm
       if key != self.manual_key:
+        options = snapshot.preferences.cem if choice is ModeChoice.CEM else snapshot.preferences.ccm
+        retained = (self.manual, self.manual_state, self.manual_live_code) if (
+          self.manual_key is not None and self.manual_key[0] == drive_id and
+          self.manual_key[1] == snapshot.owner_token and self.manual_key[3] is choice and
+          options.persist_manual == self.manual_saved.persist and
+          not self.manual_saved.conflicted and self.manual.ready and self.manual_state is not None
+        ) else None
+        if (retained is None and self.retained_manual is not None and
+            self.retained_manual[0][0:2] == key[0:2] and self.retained_manual[0][3] is choice and
+            self.retained_manual[1] == options.persist_manual):
+          retained = self.retained_manual[2]
+        self.retained_manual = (key, options.persist_manual, retained) if retained is not None else None
         self.manual_saved.close()
         self.manual_saved = ManualSavedOwner(self.params, self.settings)
         self.pending_manual_state = None
@@ -238,13 +325,24 @@ class ConditionalPlannerHost:
         start = self.manual_saved.begin_drive(snapshot, choice=choice, drive_id=drive_id, now_ns=now_mono_ns)
         if start.status == 'active_elsewhere':
           self.manual_key = None  # Retry after the prior drive's cancelled worker releases its lease.
-        if start.intent is None:
+        if retained is not None and (start.status == 'active_elsewhere' or start.intent is not None and not options.persist_manual):
+          self.manual, self.manual_state, self.manual_live_code = retained
+          if options.persist_manual:
+            # Keep only the last applied durable intent while its owner is busy.
+            # Pending writes/gestures cannot acquire authority during the wait.
+            self.manual.code = self.manual_live_code
+            self.manual.ready = False
+          else:
+            self.manual_live_code = self.manual.code
+        elif start.intent is None:
           self.manual = ManualSession()
           self.manual_state = manual_for_drive(ManualIntent.NONE, drive_id, drive_id)
         else:
           self.manual_state = self.manual.start(choice, drive_id, drive_id,
                                                 persist_manual=options.persist_manual, persisted_code=start.code)
           self.manual_live_code = start.code if start.code is not None else 0
+        if start.status != 'active_elsewhere':
+          self.retained_manual = None
         self.card_session = None
         self.card_last_sequence = 0
       result = self.manual_saved.poll(snapshot=snapshot, drive_id=drive_id, now_ns=now_mono_ns)
@@ -280,6 +378,8 @@ class ConditionalPlannerHost:
         self._manual_event(manual_event, snapshot, choice, drive_id, sm, cp, now_mono_ns)
         self._ui_event(ui_event, snapshot, choice, drive_id, sm, cp, now_mono_ns,
                        allow_apply=self.manual.last_observed_ns == prior_observation)
+        if self.retained_manual is not None:
+          self.retained_manual = (key, options.persist_manual, (self.manual, self.manual_state, self.manual_live_code))
     else:
       if self.manual_key is not None:
         self.manual_saved.close()
@@ -292,6 +392,7 @@ class ConditionalPlannerHost:
       self.queued_manual_states.clear()
       self.last_saved_manual = None
       self.manual_key = None
+      self.retained_manual = None
       self.card_session = None
       self.card_last_sequence = 0
     proposal = self.mode.sample(

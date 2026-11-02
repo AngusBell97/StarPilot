@@ -33,7 +33,7 @@ def reset(param=16):
 class TestModelSHW1Safety(unittest.TestCase):
   def test_all_16bit_profile_words_are_isolated(self):
     debug = lib.set_safety_hooks(CarParams.SafetyModel.allOutput, 0) == 0
-    supported = {0, 1, 16, 17, 512, 1536} | ({513, 1537} if debug else set())
+    supported = {0, 1, 16, 17, 512, 1536} | ({256, 257, 513, 1537, 768, 769, 1792, 1793} if debug else set())
     for param in range(65536):
       result = lib.set_safety_hooks(10, param)
       expected = 0 if param in supported else -1

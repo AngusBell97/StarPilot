@@ -99,7 +99,15 @@ class DesireHelper:
       elif self.lane_change_state == LaneChangeState.laneChangeStarting:
         self.lane_change_timer += DT_MDL
 
-        if lane_change_prob < 0.02 and self.lane_change_timer >= LANE_CHANGE_START_TIME:
+        if not one_blinker or self.get_lane_change_direction(carstate) != self.lane_change_direction:
+          # The driver cancelled (or reversed) the signal: stop the lane change now. With no lane-change desire the
+          # model steers for the centre of whichever lane the car is mostly in (the old one before the line, the new
+          # one past it), and lane centring takes back over from there. A fresh signal is needed to try again.
+          self.lane_change_state = LaneChangeState.off
+          self.lane_change_direction = LaneChangeDirection.none
+          self.lane_change_timer = 0.0
+          self.pre_lane_change_timer = 0.0
+        elif lane_change_prob < 0.02 and self.lane_change_timer >= LANE_CHANGE_START_TIME:
           self.lane_change_timer = 0.0
           if one_blinker and not (self.policy.one_per_signal and self.lane_change_performed):
             self.lane_change_state = LaneChangeState.preLaneChange

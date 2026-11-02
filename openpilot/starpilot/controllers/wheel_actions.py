@@ -14,7 +14,7 @@ ACTIONS = {
   "Off": 0, "Cycle personality": 1, "Force coast": 2, "Pause steering": 3, "Pause longitudinal": 4,
   "Experimental override": 5, "Traffic mode": 6, "Switchback Mode": 7, "Bookmark": 8,
   "Toggle AOL": 9, "Adopt speed limit": 10, "Quick Select 1": 11, "Quick Select 2": 12,
-  "Quick Select 3": 13, "Pulse and glide": 14,
+  "Quick Select 3": 13, "Pulse and glide": 14, "Increase follow gap": 15, "Decrease follow gap": 16,
 }
 KEYS = ("LKASButtonControl", "MainCruiseButtonControl", "DistanceButtonControl", "LongDistanceButtonControl",
         "VeryLongDistanceButtonControl", "CancelButtonControl", "LongCancelButtonControl", "VeryLongCancelButtonControl",
@@ -23,7 +23,7 @@ KEYS = ("LKASButtonControl", "MainCruiseButtonControl", "DistanceButtonControl",
 PADDLE_KEY = "LeftPaddleButtonControl"
 LIFETIME_NS = 250_000_000
 SESSION = re.compile(r"[0-9a-f]{32}\Z")
-DELIVERED_ACTIONS = frozenset((1, 2, 5, 6, 7, 8, 10, 11, 12, 13, 14))
+DELIVERED_ACTIONS = frozenset((1, 2, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16))
 DEFAULTS = {"DistanceButtonControl": 1, "LongDistanceButtonControl": 5, "VeryLongDistanceButtonControl": 6}
 BUTTON_KEYS = {
   Button.LKAS: (KEYS[0],), Button.DISTANCE: KEYS[2:5], Button.MODE: KEYS[8:11], Button.CUSTOM: KEYS[11:14],

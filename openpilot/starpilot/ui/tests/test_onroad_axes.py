@@ -66,7 +66,7 @@ class TestOnroadAxes(unittest.TestCase):
           UnifiedSpeedWidget(fonts).render(rl.Rectangle(30, 30, 1800, 1020), state)
         from openpilot.starpilot.ui.tests.test_unified_speed_native import foreground_calls
         label_color = foreground_calls(fonts.draw)[0].args[-1]
-        self.assertEqual(rgba(label_color), (190, 208, 202, 255))
+        self.assertEqual(rgba(label_color), (255, 255, 255, 255))
         compact = CompactHudRenderer(fonts, Path("/unused"))
         with patch.object(compact, "prepare"), patch("openpilot.starpilot.ui.onroad_compact_widgets.rl.draw_texture_pro"), \
              patch("openpilot.starpilot.ui.onroad_compact_widgets.rl.draw_circle_gradient"):
@@ -310,7 +310,7 @@ class TestOnroadAxes(unittest.TestCase):
     with patch("openpilot.starpilot.ui.onroad_large_widgets.draw_control_card"), patch.object(rl, "draw_line_ex"):
       UnifiedSpeedWidget(fonts).render(rl.Rectangle(30, 30, 1800, 1020), state)
     from openpilot.starpilot.ui.tests.test_unified_speed_native import foreground_calls
-    self.assertEqual(rgba(foreground_calls(fonts.draw)[0].args[-1]), (190, 208, 202, 255))
+    self.assertEqual(rgba(foreground_calls(fonts.draw)[0].args[-1]), (255, 255, 255, 255))
     compact = CompactHudRenderer(fonts, Path("/unused"))
     with patch("openpilot.starpilot.ui.onroad_compact_widgets.rl.draw_circle_gradient"):
       compact.render(state)

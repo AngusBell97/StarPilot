@@ -38,6 +38,7 @@ class Frame:
   action: acc.DriverAction | None = None
   adopt: acc.AdoptRequest | None = None
   classified_cruise: arb.Result | None = None
+  per_limit_memory: bool = False
   is_metric: bool | None = None
   set_speed_ready: bool = True
 
@@ -126,7 +127,6 @@ def step(state: State, frame: Frame) -> Result:
       not isinstance(frame.acceptance_policy, acc.Policy) or
       any(type(value) is not bool for value in (frame.acceptance_policy.confirm_lower,
                                                 frame.acceptance_policy.confirm_higher,
-                                                frame.acceptance_policy.fallback_previous,
                                                 frame.acceptance_policy.display_only)) or
       not isinstance(frame.selected_kind, sd.DomainStatus) or not isinstance(frame.ego_pair, sd.SpeedPair) or
       (frame.is_metric is not None and type(frame.is_metric) is not bool) or type(frame.set_speed_ready) is not bool):
@@ -193,6 +193,10 @@ def step(state: State, frame: Frame) -> Result:
                                     frame.pedal_pressed if frame.ego_pair.status is sd.DomainStatus.VALID else None,
                                     frame.ego_pair.raw_mps if frame.ego_pair.status is sd.DomainStatus.VALID else None)
   change = frame.classified_cruise.change if frame.classified_cruise is not None else None
+  if (frame.per_limit_memory is True and acceptance.state.accepted is not None and
+      base.override.accepted_mps is not None and
+      abs(acceptance.state.accepted.candidate.speed_mps-base.override.accepted_mps) >= .1):
+    base = replace(base, override=replace(base.override, persistent_selected_mps=None))
   override = ov.step(base.override, acceptance, frame.authority, frame.acceptance_policy,
                      selected_evidence, pedal_evidence, now_ns=frame.now_ns, change=change, domain=domain)
   base = replace(base, override=override.state)

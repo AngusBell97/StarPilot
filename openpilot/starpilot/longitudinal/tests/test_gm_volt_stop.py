@@ -187,7 +187,7 @@ class TestVoltStop(unittest.TestCase):
         with self.assertRaises(Registered):
           Controls()
       self.assertEqual(captured['services'].count('deviceState'), 1)
-      self.assertEqual(captured['services'].count('radarState'), int(selected))
+      self.assertEqual(captured['services'].count('radarState'), 1)
       for name in ('deviceState',) + (('radarState',) if selected else ()):
         for ignored in ('ignore_alive', 'ignore_valid', 'ignore_avg_freq'):
           self.assertIn(name, captured['options'][ignored])

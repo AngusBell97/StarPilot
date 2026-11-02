@@ -1,3 +1,4 @@
+#include "selfdrive/pandad/firmware_ready.h"
 #include "openpilot/starpilot/car/ford/aol_policy.h"
 #include "openpilot/starpilot/car/nissan/aol_policy.h"
 #include "selfdrive/pandad/pandad.h"
@@ -644,7 +645,11 @@ void pandad_main_thread(std::vector<std::string> serials) {
 
   if (!do_exit) {
     LOGW("connected to all pandas");
-    pandad_run(pandas);
+    if (firmware_startup::acknowledge()) {
+      pandad_run(pandas);
+    } else {
+      LOGE("native firmware readiness acknowledgement failed");
+    }
   }
 
   for (Panda *panda : pandas) {

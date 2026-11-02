@@ -33,6 +33,7 @@ from openpilot.selfdrive.controls.lib.longcontrol import LongControl
 from openpilot.common.params import Params
 from openpilot.starpilot.lateral.lane_change_preferences import LiveLaneChangePolicy
 from openpilot.starpilot.lateral.lane_change_smoothing import LaneChangeSmoother
+from openpilot.starpilot.longitudinal.lane_change_gap import LaneChangePace
 
 
 def observed_lead(controls):
@@ -102,6 +103,7 @@ def controls_fixture(alpha=False):
   controls.lane_change_preferences = LiveLaneChangePolicy(controls.params, now_ns=now)
   controls.lane_change_policy = controls.lane_change_preferences.applied
   controls.lane_change_smoother = LaneChangeSmoother()
+  controls.lane_change_pace = LaneChangePace()
   controls.curvature = controls.desired_curvature = 0.0
   controls.steer_limited_by_safety = False
   fixture = SubMasterFixture(now)

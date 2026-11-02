@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 
 CONFIRMATION_NS = 10_000_000_000
+AUTOMATIC_ADOPTION_NS = 3_000_000_000
 MAX_REJECTIONS = 256
 
 
@@ -77,8 +78,8 @@ class Authority:
 class Policy:
   confirm_lower: bool = True
   confirm_higher: bool = True
-  fallback_previous: bool = False
   display_only: bool = False
+  automatic_adoption_ns: int = AUTOMATIC_ADOPTION_NS
 
 
 class ActionKind(Enum):
@@ -172,16 +173,6 @@ class Decision:
   adoption: AdoptionProposal | None = None
   authority: Authority | None = None
   policy: Policy | None = None
-
-
-def previous_limit_is_qualified(decision: Decision) -> bool:
-  """Recognize retained control after the caller validates the decision structure."""
-  accepted = decision.state.accepted
-  return (not decision.errors and decision.basis == "previous_accepted" and
-          decision.policy is not None and decision.policy.fallback_previous is True and not decision.policy.display_only and
-          decision.authority is not None and decision.authority.can_control and
-          decision.state.observation.kind is not ObservationKind.VALID and accepted is not None and
-          decision.control_target_mps is not None and decision.control_target_mps == accepted.candidate.speed_mps)
 
 
 def _token(value: object) -> bool:
@@ -350,7 +341,8 @@ def step(state: State, observation: Observation, authority: Authority, policy: P
   if not observation_is_valid(observation, session_id=state.session_id):
     errors.append("invalid observation")
   if not isinstance(policy, Policy) or any(type(v) is not bool for v in (
-      policy.confirm_lower, policy.confirm_higher, policy.fallback_previous, policy.display_only)):
+      policy.confirm_lower, policy.confirm_higher, policy.display_only)) or (
+      type(policy.automatic_adoption_ns) is not int or not 0 <= policy.automatic_adoption_ns <= CONFIRMATION_NS):
     errors.append("invalid policy")
   if not _integer(now_ns) or (state.last_timestamp_ns is not None and now_ns < state.last_timestamp_ns):
     errors.append("invalid or reversed monotonic clock")
@@ -401,8 +393,7 @@ def step(state: State, observation: Observation, authority: Authority, policy: P
     return finish("display_only")
   if observation.kind is not ObservationKind.VALID:
     state = replace(state, pending=None, timer_running=False)
-    target = previous_target() if policy.fallback_previous else None
-    return finish("previous_accepted" if target is not None else observation.kind.value, target=target)
+    return finish(observation.kind.value)
 
   assert candidate is not None
   new_limit = state.received_speed_mps != candidate.speed_mps
@@ -428,7 +419,11 @@ def step(state: State, observation: Observation, authority: Authority, policy: P
     return finish("rejected", target=previous_target())
 
   previous_speed = state.accepted.candidate.speed_mps if state.accepted is not None else None
-  if not new_limit and old.pending is None and candidate.speed_mps == previous_speed:
+  # SP-011: an unaccepted conflicting observation is not a new speed zone.
+  # Keep the original acceptance/command identity when the same limit returns;
+  # an explicit adoption above still deliberately clears driver intent.
+  if candidate.speed_mps == previous_speed and ((not new_limit and old.pending is None) or
+                                                not (policy.confirm_lower or policy.confirm_higher)):
     state = replace(state, pending=None, timer_running=False)
     return finish("accepted", target=previous_target())
   confirmation = policy.confirm_higher if previous_speed is None or candidate.speed_mps > previous_speed else (
@@ -444,7 +439,7 @@ def step(state: State, observation: Observation, authority: Authority, policy: P
   state = replace(state, pending=pending, timer_running=True)
 
   if pending.automatic:
-    if authority.can_control or authority.fully_disengaged:
+    if pending.active_elapsed_ns >= policy.automatic_adoption_ns and (authority.can_control or authority.fully_disengaged):
       state, history = _accept(state, candidate, now_ns)
       return finish("accepted" if authority.can_control else "disengaged_accept",
                     target=candidate.speed_mps if authority.can_control else None, history=history)

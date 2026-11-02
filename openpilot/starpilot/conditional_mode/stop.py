@@ -60,6 +60,7 @@ class StopFrame:
   model_tick_mono_s: float | None = None
   model_should_stop: bool | None = None
   stationary_launch_clear: bool = False
+  native_departure_clear: bool = False
   standstill_path_extent_m: float | None = None
   longitudinal_stop_active: bool = False
 
@@ -107,6 +108,7 @@ class StopLightDetector:
     self.standstill_reason: str | None = None
     self.committed = False
     self.standstill_committed = False
+    self.released_at_standstill = False
     self.commit_distance_m = 0.0
     self.commit_clear_since_s: float | None = None
     self.last_observed_mono_s: float | None = None
@@ -127,39 +129,53 @@ class StopLightDetector:
     self.light_hold_until_s = 0.0
     self.approach_hold_until_s = 0.0
 
-  def _commit(self, frame: StopFrame, horizon: float | None, model_stopping: bool | None, acquire: bool, dt: float) -> None:
+  def _commit(self, frame: StopFrame, horizon: float | None, model_stopping: bool | None, acquire: bool, dt: float) -> bool:
     if frame.pedal_override is True:
       self.committed = False
       self.standstill_committed = False
       self.commit_clear_since_s = None
-      return
+      return False
     if acquire and not self.committed and horizon is not None:
       self.committed = True
+      self.released_at_standstill = False
       self.commit_distance_m = horizon
     if self.committed:
       assert frame.speed_mps is not None
       self.commit_distance_m = max(0.0, self.commit_distance_m - frame.speed_mps * dt)
       launch_clear = (self.standstill_committed and frame.standstill is True and frame.speed_mps <= 0.01 and
                       frame.forcing_stop is False and frame.stationary_launch_clear is True)
-      clear_distance = max(0.0 if launch_clear else FROZEN_RAW_STOP_DISTANCE_M,
-                           self.commit_distance_m) + STOP_MODEL_RELEASE_MARGIN_M
-      clear = (horizon is not None and model_stopping is False and frame.model_should_stop is False and
+      native_departure_clear = launch_clear and frame.native_departure_clear is True
+      # Once independently stopped, a qualified native/model departure is
+      # current authority. The integrated approach distance can retain error
+      # after braking and is not a fresh obstacle measurement.
+      clear_distance = (STOP_MODEL_RELEASE_MARGIN_M if native_departure_clear else
+                        max(0.0 if launch_clear else FROZEN_RAW_STOP_DISTANCE_M,
+                            self.commit_distance_m) + STOP_MODEL_RELEASE_MARGIN_M)
+      clear = (frame.forcing_stop is False and frame.stop_sign_confirmed is False and
+               (not frame.standstill or frame.dashboard_stop_sign is False) and
+               horizon is not None and (native_departure_clear or model_stopping is False) and frame.model_should_stop is False and
                horizon >= clear_distance)
       if clear:
         if self.commit_clear_since_s is None:
           self.commit_clear_since_s = frame.now_mono_s
-        elif frame.now_mono_s - self.commit_clear_since_s >= 0.5:
+        elif frame.now_mono_s - self.commit_clear_since_s >= (0.15 if native_departure_clear else 0.5):
           self.committed = False
           self.standstill_committed = False
           self.commit_clear_since_s = None
           self._reset_light()
+          self.standstill_model_stopped = False
+          self.standstill_reason = None
+          self.released_at_standstill = frame.standstill is True
+          return True
       else:
         self.commit_clear_since_s = None
+    return False
 
   def _commit_ford_standstill(self, frame: StopFrame, extent: float) -> None:
     # Commit only an already established, geometry-qualified stopped hold.
     # The model action corroborates that hold; it cannot acquire a light alone.
-    if (frame.car_fingerprint in FORD_STOP_NAMES and frame.standstill is True and
+    if (frame.model_stop_time_s is not None and frame.model_stop_time_s > 0.0 and
+        frame.car_fingerprint in FORD_STOP_NAMES and frame.standstill is True and
         frame.pedal_override is False and frame.model_should_stop is True and
         frame.longitudinal_stop_active is True and
         self.standstill_reason == 'light' and self.standstill_model_stopped and
@@ -247,10 +263,13 @@ class StopLightDetector:
     if frame.pedal_override is True:
       self.reset()
       return StopObservation(False, False, None, False)
+    if (frame.standstill is False or frame.model_should_stop is not False or forcing_stop or
+        frame.stop_sign_confirmed or frame.dashboard_stop_sign is not False):
+      self.released_at_standstill = False
     dt = model_tick - self.last_model_tick_mono_s if self.last_model_tick_mono_s is not None else DT_MDL
     self.last_observed_mono_s = observed
     self.last_model_tick_mono_s = model_tick
-    if horizon is None or (self.committed and lead.present and lead.tracked is None):
+    if horizon is None or (self.committed and lead.present and lead.tracked is None and not frame.native_departure_clear):
       self._commit(frame, None, None, False, dt)
       if self.committed:
         self.light_detected = True
@@ -260,7 +279,7 @@ class StopLightDetector:
       if horizon is None and frame.standstill is True and frame.pedal_override is False and extent is not None:
         self._commit_ford_standstill(frame, extent)
         release_distance = FROZEN_RAW_STOP_DISTANCE_M + (STOP_MODEL_RELEASE_MARGIN_M if self.standstill_model_stopped else 0.0)
-        self.standstill_model_stopped = extent < release_distance
+        self.standstill_model_stopped = not self.released_at_standstill and extent < release_distance
         hold, reason = self._standstill(frame, self.standstill_model_stopped or forcing_stop)
         return StopObservation(None, hold, reason, None)
       self.invalidate()
@@ -268,7 +287,7 @@ class StopLightDetector:
     # At standstill the speed-scaled detector has a zero threshold. Its raw
     # 50 m fallback therefore needs the same spatial release band as an approach;
     # otherwise a 49.9/50.1 m horizon alternates the actual CEM hold each tick.
-    if frame.stationary_launch_clear is True and frame.standstill and frame.pedal_override is False:
+    if (frame.stationary_launch_clear is True or self.released_at_standstill) and frame.standstill and frame.pedal_override is False:
       # The qualified launch proof clears the coarse stationary <50m fallback;
       # the acquired stop still holds until _commit's continuous clear dwell.
       self.standstill_model_stopped = False
@@ -294,7 +313,8 @@ class StopLightDetector:
       return unknown
     if turn_scene or frame.traffic_mode or speed * MPS_TO_MPH > 75.0:
       self._reset_light()
-      self._commit(frame, horizon, horizon < FROZEN_RAW_STOP_DISTANCE_M, False, dt)
+      if self._commit(frame, horizon, horizon < FROZEN_RAW_STOP_DISTANCE_M, False, dt):
+        return StopObservation(False, False, None, False)
       self.light_detected = self.committed
       hold, reason = self._standstill(frame, model_stopped)
       return StopObservation(self.light_detected, hold, reason, False)
@@ -340,7 +360,10 @@ class StopLightDetector:
     if filtered and (model_stopped or strong):
       self.light_hold_until_s = now + 4.0
     hold_context = not relevant or trackable_approach
-    self._commit(frame, horizon, model_stopping, filtered or handoff or approach_latched, dt)
+    if self._commit(frame, horizon, model_stopping, filtered or handoff or approach_latched, dt):
+      # Handoff/active were computed from the old light state. Reusing them
+      # after release re-acquires the same stop on the next model tick.
+      return StopObservation(False, False, None, False)
     self.light_detected = bool(self.committed or active or (hold_context and now < self.light_hold_until_s))
     hold, reason = self._standstill(frame, model_stopped)
     return StopObservation(self.light_detected, hold, reason, model_stopping)

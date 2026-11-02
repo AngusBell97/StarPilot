@@ -1,8 +1,18 @@
 """Exact modern Tesla screen harness capability and frozen safety selection."""
-from opendbc.car.tesla.values import CAR, TeslaFlags
+from opendbc.car.tesla.values import CAR, TeslaFlags, TeslaSafetyFlags
 
-SCREEN_WORDS = frozenset((512, 513, 1536, 1537))
-BASE_WORDS = frozenset((0, 1))
+SCREEN_WORDS = frozenset((512, 513, 1536, 1537, 768, 769, 1792, 1793))
+BASE_WORDS = frozenset((0, 1, 256, 257))
+SPEED_SYNC = int(TeslaSafetyFlags.SCROLL_SPEED_SYNC)
+# Exact native tesla_sync_param_valid words; every one carries LONG_CONTROL.
+SYNC_WORDS = frozenset((2049, 2305, 2561, 2817, 3585, 3841))
+KNOWN_FLAGS = int(TeslaFlags.MISSING_DAS_SETTINGS | TeslaFlags.HAS_VEHICLE_BUS | TeslaFlags.AOL_SCREEN_BUTTON)
+
+
+def speed_sync_allowed(cp, word):
+  return bool(word in SYNC_WORDS and cp.carFingerprint == CAR.TESLA_MODEL_3 and cp.openpilotLongitudinalControl and
+              cp.flags & TeslaFlags.HAS_VEHICLE_BUS and not cp.flags & ~KNOWN_FLAGS and
+              bool(word & 512) == bool(cp.flags & TeslaFlags.AOL_SCREEN_BUTTON))
 
 
 def screen_tap_supported(cp):
@@ -11,10 +21,15 @@ def screen_tap_supported(cp):
         cp.passive or cp.dashcamOnly or cp.notCar or cp.alternativeExperience not in (0, 32) or len(cp.safetyConfigs) != 1 or
         int(cp.safetyConfigs[0].safetyModel.raw) != 10 or
         not cp.flags & TeslaFlags.HAS_VEHICLE_BUS or
-        cp.flags & ~int(TeslaFlags.MISSING_DAS_SETTINGS | TeslaFlags.HAS_VEHICLE_BUS | TeslaFlags.AOL_SCREEN_BUTTON)):
+        cp.flags & ~KNOWN_FLAGS):
       return False
     word = int(cp.safetyConfigs[0].safetyParam)
-    return (word in BASE_WORDS | SCREEN_WORDS and bool(word & 1) == bool(cp.openpilotLongitudinalControl) and
+    if word & SPEED_SYNC:
+      if not speed_sync_allowed(cp, word):
+        return False
+      word &= ~SPEED_SYNC
+    return (not (word & 256 and cp.carFingerprint != CAR.TESLA_MODEL_3) and
+            word in BASE_WORDS | SCREEN_WORDS and bool(word & 1) == bool(cp.openpilotLongitudinalControl) and
             bool(word & 512) == bool(cp.flags & TeslaFlags.AOL_SCREEN_BUTTON))
   except (AttributeError, ValueError, TypeError, IndexError):
     return False
@@ -24,14 +39,14 @@ modern_screen_supported = screen_tap_supported
 
 
 def screen_qualified(cp, *, marked_only=False):
-  return bool(screen_tap_supported(cp) and int(cp.safetyConfigs[0].safetyParam) in SCREEN_WORDS and
+  return bool(screen_tap_supported(cp) and (int(cp.safetyConfigs[0].safetyParam) & ~SPEED_SYNC) in SCREEN_WORDS and
               cp.alternativeExperience in ((32,) if marked_only else (0, 32)))
 
 
 def apply_screen_button(cp, requested, brake_disengage):
   if not screen_tap_supported(cp):
     return
-  base = int(cp.safetyConfigs[0].safetyParam) & 1
+  base = int(cp.safetyConfigs[0].safetyParam) & (257 | SPEED_SYNC)
   cp.flags &= ~int(TeslaFlags.AOL_SCREEN_BUTTON)
   cp.safetyConfigs[0].safetyParam = base
   if requested:

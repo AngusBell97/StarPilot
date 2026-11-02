@@ -22,6 +22,7 @@ from openpilot.starpilot.ui.onroad_customization import (CAMERA_WIDGETS, PROFILE
 from openpilot.starpilot.ui.onroad_widget_style import draw_widget_frame
 from openpilot.starpilot.curve_speed.status import CurveObservation
 from openpilot.starpilot.ui.onroad_state import ConditionalLead
+from openpilot.starpilot.ui.unified_speed_presentation import resolve_unified_speed
 from openpilot.starpilot.ui.onroad_state import AlertSize, ObservationKind, OnroadAlert, OnroadState, SourceReading, SpeedLimitObservation
 from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice, OnroadAppearance
 from openpilot.starpilot.ui.onroad_dm import draw_monitor_art, monitor_bounds, monitor_visible
@@ -97,9 +98,9 @@ def sample_state(scene: str, document: dict) -> OnroadState:
                      experimental_enabled=scene == "experimental" or scene in CEM_SCENE_REASONS, lateral_active=lateral,
                      longitudinal_active=longitudinal, stock_cruise_active=False,
                      slc_system_long_available=longitudinal, slc_wheel_confirmation_available=longitudinal, torque_utilization=0.78 if lateral else 0.0,
-                     customization=document,
+                     customization=document, lane_correction=.0009 if lateral else 0., lane_correction_limit=.0018,
                      slc_prompt_open=scene == 'slc_pending',
-                     visual_preview=OnroadVisualPreview(cem_reason=CEM_SCENE_REASONS[scene], layout_sample=True) if scene in CEM_SCENE_REASONS else None)
+                     visual_preview=OnroadVisualPreview(cem_reason=CEM_SCENE_REASONS.get(scene), layout_sample=True))
 
   if scene == 'cem_lead':
     state = replace(state, conditional_lead=ConditionalLead(12.0, 0.0))
@@ -339,6 +340,11 @@ class _Canvas:
     captures = []
     for key in RUNTIME_PREVIEW_WIDGETS[str(self.profile)]:
       logical_width, logical_height = widget_size(state.customization, self.profile, key)
+      if self.viewport and key == 'lane_centering_bar':
+        from openpilot.starpilot.ui.onroad_torque_geometry import lane_bar_footprint
+        _, _, logical_width, logical_height = lane_bar_footprint(content.x, content.y, content.width, content.height, self.viewport[0])
+      if self.profile == Profile.COMPACT and key == 'speed_limit' and resolve_unified_speed(state).offset_text:
+        logical_height = max(logical_height, 164) if state.appearance.use_vienna_sign else logical_height + 44
       position = positions[key]
       widget = PROFILES[str(self.profile)]['widgets'][key]
       crop_x = max(0, math.floor(position['x'] - widget.get('visualInsetLeft', 0)))
@@ -353,11 +359,14 @@ class _Canvas:
         offset_x, offset_y = crop_x - position['x'], crop_y - position['y']
       if self.profile == Profile.COMPACT and key == 'speed_limit' and 0 <= crop_y < canvas_height:
         height = min(height, canvas_height - crop_y)
-      if x + width > 1024:
+      art_width, art_height = widget_art_size(width, height)
+      if x + art_width > 1024:
         x, y, row_height = 0, y + row_height, 0
-      sprites[key] = {'x': x, 'y': y, 'width': width, 'height': height, 'offsetX': offset_x, 'offsetY': offset_y}
-      x += width
-      row_height = max(row_height, height)
+      sprites[key] = {'x': x, 'y': y, 'width': art_width, 'height': art_height, 'offsetX': offset_x, 'offsetY': offset_y}
+      if art_width != width:
+        sprites[key].update(displayWidth=width, displayHeight=height)
+      x += art_width
+      row_height = max(row_height, art_height)
       if not (0 <= crop_x <= canvas_width - width and 0 <= crop_y <= canvas_height - height):
         raise ValueError("Widget art crop lies outside the canvas")
       rl.begin_texture_mode(self.target)
@@ -373,7 +382,7 @@ class _Canvas:
             # General edit shows a representative CEM sample even though its backdrop
             # remains engaged. Driving scenes always use their unmodified state.
             sample = {'cem_gauge': 'cem_curve', 'speed_limit_actions': 'slc_pending'}.get(key) if general else None
-            widget_state = sample_state(sample, state.customization) if sample is not None else state
+            widget_state = replace(sample_state(sample, state.customization), lane_clean_arc=state.lane_clean_arc) if sample is not None else state
             self._settle(widget_state)
             self.view._ordered_widgets(content, widget_state, only_widget=key)
         finally:
@@ -385,7 +394,9 @@ class _Canvas:
         rl.image_format(image, rl.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8)
         rl.image_flip_vertical(image)
         rl.image_crop(image, rl.Rectangle(crop_x, crop_y, width, height))
-        captures.append((key, _straight_rgba(bytes(rl.ffi.buffer(image.data, width * height * 4)))))
+        if art_width != width:
+          rl.image_resize(image, art_width, art_height)
+        captures.append((key, _straight_rgba(bytes(rl.ffi.buffer(image.data, art_width * art_height * 4)))))
       finally:
         rl.unload_image(image)
     sheet_width = max(slot['x'] + slot['width'] for slot in sprites.values())
@@ -446,7 +457,8 @@ class _Canvas:
 
 
 class LayoutPreviewRenderer:
-  def __init__(self):
+  def __init__(self, *, clean_lane_bar=lambda: False):
+    self._clean_lane_bar = clean_lane_bar
     self._canvas: _Canvas | None = None
     self._last_use = 0.0
 
@@ -476,7 +488,7 @@ class LayoutPreviewRenderer:
       width = profile.size[0] - (SIDEBAR_WIDTH if sidebar else 0)
       # Widget art is cropped from the saved 1860px road, as the editor places each sprite itself.
       document = fit_to_road(document, ROAD_BASE_WIDTH if payload.get('art') is True else width)
-    state = sample_state(scene, document)
+    state = replace(sample_state(scene, document), lane_clean_arc=self._clean_lane_bar())
     if profile == Profile.LARGE and viewport is None:
       state = replace(state, viewport_width=width, appearance=replace(state.appearance, show_developer_sidebar=sidebar))
     if profile == Profile.LARGE:
@@ -507,3 +519,8 @@ class LayoutPreviewRenderer:
     if self._canvas is not None:
       self._canvas.close()
     self._canvas = None
+
+
+def widget_art_size(width, height):
+  """Bound wide projection sprites without changing their displayed geometry."""
+  return (1024, max(1, round(height * 1024 / width))) if width > 1024 else (width, height)

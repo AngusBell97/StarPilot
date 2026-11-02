@@ -5,6 +5,8 @@ const COLORS = ["cardFill", "cardBorder", "text"]
 export const ROAD_COLORS = ["path", "pathEdge", "laneLines"]
 // "default" is a legacy saved value that now renders as acceleration colors.
 export const PATH_MODES = ["default", "color", "rainbow", "acceleration"]
+// Optional widgets start off and never block placement while off.
+const OPTIONAL_WIDGETS = ["driving_mode_descriptions", "clock", "stopped_timer", "lane_centering_bar"]
 export const HEX = /^#[0-9a-fA-F]{8}$/
 const keysEqual = (value, keys) => value && typeof value === "object" && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))

@@ -29,6 +29,7 @@ class LaneChangePolicy:
   close_gap_seconds: float = 0.75
   duration_s: float = 3.0 + 25.0 / 9.0
   turn_signal_guidance: bool = True
+  close_gap_fast_pace: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,19 +61,21 @@ def decode(raw: bytes) -> LaneChangePolicy | None:
     return None
   version = data.get("version")
   fields = {"version", "enabled", "minimumSpeedMps", "onePerSignal"}
-  if version in (2, 3, 4, 5):
+  if version in (2, 3, 4, 5, 6):
     fields |= {"autoLaneChange", "autoDelayS", "minimumLaneWidthM"}
-  if version in (3, 4, 5):
+  if version in (3, 4, 5, 6):
     fields |= {"closeGap", "closeGapSeconds"}
-  if version in (4, 5):
+  if version in (4, 5, 6):
     fields |= {"durationS"}
-  if version == 5:
+  if version in (5, 6):
     fields |= {"turnSignalGuidance"}
+  if version == 6:
+    fields |= {"closeGapFastPace"}
   if set(data) != fields:
     return None
   enabled = data["enabled"]
   speed, once = data["minimumSpeedMps"], data["onePerSignal"]
-  if (type(version) is not int or version not in (1, 2, 3, 4, 5) or type(enabled) is not bool or type(once) is not bool or
+  if (type(version) is not int or version not in (1, 2, 3, 4, 5, 6) or type(enabled) is not bool or type(once) is not bool or
       type(speed) not in (int, float)):
     return None
   try:
@@ -109,7 +112,10 @@ def decode(raw: bytes) -> LaneChangePolicy | None:
   guidance = data.get("turnSignalGuidance", True)
   if type(guidance) is not bool:
     return None
-  return LaneChangePolicy(enabled, finite_speed, once, auto, delay, width, close_gap, seconds, float(duration), guidance)
+  fast = data.get("closeGapFastPace", False)
+  if type(fast) is not bool:
+    return None
+  return LaneChangePolicy(enabled, finite_speed, once, auto, delay, width, close_gap, seconds, float(duration), guidance, fast)
 
 
 def to_value(policy: LaneChangePolicy) -> dict[str, int | bool | float]:
@@ -142,10 +148,13 @@ def to_value(policy: LaneChangePolicy) -> dict[str, int | bool | float]:
     raise ValueError("invalid lane-change duration")
   if type(policy.turn_signal_guidance) is not bool:
     raise ValueError("invalid turn signal guidance")
-  return {"version": 5, "enabled": policy.enabled, "minimumSpeedMps": finite_speed,
+  if type(policy.close_gap_fast_pace) is not bool:
+    raise ValueError("invalid close-gap steering preference")
+  return {"version": 6, "enabled": policy.enabled, "minimumSpeedMps": finite_speed,
           "onePerSignal": policy.one_per_signal, "autoLaneChange": policy.auto_lane_change,
           "autoDelayS": delay, "minimumLaneWidthM": width,
-          "closeGap": policy.close_gap, "closeGapSeconds": seconds, "durationS": policy.duration_s, "turnSignalGuidance": policy.turn_signal_guidance}
+          "closeGap": policy.close_gap, "closeGapSeconds": seconds, "durationS": policy.duration_s, "turnSignalGuidance": policy.turn_signal_guidance,
+          "closeGapFastPace": policy.close_gap_fast_pace}
 
 
 def read_saved(params: Any) -> SavedLaneChange:
@@ -207,6 +216,8 @@ class LiveLaneChangePolicy:
       self.applied = replace(self.applied, enabled=False, auto_lane_change=False)
     elif not self.requested.auto_lane_change and self.applied.auto_lane_change:
       self.applied = replace(self.applied, auto_lane_change=False)
+    if not self.requested.close_gap or not self.requested.close_gap_fast_pace:
+      self.applied = replace(self.applied, close_gap=self.requested.close_gap, close_gap_fast_pace=False)
     if not self.requested.turn_signal_guidance:
       self.applied = replace(self.applied, turn_signal_guidance=False)
     if not signaling and not maneuver_active:

@@ -14,8 +14,11 @@ from openpilot.system import micd
 from openpilot.common.hardware import HARDWARE, PC
 from openpilot.common.params import Params
 from openpilot.starpilot.aol.wire import INTENT_SERVICE
-from openpilot.starpilot.audio.alert_volume import AUTO, VOLUMES, effective_volume, read_volume
+from openpilot.starpilot.audio.alert_volume import AUTO, DEFAULTS, VOLUMES, effective_volume, read_volume
 from openpilot.starpilot.audio.axis_alerts import AxisAlerts
+from openpilot.starpilot.audio.slc_warning import SlcWarning
+from openpilot.starpilot.audio.model_ready import ModelReadyChime, preference
+from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.audio.sound_pack import PACK_ROOT, SoundPackLoader, migrate_removed_selection
 
 SAMPLE_RATE = 48000
@@ -39,9 +42,11 @@ if HARDWARE.get_device_type() in ("tici", "tizi"):
 
 AudibleAlert = log.SelfdriveState.AudibleAlert
 CRITICAL_MAX = -1 # internal sound key, not an AudibleAlert
+GPU_MODEL_READY = 1000  # internal sound key, never published as an AudibleAlert
 
 
 sound_list: dict[int, tuple[str, int | None, float]] = {
+  GPU_MODEL_READY: ("model_ready.wav", 1, MAX_VOLUME),
   # AudibleAlert, file name, play count (none for infinite)
   AudibleAlert.engage: ("engage.wav", 1, MAX_VOLUME),
   AudibleAlert.disengage: ("disengage.wav", 1, MAX_VOLUME),
@@ -59,6 +64,7 @@ sound_list: dict[int, tuple[str, int | None, float]] = {
 }
 
 ALERT_VOLUME_KEYS = {
+  GPU_MODEL_READY: "GpuModelReadyVolume",
   AudibleAlert.engage: "EngageVolume",
   AudibleAlert.disengage: "DisengageVolume",
   AudibleAlert.refuse: "RefuseVolume",
@@ -87,7 +93,7 @@ class Soundd:
     self.pack_loader = SoundPackLoader(self.volume_params, Path(__file__).resolve().parents[1] / "assets/sounds", pack_root,
                                        device_type=HARDWARE.get_device_type())
     self.load_sounds()
-    self.saved_volumes = {key: AUTO for key, _, _ in VOLUMES}
+    self.saved_volumes = {key: DEFAULTS.get(key, AUTO) for key, _, _ in VOLUMES}
     self.volume_read_at = 0.0
 
     self.current_alert = AudibleAlert.none
@@ -107,6 +113,11 @@ class Soundd:
     self.stream_report_at = None
     self.native_audio = None
     self.axis_alerts = AxisAlerts()
+    self.slc_warning = SlcWarning()
+    self.model_ready_chime = ModelReadyChime()
+    self.model_ready_checked_at = -1.0
+    self.slc_warning_playing = False
+    self.slc_warning_volume = 0.
 
     self.spl_filter_weighted = FirstOrderFilter(0, 2.5, FILTER_DT, initialized=False)
 
@@ -143,7 +154,7 @@ class Soundd:
           self.pending_stop = False
           break
 
-    key = ALERT_VOLUME_KEYS.get(producing_alert)
+    key = self.volume_key(producing_alert)
     ambient = self.current_volume
     if sound_data is not None and self.pack_loader.is_builtin(sound_data):
       ambient = max(ambient, STARPILOT_AUTO_MIN)
@@ -152,12 +163,17 @@ class Soundd:
       immediate_ramp=self.current_volume if producing_alert in (AudibleAlert.warningSoft, AudibleAlert.warningImmediate) else None)
     return ret * gain
 
+  def volume_key(self, alert):
+    return ("SLCWarningVolume" if self.slc_warning_playing and alert == AudibleAlert.preAlert
+            else ALERT_VOLUME_KEYS.get(alert))
+
   def refresh_saved_volumes(self, now: float) -> None:
     """Read slow Params state from the service loop, never the audio callback."""
     if now - self.volume_read_at < 0.25:
       return
     self.volume_read_at = now
     self.saved_volumes = {key: read_volume(self.volume_params, key).value for key, _, _ in VOLUMES}
+    self.slc_warning_volume = self.saved_volumes["SLCWarningVolume"] or 0.
 
   def callback(self, data_out: np.ndarray, frames: int, time, status) -> None:
     data_out[:frames, 0] = self.get_sound_data(frames)
@@ -214,6 +230,14 @@ class Soundd:
       new_alert = sm['selfdriveState'].alertSound.raw
       now_ns = time.monotonic_ns()
       new_alert = self.axis_alerts.update(sm, new_alert, now_ns)
+      if new_alert != AudibleAlert.none:
+        self.slc_warning_playing = False
+      warn = self.slc_warning.update(sm, now_ns,
+        busy=new_alert != AudibleAlert.none or self.current_alert not in (AudibleAlert.none, GPU_MODEL_READY),
+        enabled=self.slc_warning_volume > 0)
+      if warn:
+        self.slc_warning_playing = True
+        new_alert = AudibleAlert.preAlert
       self.update_alert(new_alert)
     elif check_selfdrive_timeout_alert(sm):
       self.update_alert(AudibleAlert.warningImmediate)
@@ -221,6 +245,32 @@ class Soundd:
     elif self.selfdrive_timeout_alert:
       self.update_alert(AudibleAlert.none)
       self.selfdrive_timeout_alert = False
+
+  def update_model_ready_sound(self, sm, now):
+    if now - self.model_ready_checked_at < .25:
+      return
+    self.model_ready_checked_at = now
+    self.refresh_saved_volumes(now)
+    _, _, enabled = preference(self.volume_params)
+    active, active_valid = read_saved(self.volume_params, "ChestnutActive", 1)
+    loading, loading_valid = read_saved(self.volume_params, "ChestnutLoading", 1)
+    active = (active == b"1") if active_valid and active in (b"0", b"1") else None
+    fresh = lambda name, age: (sm.seen[name] and sm.alive[name] and sm.valid[name] and
+                              0 <= now - sm.logMonoTime[name] / 1e9 <= age)
+    device_fresh = fresh('deviceState', 2.5)
+    if not device_fresh:
+      # Missing transport is not a new loading session.
+      return
+    onroad = sm['deviceState'].started
+    output_ready = (fresh('modelV2', .25) and sm['modelV2'].big and
+                    fresh('selfdriveState', .5) and sm['deviceState'].chestnutPresent)
+    pending = self.model_ready_chime.update(onroad=onroad, active=active,
+      loading=loading_valid and loading == b"1", output_ready=output_ready,
+      enabled=enabled and loading_valid and loading == b"0", now=now)
+    if pending and self.current_alert == AudibleAlert.none and not self.selfdrive_timeout_alert:
+      self.model_ready_chime.consume()
+      self.slc_warning_playing = False
+      self.update_alert(GPU_MODEL_READY)
 
   def update_critical_sound(self, now: float) -> None:
     if self.current_alert in (AudibleAlert.warningSoft, AudibleAlert.warningImmediate):
@@ -270,7 +320,7 @@ class Soundd:
     import sounddevice as sd
     micd.patch_sounddevice(sd)
 
-    sm = messaging.SubMaster(['selfdriveState', 'soundPressure', 'aolAxisState', INTENT_SERVICE])
+    sm = messaging.SubMaster(['selfdriveState', 'soundPressure', 'aolAxisState', INTENT_SERVICE, 'slcState', 'deviceState', 'modelV2'])
 
     with self.get_stream(sd) as stream:
       rk = Ratekeeper(20)
@@ -293,6 +343,7 @@ class Soundd:
             self.current_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
 
         self.get_audible_alert(sm)
+        self.update_model_ready_sound(sm, time.monotonic())
 
         self.update_critical_sound(time.monotonic())
         if self.native_audio is not None:

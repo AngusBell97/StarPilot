@@ -285,6 +285,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     _, tagged = ioniq_candidate()
     root = Path(self.params.get_param_path("LaneCentering")).parent
     registered = self.params
+    registered_strength_default = registered.get_default_value("LaneCenteringStrength")
     class Files:
       def get_param_path(self, key):
         return str(root / key)
@@ -311,7 +312,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.assertTrue(self.owner.apply(FeatureSettingsRequest(reset_row.key, reset_row.source, reset_row.default_value,
                                                           vehicle_fingerprint=reset_row.vehicle_fingerprint)))
     self.assertEqual((root / row.key).read_bytes(), b"1.5")
-    self.assertEqual(registered.get_default_value("LaneCenteringStrength"), 1.5)
+    self.assertEqual(registered.get_default_value("LaneCenteringStrength"), registered_strength_default)
     for percent, expected in ((33, b"0.5"), (67, b"1.005"), (100, b"1.5"), (105, b"1.575"), (150, b"2.25"), (200, b"3.0")):
       current = self._row("lane", "LaneCenteringStrength")
       self.assertTrue(self.owner.apply(FeatureSettingsRequest(current.key, current.source, str(percent),
@@ -441,8 +442,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
 
   def test_corrupt_bytes_remain_visible_and_untouched(self):
     for key, page, raw in (("LaneCenterOffset", "lane", b"nan"),
-                           ("SpeedLimitController", "slc", b"maybe"),
-                           ("SLCFallback", "slc", b"broken")):
+                           ("SpeedLimitController", "slc", b"maybe")):
       with self.subTest(key=key):
         path = Path(self.params.get_param_path(key))
         path.write_bytes(raw)
@@ -516,21 +516,42 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.owner.vehicle_params = lambda: cp
     self.assertFalse(any(row.key in ('SLCConfirmationLower', 'SLCConfirmationHigher') for row in
                          self.owner.snapshot('slc', parked=True, system_long=True, lateral_context=True, metric=False).rows))
-    self.assertFalse(self.owner.apply(FeatureSettingsRequest('SLCConfirmationLower', None, 'On', vehicle_fingerprint=self.fingerprint)))
-    parent = self._row("slc", "SLCConfirmation")
-    self.assertTrue(self.owner.apply(required_change(parent)))
-    self.assertTrue(self.params.get_bool('SLCConfirmation'))
+    legacy = Path(self.params.get_param_path('SLCConfirmation'))
+    legacy_before = legacy.read_bytes() if legacy.exists() else None
+    lower = self._row("slc/timing", "SLCConfirmationLower")
+    change = required_change(lower)
+    self.assertTrue(self.owner.apply(change))
+    self.assertTrue(self.params.get_bool('SLCConfirmationLower'))
+    self.assertFalse(self.params.get_bool('SLCConfirmationHigher'))
+    self.assertFalse(self.owner.apply(change))
+    self.assertEqual(legacy.read_bytes() if legacy.exists() else None, legacy_before)
+    self.allowed = False
+    higher = self._row("slc/timing", "SLCConfirmationHigher")
+    self.assertFalse(higher.available)
+    self.assertFalse(self.owner.apply(FeatureSettingsRequest(higher.key, higher.source, 'On', vehicle_fingerprint=self.fingerprint)))
+    self.allowed = True
     authority = self._row("lane", "LaneCenteringE2EAuthority")
     self.assertEqual(authority.value, "100.0")
     self.assertTrue(self.owner.apply(required_change(authority, -1)))
     self.assertAlmostEqual(self.params.get("LaneCenteringE2EAuthority"), 0.95)
-    offset = self._row("slc", "Offset1")
+    offset = self._row("slc/offsets", "Offset1")
     self.assertFalse(offset.available)
     self.assertFalse(self.owner.apply(FeatureSettingsRequest("Offset1", offset.source, "5", vehicle_fingerprint=offset.vehicle_fingerprint)))
     Path(self.params.get_param_path("IsMetric")).write_bytes(b"bad")
-    offset = self._row("slc", "Offset1")
+    offset = self._row("slc/offsets", "Offset1")
     self.assertIn("invalid saved units", offset.label)
     self.assertEqual(Path(self.params.get_param_path("IsMetric")).read_bytes(), b"bad")
+
+  def test_retired_fallback_is_hidden_and_cannot_be_written(self):
+    path = Path(self.params.get_param_path('SLCFallback'))
+    for raw in (b'0', b'1', b'2', b'broken'):
+      with self.subTest(raw=raw):
+        path.write_bytes(raw)
+        rows = self.owner.snapshot('slc', parked=True, system_long=True, lateral_context=True, metric=False).rows
+        self.assertFalse(any(row.key == 'SLCFallback' for row in rows))
+        self.assertFalse(self.owner.apply(FeatureSettingsRequest('SLCFallback', raw, 'Off',
+                                                                  vehicle_fingerprint=self.fingerprint)))
+        self.assertEqual(path.read_bytes(), raw)
 
   def test_limit_sign_preference_needs_parked_authority_not_long_control_or_vehicle(self):
     self.fingerprint = None
@@ -545,8 +566,10 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     sign = next(row for row in page.rows if row.key == "ShowSpeedLimits")
     self.assertTrue(sign.available)
     self.assertIsNone(sign.vehicle_fingerprint)
-    for key in ("SpeedLimitController", "SLCConfirmation", "SLCPriority1", "SLCFallback"):
-      self.assertFalse(next(row for row in page.rows if row.key == key).available)
+    for child, key in (("slc", "SpeedLimitController"), ("slc/timing", "SLCConfirmationLower"),
+                       ("slc/timing", "SLCConfirmationHigher"), ("slc/sources", "SLCPriority1")):
+      child_page = self.owner.snapshot(child, parked=True, system_long=False, lateral_context=False, metric=False)
+      self.assertFalse(next(row for row in child_page.rows if row.key == key).available)
     request = required_change(sign)
     self.allowed = False
     self.assertFalse(self.owner.apply(request))

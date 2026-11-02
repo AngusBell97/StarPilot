@@ -27,39 +27,56 @@ An expired confirmation stays declined even if SET now matches. Changing only
 display units renews pending actions while preserving accepted limits, declines, manual
 overrides and the already applied SET.
 
-With Automatic adoption on, qualified new limits are adopted immediately.
-With it off, the stationary confirmation card gives two gentle purple pulses
+This custom build retains profile-calculated mapped lower-limit timing and the
+separate mapped higher-limit distance. The lower timing adjustment offsets the
+calculated slowing point; it does not replace the forecast with a fixed number of
+seconds. Known mapped zones shorter than five seconds are filtered in either
+direction. Warning lead time, same-zone manual speed memory, the bounded accepted
+preview hold and checked preview rollback remain enabled by their existing rules.
+Automatic adoption retains this build's source qualification and timing policy.
+For limits needing confirmation, the stationary card gives two gentle purple pulses
 (700 ms each, separated by 200 ms), then rests until the 3.2-second cycle repeats.
 Only the lower part of the card pulses; the speed and source remain steady.
 The arrow remains relative to vehicle speed.
-Outside manual confirmation, large UI uses the same US or Vienna sign at 1.25×
-scale beside SET speed.
-US signs share a cached antialiased white outline with a transparent interior;
-the offset fits inside the fixed sign height on both screens.
+This build retains its smaller Vienna sign with the offset underneath.
 Both sign styles identify the displayed source: DASH for Dashboard, OSM for offline
 Maps, and VISION for the vision model. Explicit Mapbox readings in historical
-replay use NAV; unidentified sources keep SPEED. Retained readings use LAST.
+replay use NAV; unidentified sources keep SPEED. Retained readings keep their
+original source label.
 Both styles place only this source above the number, beside any pending arrow.
 The source and arrow share a centered row; all sign contents use the same geometry
 on both screens. Small arrows are baked at double resolution and text is aligned
 to final pixels for clear native rendering.
-Steering-wheel + accepts and − declines. Tapping the sign opens the same
+Tesla wheel gestures retain their speed-adjustment role. Tapping the sign opens the same
 Accept / Reject choices on either native screen. A pending manual choice expires
 after ten monotonic seconds, including time without active longitudinal control.
 Decline and timeout leave set speed unchanged. An action at the exact deadline
 can still complete its presented decision; a later action cannot accept it.
 
-The existing saved `SLCConfirmation` bit is retained: `0` means Automatic adoption
-on and `1` means off. Both native settings layouts show the inverse as Automatic
-adoption. Legacy directional confirmation and override preferences do not change
-this policy. No new saved preference or dependency is needed.
+The existing saved `SLCConfirmation` bit supplies the default for this build's
+separate lower-limit and higher-limit confirmation choices. The standalone
+"Use X Speed" button is removed; the confirmation card and assigned adoption action
+remain available. This update does not change saved preferences.
 
 Only a finite positive source observation can propose a limit. Missing, stale and
 unknown observations stay distinct. Source loss clears a pending choice; it cannot
 change set speed. While the publisher remains fresh, the widget retains the latest
-received limit and offset with an unavailable status, independently of accepted
-history and the previous-limit fallback preference. A LAST marker identifies the
-retained reading on either screen. Offset-only edits preserve accepted and
+received limit, offset and original source with an unavailable status, independently
+of accepted history. Cruise continues using its current SET, including a driver's
+manual adjustment. Source loss creates no speed target and cannot select a
+different Conditional Experimental or Conditional Chill mode. Normal mode triggers
+and live braking safeguards remain with their existing owners.
+The custom five-second map-to-dashboard delay remains in force. A fresh, qualified
+map observation may still complete the existing checked preview rollback; a loss
+of data alone cannot initiate that restoration.
+
+Previous accepted limit and its legacy Experimental fallback are retired.
+`SLCFallback` remains registered without a default solely to preserve existing
+saved bytes for older versions; current code neither reads nor writes it.
+Missing, 0, 1, 2 and malformed old values all use the same behavior above.
+Old Quick Select assignments remain saved but unavailable.
+
+Offset-only edits preserve accepted and
 rejected state and renew action identities. A changed offset can update the set
 speed of the accepted current limit; source loss defers this command until that
 limit is qualified again.
@@ -84,6 +101,10 @@ or creating an SLC override. Adoption and confirmation can update software set
 speed while accelerator override temporarily suspends actuator output. On release the ordinary planner approaches set speed
 using the currently selected braking profile. Existing lead and stopping constraints
 continue to apply.
+
+The onroad screen does not offer a separate button to reapply the displayed limit.
+The configured wheel action to adopt a limit remains available, as do the normal
+set-speed buttons and confirmation for a different limit.
 
 With SLC enabled and system longitudinal control available, card owns software set
 speed even on PCM vehicles; PCM still owns engagement. Native PCM setpoint changes

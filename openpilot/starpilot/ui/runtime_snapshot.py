@@ -41,12 +41,15 @@ from opendbc.car.structs import car as car_schema
 from openpilot.starpilot.ui.device_state import DeviceRequest, DeviceState
 from openpilot.starpilot.ui.home_state import HomeMode, HomeState
 from openpilot.starpilot.models.jetlink_status import JetlinkStatusFeed
+from openpilot.starpilot.ui.lead_follow import FollowTargetReader
 from openpilot.starpilot.ui.onroad_state import conditional_lead_from_message
 from openpilot.starpilot.ui.onroad_state import (AlertSize, BorderSignals, ObservationKind, OnroadAlert,
                                                 OnroadState, SpeedLimitObservation, is_personality_notice, speed_limit_from_message)
 from openpilot.starpilot.ui.unified_speed_presentation import displayed_adjusted_limit_mps, displayed_limit_mps, positive, retaining_limit
 from openpilot.starpilot.ui.onroad_stopped_timer import StoppedTimer
 from openpilot.starpilot.ui.onroad_lane_alerts import lateral_lane_alert
+from openpilot.starpilot.ui.tesla_speed_sync_warning import SpeedSyncCaption
+from openpilot.starpilot.lateral.lane_feedback import correction_feedback, STOCK_CORRECTION
 from openpilot.starpilot.ui.onroad_camera import ReverseDriverCamera
 from openpilot.starpilot.ui.navigation_state import navigation_display, official_navigation_display
 from openpilot.starpilot.ui.settings_state import Destination, DestinationAvailability, SettingsState
@@ -300,6 +303,8 @@ class RuntimeSnapshotAdapter:
     self.bluetooth_powered = bluetooth_powered
     self._customization_value = default_document()
     self._appearance_value = OnroadAppearance()
+    self._follow_target = FollowTargetReader(getattr(ui_state, "params", None))
+    self._lane_clean_arc = False
     self._appearance_read_ns: int | None = None
     # A second screen (Android Auto) swaps in its own display choices before anything uses them.
     self.appearance_override: Callable[[OnroadAppearance], OnroadAppearance] | None = None
@@ -319,6 +324,7 @@ class RuntimeSnapshotAdapter:
     self._traffic_map_assigned = False
     self._traffic_profile_valid = False
     self._personality_notice = PersonalityNotice()
+    self._speed_sync_caption = SpeedSyncCaption()
     self._stopped_timer = StoppedTimer()
     self._replay_stopped_history = False
     self._developer_metrics = DeveloperMetrics()
@@ -401,6 +407,7 @@ class RuntimeSnapshotAdapter:
         now_ns - self._appearance_read_ns >= 1_000_000_000):
       self._customization_value = read_customization(self.ui_state.params)
       self._appearance_value = onroad_appearance(self.ui_state.params)
+      self._lane_clean_arc = _text(self.ui_state.params, "LaneCenteringVersion") == "6"
       if self.appearance_override is not None:
         self._appearance_value = self.appearance_override(self._appearance_value)
       self._appearance_read_ns = now_ns
@@ -617,7 +624,7 @@ class RuntimeSnapshotAdapter:
       self._slc_sign_cache = None
     if (slc is not None and (slc.enabled or slc.displayOnly) and observation.kind != ObservationKind.VALID and
         not retaining_limit(observation)):
-      # SLC is on but has no limit right now: keep the limit half of the card (as "–")
+      # SLC is on but has no limit right now: keep the limit half of the card (as "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“")
       # instead of letting it come and go with the source.
       observation = SpeedLimitObservation(kind=ObservationKind.STALE, source=observation.source, status=observation.status,
                                           source_readings=observation.source_readings)
@@ -651,6 +658,7 @@ class RuntimeSnapshotAdapter:
       cp is not None and cp.openpilotLongitudinalControl)
     cruise_state = getattr(car, 'cruiseState', None)
     wheel_confirmation = bool(
+      not (cp is not None and getattr(cp, 'carFingerprint', '') in ('TESLA_MODEL_3', 'TESLA_MODEL_Y')) and
       system_long and control is not None and getattr(control, 'enabled', False) and
       cruise_state is not None and getattr(cruise_state, 'available', False) and
       not (cp is not None and getattr(cp, 'brand', '') == 'toyota' and
@@ -661,6 +669,11 @@ class RuntimeSnapshotAdapter:
       torque=current_message(sm, 'lateralTorqueParameters', now_ns, after_frame=after) if started else None,
       parameters=display_message(sm, 'vehicleParameters', now_ns, after_frame=after) if started else None,
       metric=bool(ui.is_metric), cp=cp)
+    lane_correction, lane_limit = correction_feedback(sm, now_ns, after, use_request=True) if started and mode == ShellMode.ONROAD else (0.0, STOCK_CORRECTION)
+    traffic_active = bool(traffic is not None and traffic.state == 'active')
+    follow_target = (self._follow_target.sample(now_ns, list(Personality).index(persona),
+                                                getattr(display_car, 'vEgo', None) if display_car_valid else None, cp,
+                                                traffic_mode=traffic_active) if started else None)
     onroad = OnroadState(developer_metrics=developer_metrics,
                          engaged=display_lat_active or display_long_active or longitudinal_overridden, camera_available=started,
                          speed_mps=raw_speed, cruise_kph=cruise, speed_limit=observation,
@@ -668,6 +681,10 @@ class RuntimeSnapshotAdapter:
                          toyota_cruise_target_kph=_finite(toyota.targetKph, positive=True) if toyota is not None else None,
                          appearance=self._appearance_value, customization=self._customization_value,
                          alert=alert, metric=bool(ui.is_metric),
+                         tesla_sync_caption=self._speed_sync_caption.update(
+                           car_params=cp, car=display_car, selfdrive=display_selfdrive, comma_kph=cruise,
+                           now_ns=now_ns, drive_frame=after, metric=bool(ui.is_metric),
+                           slc_enabled=bool(slc is not None and slc.enabled), alert_present=alert.size != AlertSize.NONE),
                          experimental_available=bool(ui.has_longitudinal_control),
                          experimental_enabled=observed_experimental,
                          personality=list(Personality).index(persona),
@@ -676,6 +693,8 @@ class RuntimeSnapshotAdapter:
                              event_ns=int(sm.logMonoTime['slcState']))),
                          traffic_mode=bool(traffic is not None and traffic.state == 'active'),
                          traffic_display=traffic,
+                         lane_correction=lane_correction, lane_correction_limit=lane_limit,
+                         lane_clean_arc=self._lane_clean_arc,
                          torque_utilization=torque.utilization if torque.utilization is not None else 0.0,
                          torque_source_available=torque.utilization is not None,
                          torque_drive_frame=after if started else None, drive_frame=after if started else None, observed_ns=now_ns,
@@ -692,6 +711,7 @@ class RuntimeSnapshotAdapter:
                          conditional_configured=self._conditional_choice, conditional_effective=conditional,
                          conditional_perception=perception,
                          conditional_lead=conditional_lead_from_message(display_radar) if display_car_valid else None,
+                         follow_target_s=follow_target,
                          navigation=displayed_navigation,
                          border_signals=border_signals, stopped_duration_s=stopped_duration,
                          reverse_driver_camera=reverse_driver_camera,
