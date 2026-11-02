@@ -901,7 +901,7 @@ class SettingsGatewayTest(unittest.TestCase):
     self.assertTrue(readable)
     assert raw is not None
     document = json.loads(raw)
-    self.assertEqual(document["schemaVersion"], 5)
+    self.assertEqual(document["schemaVersion"], 6)
     self.assertEqual(document["selectedDecelerationProfile"], "sport")
     self.assertNotIn("globalBrakingResponse", document)
     self.assertEqual(document["profiles"]["aggressive"]["braking"], previous)
@@ -946,14 +946,15 @@ class SettingsGatewayTest(unittest.TestCase):
     else:
       self.fail("Custom preset was not reachable")
     page = self.page("standard/acceleration")
-    self.assertEqual([row["label"] for row in page["rows"][1:]], [f"{speed} mph point" for speed in range(0, 91, 10)])
-    previous = float(page["rows"][1]["value"])
-    direction = -1 if previous >= page["rows"][1]["maximum"] else 1
-    intent = self.gateway.preview(page["view"], 1, direction, self.session, self.generation)
+    self.assertEqual(page["rows"][1]["label"], "SLC acceleration limit")
+    self.assertEqual([row["label"] for row in page["rows"][2:]], [f"{speed} mph point" for speed in range(0, 91, 10)])
+    previous = float(page["rows"][2]["value"])
+    direction = -1 if previous >= page["rows"][2]["maximum"] else 1
+    intent = self.gateway.preview(page["view"], 2, direction, self.session, self.generation)
     self.assertIn("0 mph point", intent["question"])
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
     updated = self.page("standard/acceleration")
-    self.assertAlmostEqual(float(updated["rows"][1]["value"]), previous + direction * 0.05)
+    self.assertAlmostEqual(float(updated["rows"][2]["value"]), previous + direction * 0.05)
     with self.assertRaises(SettingsChanged):
       self.gateway.confirm(intent["intent"], self.session, self.generation)
 

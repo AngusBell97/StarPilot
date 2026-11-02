@@ -12,6 +12,10 @@ class TrackingTarget:
   blocked: bool = False
 
 
+def line_accepted(prob, std):
+  return 0.6 <= prob <= 1.0 and 0.0 <= std <= 0.3
+
+
 class SingleLineTracker:
   DEFAULT_SPACING = 1.7
   MAX_SOURCE_GAP = 0.15
@@ -20,7 +24,8 @@ class SingleLineTracker:
   MAX_PATH_DISAGREEMENT = 0.8
   MIN_CLEARANCE = 1.1
 
-  def __init__(self):
+  def __init__(self, accept_line=line_accepted):
+    self.accept_line = accept_line
     self.reset()
 
   def reset(self):
@@ -79,7 +84,7 @@ class SingleLineTracker:
         raise ValueError
       if not all(math.isfinite(float(v)) for v in (probs[1], probs[2], stds[1], stds[2])):
         raise ValueError
-      good = [0.6 <= probs[i] <= 1.0 and 0.0 <= stds[i] <= 0.3 for i in (1, 2)]
+      good = [self.accept_line(probs[i], stds[i]) for i in (1, 2)]
       lines = [self._points(model.laneLines[i]) if good[i - 1] else None for i in (1, 2)]
       if all(good):
         if any(line is None for line in lines):

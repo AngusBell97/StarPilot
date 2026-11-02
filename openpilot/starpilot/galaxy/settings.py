@@ -1,7 +1,7 @@
 """Authenticated local projection of the shared saved-feature owner."""
 from openpilot.starpilot.galaxy import slider_units
 
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu, lane_v9_menu
 from openpilot.starpilot.ui.lane_change_feature import confirm_question as lane_change_question
 
 from collections.abc import Callable
@@ -42,7 +42,7 @@ from openpilot.starpilot.ui.sentry_owner import RESET as SENTRY_RESET, SentryOwn
 from openpilot.starpilot.ui.vasm_owner import ANNOTATION as VASM_ANNOTATION, RESET as VASM_RESET, VASMOwner, validated_annotation
 
 
-PAGES = frozenset((*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *SLC_PAGES, "hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities", "traffic", "aggressive", "standard", "relaxed",
+PAGES = frozenset((*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES, *SLC_PAGES, "hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities", "traffic", "aggressive", "standard", "relaxed",
                    "curve", "torque", "aol", "wheel", "appearance", "display", "data", "sounds", "pip", "sentry", "vasm",
                    "conditional", "conditional/cem", "conditional/ccm",
                    *(f"{name}/{category}" for name in ("traffic", "aggressive", "standard", "relaxed")
@@ -388,13 +388,13 @@ def _projection(row: FeatureRow, page: str) -> dict:
                           row.key in (PIP_RESET, PIP_EDITOR, VASM_RESET, VASM_ANNOTATION) or row.key.startswith(PIP_FORMAT_PREFIX)),
           "repairValue": row.repair_value, "defaultValue": row.default_value, "resetAvailable": row_default(row) is not None,
           "unitPrecision": 3 if any(key in slider_units.SPECS for key, _ in row.dependencies) else None,
-          "displayScale": "lane-strength" if row.key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength") else None,
+          "displayScale": "lane-strength" if row.key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength") else None,
           "rangePair": lane_versions_menu.range_descriptor(row) if page.startswith("lane") else None}
 
 
 def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
   key = request.key
-  if key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength"):
+  if key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength"):
     raw = float(request.value)
     level = (1 + (raw - row.minimum) * 4 / (100 - row.minimum) if raw <= 100 else
              5 + (raw - 100) * 5 / (row.maximum - 100))
@@ -496,7 +496,7 @@ class SettingsGateway:
     with self.lock:
       ctx = self.context.sample()
       sections = []
-      for page in ("torque", "lane", *lane_v4_menu.PAGES, *lane_v8_menu.PAGES, "lane_change", "aol", "conditional", "profiles", "slc", *SLC_PAGES, "curve"):
+      for page in ("torque", "lane", *lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES, "lane_change", "aol", "conditional", "profiles", "slc", *SLC_PAGES, "curve"):
         state = self._state(page, ctx)
         sections.append({"title": state.title,
                          "rows": [{"label": row.label, "value": row.value} for row in state.rows[:64]]})
@@ -640,7 +640,7 @@ class SettingsGateway:
       return self._vasm_owner(ctx).snapshot()
     state = self._owner(ctx).snapshot(page, parked=ctx.parked,
                                       system_long=_qualified(ctx, "long"),
-                                      lateral_context=_qualified(ctx, "lane") or ((page == "lane" or page in lane_v4_menu.PAGES or page in lane_v8_menu.PAGES) and _qualified(ctx, "lane_live")),
+                                      lateral_context=_qualified(ctx, "lane") or ((page == "lane" or page in (*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES)) and _qualified(ctx, "lane_live")),
                                       metric=ctx.metric, configure_while_driving=True, lane_v4=True)
     if ctx.editing_saved_vehicle:
       from opendbc.car.values import PLATFORMS
@@ -813,6 +813,10 @@ class SettingsGateway:
     native_request = self._native_request(view.page, ctx, request)
     if native_request.key in lane_v8_menu.KEYS:
       error = lane_v8_menu.error(self._owner(ctx), native_request)
+      if error:
+        raise SettingsChanged(error)
+    if native_request.key in lane_v9_menu.KEYS:
+      error = lane_v9_menu.error(self._owner(ctx), native_request)
       if error:
         raise SettingsChanged(error)
     if native_request.key in lane_versions_menu.REVERSE or native_request.key in lane_versions_menu.V51_RECOVERY or native_request.key in (lane_versions_menu.VERSION, lane_versions_menu.PREVIEW, lane_versions_menu.V6_PREVIEW, lane_versions_menu.V51_PREVIEW):

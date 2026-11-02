@@ -40,6 +40,7 @@ from openpilot.starpilot.longitudinal.experimental_release import ConditionalHan
 from openpilot.starpilot.longitudinal.force_stop import StopPlan
 from openpilot.starpilot.longitudinal.follow_jerk import FollowJerk
 from openpilot.starpilot.longitudinal.lead_takeoff import LeadTakeoff, project as project_takeoff
+from openpilot.starpilot.longitudinal.slow_creep import SlowCreep, project as project_creep
 from openpilot.starpilot.longitudinal.lead_behavior import adjust as adjust_lead_behavior
 from openpilot.starpilot.longitudinal.hkg_vision_stop import owner_for as vision_stop_owner
 from openpilot.starpilot.car.ford.stopped_lead import owner_for as ford_stop_owner
@@ -180,6 +181,7 @@ class LongitudinalPlanner:
     self.follow_jerk = FollowJerk(CP)
     self.vehicle_cost_owner = planner_cost_owner(CP)
     self.lead_takeoff = LeadTakeoff()
+    self.slow_creep = SlowCreep()
     self.steering_load = SteeringLoad()
     self.curve_response = CurveResponse()
     self.vehicle_far_follow = far_follow_owner(CP, dt)
@@ -659,6 +661,20 @@ class LongitudinalPlanner:
       output_a_target, self.output_should_stop = self.ford_stop_approach.sample(
         sm, now_ns=sample_now_ns, drive_id=drive_id, target=float(output_a_target),
         stopping=self.output_should_stop, accel_min=ACCEL_MIN, active=profile_eligible and not reset_state)
+    # Only release Tesla's native low-speed threshold, after every acceleration
+    # shaper. The exact final request is preserved; downstream CEM holds still win.
+    creep_frame = project_creep(
+      sm, self.CP, now_ns=sample_now_ns, drive_id=drive_id, selected_speed=v_cruise,
+      mpc_accel=output_a_target_mpc, cruise_accel=self.a_cruise,
+      follow_seconds=float(self.mpc.params[0, 4]), stop_plan=self.force_stop_plan,
+      threshold_only=bool(output_should_stop_mpc == should_stop(v_ego, output_a_target_mpc)),
+      blocked=bool(reset_state or self.fcw or not self.allow_throttle or traffic_mode is not False or
+                   self.mpc.solution_status != 0 or takeoff_raised))
+    native_stop = self.output_should_stop
+    output_a_target, self.output_should_stop = self.slow_creep.step(creep_frame, output_a_target, native_stop)
+    creep_diagnostic = self.slow_creep.diagnostic(output_a_target, native_stop)
+    if creep_diagnostic is not None:
+      cloudlog.event('longitudinal.creep_release', **creep_diagnostic)
     self.output_a_target = np.clip(output_a_target, ACCEL_MIN, ACCEL_MAX)
     self.lane_change_gap.last_output = float(self.output_a_target)
     lane_gap_diagnostic = self.lane_change_gap.diagnostic(

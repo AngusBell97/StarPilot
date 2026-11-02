@@ -109,7 +109,7 @@ def project(params, row, owner=None):
       converted = replace(converted, value=shown.value, minimum=shown.minimum, maximum=shown.maximum,
         step=shown.step, unit=shown.unit, display_unit=shown.unit, default_value=shown.default_value,
         available=shown.available, reason=shown.reason)
-    elif row.key == "LaneCenteringDomOffset":
+    elif row.key in ("LaneCenteringDomOffset", "LaneCenteringV9Offset"):
       converted = replace(converted, minimum=-30 if index == 1 else -11.5, maximum=30 if index == 1 else 11.5,
                           step=1 if index == 1 else .25)
   return replace(converted, reason=help_text(converted.reason, converted.unit))

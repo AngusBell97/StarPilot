@@ -109,6 +109,8 @@ def select_sections(raw, model_y, settings):
 
 
 class LaneCenteringV6Controller(LaneCenteringV5Controller):
+  use_road_edges = True  # V6 retains road-edge support.
+  use_single_boundary = True
 
 
 

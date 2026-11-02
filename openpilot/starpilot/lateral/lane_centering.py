@@ -224,10 +224,12 @@ def _error_correction(model, speed, error, authority, lookahead, deadband=CENTER
   return 2.0 * error / lookahead ** 2
 
 
-def _boundaries(model, lookahead, settings, _paths=None):
+def _boundaries(model, lookahead, settings, _paths=None, *, include_edges=True):
   # Fixed order supplies line-before-edge, then left-before-right tie breaking.
   accepted = []
   for kind, index, side in (("line", 1, 0), ("line", 2, 1), ("edge", 0, 0), ("edge", 1, 1)):
+    if kind == "edge" and not include_edges:
+      continue
     try:
       std = _finite_number((model.laneLineStds if kind == "line" else model.roadEdgeStds)[index])
       limit = settings.edge_std
@@ -308,6 +310,9 @@ def _bend_target(model, chosen, lookahead, settings, diagnostic=None, _paths=Non
 
 
 class LaneCenteringController:
+  use_road_edges = True
+  use_single_boundary = True
+
   def __init__(self) -> None:
     self._correction = 0.0
     self._limit = STOCK_CORRECTION
@@ -354,7 +359,7 @@ class LaneCenteringController:
     path = _path(getattr(model, "position", None))
     if _paths is not None: _paths["position"] = path
     model_y = _at(path, lookahead) if path is not None else None
-    boundaries = _boundaries(model, lookahead, settings, _paths)
+    boundaries = _boundaries(model, lookahead, settings, _paths, include_edges=self.use_road_edges)
     self.diagnostic.update(lookahead_m=lookahead, model_y_m=model_y, accepted=boundaries, geometry="invalid_model_or_crossed")
     left = max((b[2] for b in boundaries if b[0] == 0), default=None)
     right = min((b[2] for b in boundaries if b[0] == 1), default=None)
@@ -379,7 +384,7 @@ class LaneCenteringController:
         mode = 2 if chosen else 0
     self.diagnostic["geometry"] = "narrow" if narrow else "wide" if wide else "accepted"
     clearance = settings.car_width * .5 + settings.single_clearance
-    if not chosen and settings.mode3 and boundaries:
+    if not chosen and self.use_single_boundary and settings.mode3 and boundaries:
       if left is not None and right is not None and left + clearance > right - clearance:
         self.diagnostic["geometry"] = "single_clearance_conflict"
         self._smoothed = [None, None]

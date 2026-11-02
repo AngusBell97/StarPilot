@@ -44,7 +44,7 @@ from openpilot.starpilot.ui.torque_feature import TorqueFeature
 from openpilot.starpilot.ui.controller_feature import ControllerFeature, SETUP_ACTION
 from openpilot.starpilot.ui.slc_offset_feature import SlcOffsetOwner
 from openpilot.starpilot.ui.slc_menu import SLC_PAGES, menu_rows
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_stock_menu, lane_v8_menu
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_stock_menu, lane_v8_menu, lane_v9_menu
 from openpilot.starpilot.lateral.lane_tuning import NUMBERS as LANE_NUMBERS, BOOLS as LANE_BOOLS, PREFIX as LANE_PREFIX, KEYS as LANE_V4_KEYS, DEFAULTS as LANE_DEFAULTS
 from openpilot.starpilot.longitudinal.profile_preferences import read_document_value, read_profile_health
 from openpilot.starpilot.longitudinal.profile_document import default_slc_limits, SLC_LIMIT_DEFAULTS, SLC_LIMIT_BOUNDS
@@ -624,6 +624,9 @@ class FeatureSettingsOwner:
     return self._read_saved(key, limit)[1]
 
   def _default(self, key: str) -> str:
+    if key in lane_v9_menu.V9_DEFAULTS:
+      value = lane_v9_menu.V9_DEFAULTS[key]
+      return str(int(value)) if isinstance(value, bool) else str(value)
     if key in lane_versions_menu.DEFAULTS:
       value = lane_versions_menu.DEFAULTS[key]
       return str(int(value)) if isinstance(value, bool) else str(value)
@@ -1012,7 +1015,7 @@ class FeatureSettingsOwner:
                              reason="Saved coverage across curve types, learned while you control speed without a lead vehicle"
                                     if learning.progress is not None else learning.reason))
       rows.append(FeatureRow("", "Saved cornering comfort",
-                             f"{learning.comfort:.2f} m/sÂ²" if learning.has_samples and learning.comfort is not None else
+                             f"{learning.comfort:.2f} m/sÃ‚Â²" if learning.has_samples and learning.comfort is not None else
                              "No learned samples" if learning.valid else "Unavailable",
                              reason="Saved calibration, not a live reading" if learning.valid else learning.reason))
       rows.append(FeatureRow("curve_reset", "Reset Saved Curve Learning", "", learning.sources[0][1],
@@ -1131,7 +1134,7 @@ class FeatureSettingsOwner:
           reason=reason, capability=source_capability))
       rows.extend(offset_rows)
       title, rows = menu_rows(page, rows)
-    elif page == FeaturePage.LANE or (lane_v4 and page in (*lane_v4_menu.PAGES, *lane_v8_menu.PAGES)):
+    elif page == FeaturePage.LANE or (lane_v4 and page in (*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES)):
       from openpilot.starpilot.lateral.lane_runtime import runtime_supported
       strength_supported = runtime_supported(self.vehicle_params())
       allowed = strength_supported and ((configurable and lateral_context) or (not parked and self.authority("lane_live")))
@@ -1158,6 +1161,10 @@ class FeatureSettingsOwner:
       rows = lane_versions_menu.decorate(self, page, rows, allowed, metric, lane_v4)
       if page in lane_v8_menu.PAGES:
         title = lane_v8_menu.TITLES[page]
+      if page == lane_v9_menu.SMOOTHING_PAGE:
+        title = "Smoothing"
+      if page == "lane/activation/acceptance" and self._raw(lane_versions_menu.VERSION) in (b"5", b"51"):
+        title = "Lane-line acceptance"
     elif page == FeaturePage.LANE_CHANGE:
       title = "Lane Changes"
       rows.extend(self.lane_changes.rows(parked))
@@ -1274,7 +1281,7 @@ class FeatureSettingsOwner:
           rows.append(FeatureRow(f"{LONG_PREFIX}{name}:{category}:slc_limit",
             "SLC acceleration limit" if category == 'acceleration' else "SLC braking limit",
             f"{limits[name][category]:g}" if valid else "Invalid document", raw,
-            step=.1, minimum=SLC_LIMIT_BOUNDS[0], maximum=SLC_LIMIT_BOUNDS[1], unit="m/s²",
+            step=.1, minimum=SLC_LIMIT_BOUNDS[0], maximum=SLC_LIMIT_BOUNDS[1], unit="m/sÃ‚Â²",
             available=allowed, capability=capability, dependencies=traffic_dependencies,
             reason=("Maximum acceleration during an SLC speed change. Gentler profile requests stay gentler. " if category == 'acceleration' else
                     "Maximum normal braking during an SLC speed change; lead, corner and stop braking retain priority. ") +
@@ -1301,7 +1308,7 @@ class FeatureSettingsOwner:
             low, high = ((0.35, CURVE_BOUNDS[category][1]) if name == "traffic" and category == "braking" else
                          CURVE_BOUNDS[category])
             point = curve[index]
-            unit = "s" if category == "following" else "m/sÂ²"
+            unit = "s" if category == "following" else "m/sÃ‚Â²"
             rows.append(FeatureRow(f"{LONG_PREFIX}{name}:{category}:{index}", f"{speed} mph point", str(point), raw,
                                    step=0.05, minimum=low, maximum=high, unit=unit,
                                    available=allowed,
@@ -1347,9 +1354,11 @@ class FeatureSettingsOwner:
     key = request.key
     if key in lane_v8_menu.KEYS:
       return lane_v8_menu.apply(self, request)
+    if key in lane_v9_menu.KEYS:
+      return lane_v9_menu.apply(self, request)
     if key in lane_stock_menu.KEYS:
       return lane_stock_menu.apply(self, request)
-    if key in lane_versions_menu.KEY_MAP and key != "LaneCentering" and self._raw(lane_versions_menu.VERSION) in (b"5", b"6", b"7", b"8", b"9", b"51"):
+    if key in lane_versions_menu.KEY_MAP and key != "LaneCentering" and self._raw(lane_versions_menu.VERSION) in (b"5", b"6", b"7", b"8", b"9", b"51", b"90"):
       return False  # Reject an old v4 edit after a live version switch.
     if key in lane_versions_menu.REVERSE or key in lane_versions_menu.V51_RECOVERY or key in (lane_versions_menu.VERSION, lane_versions_menu.PREVIEW, lane_versions_menu.V6_PREVIEW, lane_versions_menu.V51_PREVIEW):
       return lane_versions_menu.apply(self, request)

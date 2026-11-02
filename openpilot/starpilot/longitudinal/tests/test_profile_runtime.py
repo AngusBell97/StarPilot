@@ -17,9 +17,19 @@ from openpilot.starpilot.speed_limits.acceptance import Authority, LongitudinalO
 from openpilot.starpilot.longitudinal.profile_document import default_personality_profiles, profile_document as current_profile_document
 from openpilot.starpilot.longitudinal.profile_runtime import (ProfileHost, ProfileSmoother, ProfileTuning,
                                                              read_settings, read_traffic_settings, resolve)
-from openpilot.starpilot.longitudinal.tests.test_cruise_ceiling import V_EGO, messages, snapshot
+from openpilot.starpilot.longitudinal.tests.test_cruise_ceiling import V_EGO, messages as unchecked_messages, snapshot
 from opendbc.car.honda.interface import CarInterface
 from opendbc.car.honda.values import CAR
+
+
+def messages(*args, **kwargs):
+  # Production uses SubMaster's health API; these native fixtures provide
+  # healthy inputs unless a test explicitly changes a control-state field.
+  class Checked(dict):
+    def all_checks(self, services):
+      return True
+  data, extra = unchecked_messages(*args, **kwargs)
+  return Checked(data), extra
 
 
 def legacy_document(profiles, *, enabled, global_braking_response='standard'):
@@ -30,6 +40,7 @@ def legacy_document(profiles, *, enabled, global_braking_response='standard'):
         profile[category]['preset'] = 'dom_default'
   document = current_profile_document(profiles, enabled=enabled, global_braking_response=global_braking_response)
   document['schemaVersion'] = 4
+  document.pop('slcLimits')
   document['globalBrakingResponse'] = document.pop('selectedDecelerationProfile')
   document.pop('selectedAccelerationProfile')
   return document
@@ -324,7 +335,7 @@ class ProfileRuntimeTests(unittest.TestCase):
     self.params.put('LongitudinalPersonalityProfiles', document, block=True)
     migrated = read_settings(self.params)
     assert migrated is not None and migrated.document is not None
-    self.assertEqual(migrated.document['schemaVersion'], 5)
+    self.assertEqual(migrated.document['schemaVersion'], 6)
     self.params.put('LongitudinalPersonalityProfiles', document, block=True)
     Path(self.params.get_param_path('LongitudinalPersonalityProfiles')).write_text('{broken')
     self.assertIsNone(read_settings(self.params))

@@ -60,7 +60,10 @@ def _center_motion(curvature: float, measured: float, speed: float, delay: float
   distances = (np.arange(16, dtype=float) + 0.5) * ds
   # Test the measured-to-command handoff rather than substituting the auxiliary
   # model position path for the commanded motion.
-  blend = np.clip((distances / speed - delay) / 0.2, 0.0, 1.0)
+  # At rest this describes the requested path once moving, not motion at rest.
+  # As speed tends to zero, the handoff completes before each positive station.
+  blend = (np.ones_like(distances) if distances[0] >= speed * (delay + 0.2) else
+           np.clip((distances / speed - delay) / 0.2, 0.0, 1.0))
   ks = measured + (curvature - measured) * blend
   headings = np.cumsum(ks * ds)
   midpoint = headings - ks * ds * 0.5
@@ -136,9 +139,9 @@ def _limit_body_envelope(edges, base, correction, measured, speed, delay, body):
   return 0.
 
 
-def limit_tracking(path, base: float, correction: float, measured: float, speed: float, delay: float) -> float:
+def limit_tracking(path, base: float, correction: float, measured: float, speed: float, delay: float, *, min_speed: float = 5.0) -> float:
   """A line-tracking contribution must improve its predicted spacing objective."""
-  if not all(math.isfinite(v) for v in (base, correction, measured, speed, delay)) or speed < 5.0 or not 0.0 <= delay <= 1.0:
+  if not all(math.isfinite(v) for v in (base, correction, measured, speed, delay)) or speed < max(0., min_speed) or not 0.0 <= delay <= 1.0:
     return 0.0
   x, y, _ = _center_motion(base, measured, speed, delay)
   selected = (x >= max(2.0, path[0][0])) & (x <= path[0][-1])

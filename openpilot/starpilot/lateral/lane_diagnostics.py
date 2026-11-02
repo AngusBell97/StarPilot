@@ -58,9 +58,9 @@ class LaneDiagnostics:
         revision=self.revision, control_ns=now_ns, model_ns=model_ns, algorithm=8, reason=result.reason,
         geometry=_clean(controller.diagnostic), requested=result.correction, limit=result.correction_limit, host=_clean(host))
       return
-    if getattr(controller, "version", None) == 7:
+    if getattr(controller, "version", None) in (7, 90):
       event("lane_centering_diagnostic", version=1, session=self.session, sequence=self.sequence,
-        revision=self.revision, control_ns=now_ns, model_ns=model_ns, algorithm=7, reason=result.reason,
+        revision=self.revision, control_ns=now_ns, model_ns=model_ns, algorithm=controller.version, reason=result.reason, geometry=_clean(controller.diagnostic),
         requested=result.correction, limit=result.correction_limit, host=_clean(host))
       return
     raw = controller._raw

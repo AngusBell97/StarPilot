@@ -74,7 +74,7 @@ class LaneCenteringHost:
   def inputs_need_refresh(self, sm, *, now_ns: int) -> bool:
     # Only the active Stock Dom host adopts upstream's queued-input refresh.
     # Custom v4/v5/v6 retain their existing subscriber and freshness behavior.
-    return (self.version == 7 and self.stock_host is not None and
+    return (self.version in (7, 90) and self.stock_host is not None and
             self.stock_host.host.inputs_need_refresh(sm, now_ns=now_ns))
 
   def sample(self, sm, *, now_ns: int, lateral_active: bool, longitudinal_active: bool) -> LaneCenteringRequest | None:
@@ -94,9 +94,11 @@ class LaneCenteringHost:
       from openpilot.starpilot.lateral.lane_versions import read_selected
       self.version, self.settings = read_selected(self.params)
       self.last_refresh_ns = now_ns
-    if self.version == 7:
+    if self.version in (7, 90):
       from openpilot.starpilot.lateral.stock_dom_adapter import StockHost
-      if self.stock_host is None: self.stock_host = StockHost(self.params)
+      from openpilot.starpilot.lateral.lane_v9_adapter import V9Host
+      host_type = V9Host if self.version == 90 else StockHost
+      if type(self.stock_host) is not host_type: self.stock_host = host_type(self.params)
       return self.stock_host.sample(sm, now_ns=now_ns, lateral_active=lateral_active, longitudinal_active=longitudinal_active)
     self.stock_host = None
     if not self.settings.enabled or not sm['carState'].canValid or sm['carState'].canTimeout:

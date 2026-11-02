@@ -108,6 +108,7 @@ class SelectedProfilesTests(unittest.TestCase):
   def test_v4_migration_preserves_dormant_custom_and_original_activation(self):
     document = self.document('dom_default', 'sport', enabled=True)
     document['schemaVersion'] = 4
+    document.pop('slcLimits')
     document['globalBrakingResponse'] = document.pop('selectedDecelerationProfile')
     document.pop('selectedAccelerationProfile')
     for profile in document['profiles'].values():
@@ -216,10 +217,14 @@ class SelectedProfilesTests(unittest.TestCase):
     self.assertEqual(changed['profiles']['standard']['acceleration']['preset'], 'sport')
 
   def run_planner(self, selected=None, *, lead=False, force=False, traffic=False):
+    class Inputs(dict):
+      def all_checks(self, services):
+        return True
     planner = LongitudinalPlanner(self.cp, init_v=V_EGO)
     with patch.object(planner_module, 'get_cruise_accel', wraps=planner_module.get_cruise_accel) as cruise:
       for _ in range(65):
         sm, _ = messages(lead=lead, force=force)
+        sm = Inputs(sm)
         sm['carState'].vCruise = 50.0
         sm['carControl'].longActive = True
         traffic_tuning = resolve(read_traffic_settings(self.params), log.LongitudinalPersonality.standard,

@@ -26,6 +26,28 @@ def arm_selected(rt: Runtime) -> None:
 
 
 class TestCurveRuntime(unittest.TestCase):
+  def test_higher_selected_speed_does_not_invent_curve_cap(self):
+    rt = Runtime(enabled=True)
+    for n in range(1, 101):
+      item = frame(n, cruise_mps=(25 if n < 20 else 40) * .44704,
+                   ego_mps=25 * .44704, measured_curvature=0.)
+      item = replace(item, profile=CurveProfile((0.,), (0.,), item.now_ns))
+      result = rt.step(item)
+      self.assertEqual(result.candidate_mps, item.cruise_mps)
+      self.assertIsNone(result.ceiling_mps)
+      self.assertTrue(rt.confirm_applied(item.now_ns, applied=False))
+      self.assertFalse(rt.was_controlling)
+
+  def test_unbound_higher_speed_preserves_real_curve_release(self):
+    rt = Runtime(enabled=True)
+    arm_selected(rt)
+    before = rt.filter.target
+    item = frame(27, cruise_mps=35., ego_mps=15., measured_curvature=0.)
+    item = replace(item, profile=CurveProfile((0.,), (0.,), item.now_ns))
+    result = rt.step(item)
+    self.assertIsNotNone(result.ceiling_mps)
+    self.assertLessEqual(result.ceiling_mps, before + 3 * .05 + 1e-9)
+
   def test_disabled_diagnostic_has_no_authority(self):
     result = Runtime(enabled=False).step(frame(1))
     assert result.candidate_mps is not None
@@ -115,15 +137,15 @@ class TestCurveRuntime(unittest.TestCase):
     self.assertTrue(status.glow)
     self.assertFalse(status.controlling)
 
-  def test_stale_hold_expires_after_max_step(self):
+  def test_stale_hold_expires_after_recovery_anchor(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    for n in range(27, 31):
+    for n in range(27, 47):
       item = frame(n, inputs_fresh=False)
-      rt.step(item)
+      self.assertIsNone(rt.step(item).ceiling_mps)
       rt.confirm_applied(item.now_ns, applied=False)
     self.assertIsNotNone(rt.filter.target)
-    item = frame(31, inputs_fresh=False)
+    item = frame(47, inputs_fresh=False)
     rt.step(item)
     rt.confirm_applied(item.now_ns, applied=False)
     self.assertIsNone(rt.filter.target)

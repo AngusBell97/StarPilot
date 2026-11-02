@@ -4,7 +4,7 @@ from pathlib import Path
 import math
 import os
 import tempfile
-from openpilot.starpilot.ui import lane_v4_menu as v4, lane_stock_menu, lane_v8_menu
+from openpilot.starpilot.ui import lane_v4_menu as v4, lane_stock_menu, lane_v8_menu, lane_v9_menu
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow
 from openpilot.starpilot.lateral.lane_versions import (VERSION, INITIALIZED, PREVIEW, KEY_MAP, REVERSE,
   DEFAULTS, seed_values, raw, version_keys, V6_PREVIEW, V51_PREVIEW, V51_RECOVERY)
@@ -40,7 +40,17 @@ def recovery_rows(owner, allowed):
   return rows
 
 
-VERSION_CHOICES = {"v4": 4, "v5": 5, "v5.1": 51, "v6": 6, "Stock Dom": 7, "v8": 8, "Chubbs / Blendful": 9}
+VERSION_CHOICES = {"v4": 4, "v5": 5, "v5.1": 51, "v6": 6, "Stock Dom": 7, "v8": 8, "Chubbs / Blendful": 9, "v9": 90}
+VERSION_DESCRIPTIONS = {
+  b"4": "v4: Adds a steering correction from one lookahead point, using lane lines or road edges, with single-boundary clearance support.",
+  b"5": "v5: Shapes a smooth correction path ahead using two lane lines. Strength controls how much correction it requests.",
+  b"51": "v5.1: Uses the full lane-centre target from two lane lines. Centre recovery time shapes the approach; correction limits still apply.",
+  b"6": "v6: Checks geometry along the preview and shapes a correction path using lane lines or edges, with single-boundary clearance support.",
+  b"7": "Stock Dom: Dom's lane-centering controller adds a bounded steering correction at one lookahead point, with single-line tracking support.",
+  b"8": "v8 (lane-led): drives from the lane lines when they are trusted and hands to the model when they are not.",
+  b"9": "Chubbs / Blendful: Blends lane guidance into the vision model's steering request, using its own confidence weighting and smoothing. Switching into or out requires parking and applies next drive.",
+  b"90": "v9: A separately tuned Dom-based controller with custom lane-line acceptance, no correction deadband, and independent buildup, unwind and fallback smoothing.",
+}
 
 
 def selected_version(raw_version):
@@ -84,7 +94,7 @@ def range_descriptor(row):
 
 def error(owner, request):
   if request.key == VERSION:
-    if request.value not in VERSION_CHOICES: return "Choose v4, v5, v5.1, v6, Stock Dom, v8 or Chubbs / Blendful"
+    if request.value not in VERSION_CHOICES: return "Choose v4, v5, v5.1, v6, Stock Dom, v8, Chubbs / Blendful or v9"
     if (request.value == "Chubbs / Blendful" or owner._raw(VERSION) == b"9") and not owner.authority("parked_preferences"):
       return "Switching into or out of Chubbs / Blendful requires parking and applies next drive"
     if request.value == "v5.1" and owner._raw(version_keys(51)[1]) != b"1":
@@ -131,6 +141,10 @@ def decorate(owner, page, rows, allowed, metric, galaxy):
     rows = lane_v8_menu.rows(owner, page, allowed)
     if not galaxy:
       rows = [row for row in rows if not row.page]
+  elif version == b"90":
+    rows = lane_v9_menu.rows(owner, page, allowed)
+    if not galaxy:
+      rows = [row for row in rows if not row.page]
   elif version == b"9":
     rows = [replace(owner._bool_row("LaneCentering", "Enable Lane Centering", allowed),
                     reason="Enable Chubbs lane guidance. Its algorithm choice applies next drive; this master switch remains live."),
@@ -153,6 +167,16 @@ def decorate(owner, page, rows, allowed, metric, galaxy):
       _, rows = v4.menu(proxy, page, rows, allowed, metric)
     mapped = []
     for row in rows:
+      if version in (b"5", b"51"):
+        if row.key in (v4.PREFIX + "EdgeStd", v4.PREFIX + "SingleClearance") or (version == b"51" and row.key == v4.PREFIX + "SingleDeadband"):
+          continue
+        row = replace(row, label=row.label.replace("Line and edge acceptance", "Lane-line acceptance"),
+                      value=row.value.replace("lane lines and road edges", "lane lines"),
+                      reason=row.reason.replace("lane lines and road edges", "lane lines").replace("line or edge", "lane line").replace(" Keeping away from a single boundary ignores this offset.", ""))
+      if version in (b"5", b"51") and row.key == "LaneCentering":
+        row = replace(row, reason="Centre using two accepted lane lines. If either line or the lane geometry becomes unusable, fade correction back to the model.")
+      if version == b"5" and row.key == v4.PREFIX + "SingleDeadband":
+        row = replace(row, reason="Ignore this much difference from the lane-centre target before requesting correction. Lower values correct smaller differences but may increase steering activity.")
       if row.key == v4.PREFIX + "LookaheadTime":
         value, source, valid = owner._value(preview)
         try: valid = valid and math.isfinite(float(value)) and 1 <= float(value) <= 4
@@ -176,10 +200,7 @@ def decorate(owner, page, rows, allowed, metric, galaxy):
       if version == b"51":
         if row.key == v4.ADAPTATION:
           reason += " Centre recovery time also decreases toward its minimum in tighter bends."
-        if row.key == v4.PREFIX + "SingleDeadband":
-          row = replace(row, label="Single-boundary deadband")
-          reason = "Ignore small single-boundary clearance errors within this distance. Paired-boundary centring follows the full centre reference without this deadband."
-        elif row.key in (v4.PREFIX + "ResponseTime", v4.PREFIX + "ResponseMin"):
+        if row.key in (v4.PREFIX + "ResponseTime", v4.PREFIX + "ResponseMin"):
           reason = "Controls how quickly the applied correction follows its request. Lower values respond faster; higher values smooth changes more gradually. Existing correction limits still apply."
       if row.key == v4.PREFIX + "Clearance":
         reason = "Extra space to aim for on each side when centring between two boundaries. Their minimum usable gap is car body width plus twice this clearance. Prediction, model preference and correction limits can prevent reaching it."
@@ -189,11 +210,11 @@ def decorate(owner, page, rows, allowed, metric, galaxy):
     if version == b"51" and galaxy and page == "lane/preferences/smoothing":
       rows[0:0] = recovery_rows(owner, allowed)
   if page == "lane" and galaxy:
-    rows.insert(0, FeatureRow(VERSION, "Lane centering version", "v8" if version == b"8" else "Chubbs / Blendful" if version == b"9" else "Stock Dom" if version == b"7" else "v4" if version in (None, b"4") else "v5.1" if version == b"51" else "v" + version.decode() if version in (b"5", b"6", b"51") else "Invalid saved version",
+    rows.insert(0, FeatureRow(VERSION, "Lane centering version", "v8" if version == b"8" else "v9" if version == b"90" else "Chubbs / Blendful" if version == b"9" else "Stock Dom" if version == b"7" else "v4" if version in (None, b"4") else "v5.1" if version == b"51" else "v" + version.decode() if version in (b"5", b"6", b"51") else "Invalid saved version",
       version, tuple(VERSION_CHOICES) if owner.authority("parked_preferences") else
       (("Chubbs / Blendful",) if version == b"9" else tuple(k for k in VERSION_CHOICES if k != "Chubbs / Blendful")),
       available=allowed and (version != b"9" or owner.authority("parked_preferences")), default_value="v4",
-      reason="Choose v4, path-based v5, experimental v5.1 full-centre reference, v6, Stock Dom, v8 (lane-led: drives from the lane lines when they are trusted and hands to the model when they are not), or Chubbs / Blendful. Stock Dom is refreshed from Dom e8256ee5; Chubbs is a separate upstream experiment, selected while parked for the next drive. Each keeps its own tune. First select a valid v5 tune to initialize v5.1. It copies that tune with Strength removed as a control, an initial 200% maximum correction, and Centre recovery time starting at 2-3 seconds; saved v5.1 settings remain independent. v5.1 uses the full paired centre reference and the normal single-boundary clearance policy, with correction limits and smoothing retained. Stock starts with Dom defaults and shows only Dom controls. Entering or leaving Stock Dom resets lane-controller history; normal steering rate limits still apply. Custom-version switches retain their existing handover."))
+      reason=VERSION_DESCRIPTIONS.get(version or b"4", "Choose a supported lane-centering version.")))
   return rows
 
 

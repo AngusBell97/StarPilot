@@ -71,13 +71,12 @@ def test_motion_aligned_straight_profile_and_turn_rotation():
  a,valid=warp_profile(x,.1*x+2,0,0,math.atan(.1),np.arange(50.));assert valid.all();np.testing.assert_allclose(a,2*math.cos(math.atan(.1)))
 
 
-def test_lane_edge_replacement_retains_profile_filter():
- c=controller();c.update(obs());old=c._profiles[0][1].copy()
+def test_lane_edge_replacement_is_not_used():
+ c=controller();c.update(obs())
  m=scene();m.laneLineProbs[1]=0.;m.roadEdgeStds[0]=.1;m.roadEdges[0].y=(np.full(33,-1.9)).tolist()
  for i in range(1,6):c.update(obs(i,model=m))
- assert c.selected_mode==2
- assert np.all(c._profiles[0][1][:-1]>-1.9) and np.all(c._profiles[0][1][:-1]<old[:-1]+1e-8)
- assert c._profiles[0][1][-1]==-1.9  # Newly exposed far station seeds from raw.
+ assert c.selected_mode==0 and c.selected_sources==()
+ assert c._profiles[0] is None
 
 
 @pytest.mark.parametrize('field,value',[('driver_override',True),('lateral_active',False),('model_valid',False),('time_discontinuity',True)])
@@ -117,18 +116,13 @@ def test_opposing_preview_changes_path_before_near_target_changes():
 
 
 @pytest.mark.parametrize('side',[1,-1])
-def test_single_raw_and_smoothed_trigger_and_away_new_request(side):
- # left at-.8 needs correction right; reflected case needs left.
+def test_single_line_is_not_used(side):
  m=scene(mid=side*1.,single=side);c=controller();r=c.update(obs(model=m))
- assert r.reason=='qualified' and c.selected_mode==3 and c.target_path.correction*side>0
- assert np.min(side*(c.target_path.target_y-c.target_path.model_y))>=-1e-8
- m2=scene(mid=0.,single=side)
- for i in range(1,6):r=c.update(obs(i,model=m2))
- assert r.reason=='qualified' and c.target_path.correction==0 and c._correction*side>0
+ assert c.selected_mode==0 and c.target_path is None and r.correction==0.
 
 
 def test_single_opposite_conflict_has_no_target():
- m=scene(mid=1.,single=1);m.roadEdgeStds[1]=.1;m.roadEdges[1].y=[1.]*33
+ m=scene(mid=1.,single=1);m.laneLineProbs[2]=.9;m.laneLines[2].y=[1.]*33
  c=controller();r=c.update(obs(model=m));assert c.target_path is None and r.correction==0
 
 
@@ -173,7 +167,7 @@ def test_negative_model_uncertainty_does_not_enable_override():
 
 
 @pytest.mark.parametrize('side',[1,-1])
-def test_single_near_priority_preserves_clear_and_yielding_stations(monkeypatch,side):
+def test_retained_single_policy_math_when_explicitly_opted_in(monkeypatch,side):
  import openpilot.starpilot.lateral.lane_v5 as lv
  original=lv.build_path;captured=[]
  def capture(**kwargs):
@@ -181,13 +175,13 @@ def test_single_near_priority_preserves_clear_and_yielding_stations(monkeypatch,
  monkeypatch.setattr(lv,'build_path',capture)
  t=np.linspace(0,5,33)
  m=scene(mid=side*np.interp(t,[0,.25,1,5],[.1,.1,.8,.8]),single=side)
- c=controller();r=c.update(obs(model=m))
+ c=controller();c.use_single_boundary=True;r=c.update(obs(model=m))
  assert r.reason=='qualified' and captured[-1]['near_priority']
  a=captured[-1];desired=side*a['desired_offset'];near=(a['t']<=1)&(desired>0)
  assert np.count_nonzero(near)>2 and np.ptp(desired[near])<1e-10
  assert desired[0]==0 and np.min(side*(c.target_path.target_y-c.target_path.model_y))>=-1e-8
  # Full model preference still suppresses an independently confident model path.
  s=replace(obs().settings,e2e_authority=1.,e2e_min=1.,override_start=.05,override_full=.1)
- c=controller();m=scene(mid=side*1.2,single=side);r=c.update(obs(model=m,settings=s))
+ c=controller();c.use_single_boundary=True;m=scene(mid=side*1.2,single=side);r=c.update(obs(model=m,settings=s))
  assert r.reason=='qualified' and c.target_path.correction==0
  assert np.max(np.abs(captured[-1]['desired_offset']))==0

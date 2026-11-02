@@ -126,11 +126,11 @@ def test_target_shaping_survives_gap_only_for_acknowledged_selected_target():
   c=TransitionComfort();c.target=25.;c.direction=1;c.deadline=10_000_000_000;c.started=0
   frame=NS(now_ns=1_000_000_000,authority=NS(can_control=True),pedal_pressed=False,host=NS(force_decel=False))
   result=NS(state=NS(acceptance=NS(accepted=None),override=NS(persistent_selected_mps=None)),selection=None,domain=None,errors=())
-  settings=CustomSettings(transition_offsets=True,accel_percent=-50.)
-  args=dict(settings=settings,selected=25.,speed=20.,acknowledged=True,manual=False,reengage=False)
-  assert c.step(result,frame,**args).percent==-50.
-  assert c.step(result,frame,**dict(args,selected=26.)) is None
-  assert c.target is None
+  settings=CustomSettings(transition_offsets=True)
+  args=dict(settings=settings,limits={"acceleration":.7,"braking":.8},selected=25.,speed=20.,acknowledged=True,manual=False,reengage=False)
+  assert c.step(result,frame,**args).limit==.7
+  assert c.step(result,frame,**dict(args,selected=26.)).limit==.7
+  assert c.target == 26.
 
 def test_remembered_lower_target_changes_braking_forecast():
   from openpilot.starpilot.speed_limits.tests.test_mapped_timing import BASE,OBS,NOW

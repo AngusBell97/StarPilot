@@ -25,8 +25,8 @@ def test_forecast_uses_braking_strength_and_returns_finite_distance(speed,target
 def test_positive_acceleration_and_weaker_transition_offset_start_earlier():
   normal=braking_distance(30.,20.,0.,BrakingProfile())
   assert braking_distance(30.,20.,1.,BrakingProfile())>normal
-  assert braking_distance(30.,20.,0.,BrakingProfile(percent=-50))>normal
-  assert braking_distance(30.,20.,0.,BrakingProfile(percent=50))==normal
+  assert braking_distance(30.,20.,0.,BrakingProfile(limit=.25))>normal
+  assert braking_distance(30.,20.,0.,BrakingProfile(limit=1.))==normal
 
 def test_lower_timing_is_metres_from_current_speed_not_target_speed():
   h=MappedTiming();project(h,1000.);normal=h.trigger

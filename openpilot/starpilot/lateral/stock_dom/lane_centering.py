@@ -15,7 +15,7 @@ import numpy as np
 
 from openpilot.cereal import log
 from openpilot.common.scalar_clip import clip_scalar
-from openpilot.starpilot.lateral.stock_dom.lane_tracking import SingleLineTracker
+from openpilot.starpilot.lateral.stock_dom.lane_tracking import SingleLineTracker, line_accepted
 from openpilot.starpilot.lateral.stock_dom.lane_clearance import BodyDimensions, limit_correction, limit_tracking
 
 
@@ -172,12 +172,12 @@ def _single_boundary_target(model: Any, paths, qualified, lookahead: float, offs
   return target
 
 
-def raw_correction(model: Any, speed_mps: float, offset_m: float, e2e_authority: float, *, _paths=None, _single_target=None) -> float | None:
+def raw_correction(model: Any, speed_mps: float, offset_m: float, e2e_authority: float, *, _paths=None, _single_target=None, _accept_line=line_accepted, _min_speed=MIN_SPEED, _deadband=True) -> float | None:
   """Return a finite raw curvature correction, or None for unqualified model data."""
   speed = _finite_number(speed_mps)
   offset = _finite_number(offset_m)
   authority = _finite_number(e2e_authority)
-  if speed is None or offset is None or authority is None or speed < MIN_SPEED:
+  if speed is None or offset is None or authority is None or speed < _min_speed:
     return None
   try:
     lines = model.laneLines
@@ -191,7 +191,7 @@ def raw_correction(model: Any, speed_mps: float, offset_m: float, e2e_authority:
       std = _finite_number(stds[i])
       if prob is None or std is None or not 0.0 <= prob <= 1.0 or std < 0.0:
         return None
-      qualified.append(prob >= MIN_LANE_PROB and std <= MAX_LANE_STD)
+      qualified.append(_accept_line(prob, std))
     if not any(qualified):
       return None
     left_path, right_path, model_path = (_path(lines[1]), _path(lines[2]), _path(model.position)) if _paths is None else _paths[:3]
@@ -226,8 +226,8 @@ def raw_correction(model: Any, speed_mps: float, offset_m: float, e2e_authority:
         return None
     error = target_y - model_y
     error_abs = abs(error)
-    deadband = CENTER_ERROR_DEADBAND
-    if not all(qualified) and _single_target is not None:
+    deadband = CENTER_ERROR_DEADBAND if _deadband else 0.
+    if _deadband and not all(qualified) and _single_target is not None:
       # Keep a quiet zone while allowing a precise visible line to hold its
       # spacing more closely than an uncertain line.
       line_std = float(stds[1 if qualified[0] else 2])
@@ -264,10 +264,20 @@ def _reader_geometry_key(model):
 
 
 class LaneCenteringController:
+  min_speed = MIN_SPEED
+  accept_line = staticmethod(line_accepted)
+  use_deadband = True
+
+  def _valid_settings(self, settings):
+    return True
+
+  def _filter_target(self, target, dt):
+    self._correction += (target - self._correction) * (1.0 - math.exp(-dt / ACQUIRE_TAU))
+
   def __init__(self, *, body: BodyDimensions | None = None, body_required: bool = False) -> None:
     self._correction = 0.0
     self._geometry_cache = None
-    self._tracker = SingleLineTracker()
+    self._tracker = SingleLineTracker(self.accept_line)
     self._body = body
     self._body_required = body_required
     self._clearance_observation = None
@@ -313,7 +323,7 @@ class LaneCenteringController:
         if self._tracker.side is None and self._tracker.width is not None:
           bound = min(MAX_OFFSET, max(0., self._tracker.width * .5 - MIN_CENTER_TO_LINE))
           offset = clip_scalar(offset, -bound, bound)
-        allowed = limit_tracking((x, y + offset), base, allowed, measured, speed, checked_delay)
+        allowed = limit_tracking((x, y + offset), base, allowed, measured, speed, checked_delay, min_speed=self.min_speed)
       if self._body is not None:
         allowed = limit_correction(model, base, allowed, measured, speed, checked_delay, self._body)
     if allowed != delta:
@@ -338,14 +348,14 @@ class LaneCenteringController:
         type(observation.model_valid) is not bool or type(observation.lateral_active) is not bool or
         type(observation.turn_signal_active) is not bool or type(observation.driver_override) is not bool or
         type(observation.time_discontinuity) is not bool or
-        type(settings.enabled) is not bool or type(settings.pause_on_signal) is not bool):
+        type(settings.enabled) is not bool or type(settings.pause_on_signal) is not bool or not self._valid_settings(settings)):
       self.reset()
       return LaneCenteringResult(base, 0.0, 0, "invalid_input")
     if observation.time_discontinuity:
       self.reset()
       return self._result(base, "time_discontinuity")
     if not observation.mode.lateral_authority or not settings.enabled or not observation.lateral_active or \
-       not observation.model_valid or speed < MIN_SPEED:
+       not observation.model_valid or speed < self.min_speed:
       self.reset()
       return self._result(base, "inactive")
     if observation.driver_override:
@@ -380,13 +390,14 @@ class LaneCenteringController:
       self._geometry_cache = None
     tracked = self._tracker.target(observation.model, observation.model_sample_id, speed, dt, offset, revision=geometry)
     raw = None if tracked.blocked else raw_correction(observation.model, speed, offset, authority,
-                                                     _paths=paths, _single_target=tracked.y)
+                                                     _paths=paths, _single_target=tracked.y,
+                                                     _accept_line=self.accept_line, _min_speed=self.min_speed, _deadband=self.use_deadband)
     if raw is None or not math.isfinite(raw):
       return self._fade(base, dt, "unqualified_model")
     target = clip_scalar(raw, -0.004, 0.004) * 0.30
     if strength != 1.0:
       target = clip_scalar(target * strength, -MAX_CORRECTION, MAX_CORRECTION)
-    self._correction += (target - self._correction) * (1.0 - math.exp(-dt / ACQUIRE_TAU))
+    self._filter_target(target, dt)
     self._correction = clip_scalar(self._correction, -MAX_CORRECTION, MAX_CORRECTION)
     return self._result(base, "qualified")
 

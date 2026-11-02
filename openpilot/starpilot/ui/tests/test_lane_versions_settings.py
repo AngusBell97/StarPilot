@@ -85,8 +85,8 @@ def test_v5_native_controls_and_minmax_units(f):
  f.params.put_bool('IsMetric',False,block=True)
  rows=f.page('lane/activation/geometry')['rows']
  assert next(r for r in rows if r['label']=='Car body width')['unit']=='in'
- edit(f,'lane/activation/geometry','Single-boundary minimum clearance',18)
- assert read_selected(f.params)[1].single_clearance==pytest.approx(.4572)
+ edit(f,'lane/activation/geometry','Two-boundary minimum clearance',18)
+ assert read_selected(f.params)[1].clearance==pytest.approx(.4572)
 
 
 def test_v5_disabling_common_native_master_stops_both(f):
@@ -117,7 +117,8 @@ def test_removed_target_line_has_no_menu_or_edit_route(f, version):
 def test_v6_seeds_selected_tune_and_keeps_versions_independent(f):
  edit(f,'lane','Lane centering version','v5')
  edit(f,'lane/preferences/smoothing','Boundary smoothing time',.31)
- edit(f,'lane/activation/geometry','Single-boundary minimum clearance',46)
+ # Hidden single-boundary values remain stored and copy unchanged to v6.
+ f.params.put('LaneCenteringV5SingleClearance',.46,block=True)
  source=read_selected(f.params)[1]
  edit(f,'lane','Lane centering version','v6')
  assert read_selected(f.params)==(6,source)

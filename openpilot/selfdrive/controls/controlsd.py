@@ -197,7 +197,7 @@ class Controls:
       if not late_gm_refresh:
         lateral_inputs_refreshed = refresh_expired_lateral_snapshot(self.sm, now_ns=refresh_now_ns)
     if (self.lane_centering_host is not None and os.getenv('REPLAY') != '1' and
-        (lane_centering is None or (isinstance(lane_centering, LaneCenteringRequest) and lane_centering.version == 7)) and
+        (lane_centering is None or (isinstance(lane_centering, LaneCenteringRequest) and lane_centering.version in (7, 90))) and
         self.lane_centering_host.inputs_need_refresh(self.sm, now_ns=time.monotonic_ns())):
       self.update(0)
     CS = self.sm['carState']
@@ -393,7 +393,7 @@ class Controls:
                       self.sm["lateralDelay"].lateralDelay + LAT_SMOOTH_SECONDS + subaru_smooth_seconds(CS.vEgo, control_maximum(self)),
                       self.lane_change_smoother.previous_factor,
                       not assist and not self.sm.valid["lateralManeuverPlan"] and self.sm.all_checks(["lateralDelay"]))
-      if lane_centering.version == 7:
+      if lane_centering.version in (7, 90):
         from openpilot.starpilot.lateral.stock_dom.lane_clearance import current_delay
         stock_lane_delay = current_delay(self.sm, motion.timestamp_ns)
       result = self.lane_centering_controller.update(LaneCenteringInput(
@@ -427,8 +427,8 @@ class Controls:
     self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, previous_curvature, new_desired_curvature, lp.roll)
     if self.last_lane_centering_result is not None and self.last_lane_centering_result.correction != 0.0:
       baseline_curvature, _ = clip_curvature(CS.vEgo, previous_curvature, limit_rate(CS.vEgo, previous_curvature, lane_base_curvature, factor), lp.roll)
-      if self.lane_centering_controller.version == 7:
-        guarded = self.lane_centering_controller.stock.guard_applied(model_v2, baseline_curvature,
+      if self.lane_centering_controller.version in (7, 90):
+        guarded = self.lane_centering_controller.active.guard_applied(model_v2, baseline_curvature,
           self.desired_curvature, self.curvature, CS.vEgo, stock_lane_delay)
         if guarded != self.desired_curvature:
           self.desired_curvature = guarded

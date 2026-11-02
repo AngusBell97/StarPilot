@@ -35,6 +35,9 @@ class LaneCenteringV5Input(LaneCenteringInput):
 
 
 class LaneCenteringV5Controller(LaneCenteringController):
+  use_road_edges = False
+  use_single_boundary = False
+
   def __init__(self, *, clock=time.perf_counter):
     _warm_matrices()
     self.clock = clock
@@ -219,10 +222,13 @@ class LaneCenteringV5Controller(LaneCenteringController):
 class LaneCenteringV51Controller(LaneCenteringV5Controller):
   """Gradual approach to the full paired centre; v5 limits and filters remain.
 
-  Strength is fixed at normal solely for the inherited scalar bridge and the
-  unchanged single-boundary clearance policy. It never scales the paired target.
+  Strength is fixed at normal solely for the inherited scalar bridge.
+  It never scales the paired target; production v5/v5.1 require two lane lines.
   A full reference is not a promise that the bounded fitted path reaches it.
+  Road edges are excluded from selection, constraints and bend evidence.
   """
+  use_road_edges = False
+
   def __init__(self, *, clock=time.perf_counter):
     super().__init__(clock=clock)
     self._strength_source = self._normal_settings = None

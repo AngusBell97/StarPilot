@@ -18,10 +18,10 @@ class Host:
 
 def test_unqualified_control_frame_never_becomes_weak_profile():
   normal=profile_from_host(Host(),NOW,1,CP,enabled=True)
-  assert normal.floor(18.)==-1.
+  assert normal.floor(18.)==-.8
   assert profile_from_host(Host(),NOW,1,CP,enabled=True,qualified=False) is None
   assert profile_from_host(Host(),NOW,1,CP,enabled=True,traffic=None) is None
-  assert profile_from_host(None,NOW,1,CP,enabled=False).floor(18.)==-1.2
+  assert profile_from_host(None,NOW,1,CP,enabled=False).floor(18.)==-.8
 
 @pytest.mark.parametrize('distance',[0.,.001,100.,400.])
 def test_profile_gap_cannot_start_lower_even_at_boundary_preview(distance):
@@ -64,20 +64,20 @@ def test_recorded_fallback_frames_do_not_activate(speed,a,target,distance):
       speed=speed,acceleration=a,cluster_delta=0.,settings=settings,enabled=True,target_override=target)
     assert not h.approach.active and result.candidate.speed_mps==40*.44704
 
-@pytest.mark.parametrize('percent',[-50,-20,0,50])
-def test_no_acceleration_threshold_discontinuity_or_percentage_delay(percent):
-  p=BrakingProfile(floors=(-1.,-1.),percent=percent,jerk=.4)
+@pytest.mark.parametrize('limit',[.1,.5,.8,1.5])
+def test_no_acceleration_threshold_discontinuity_or_percentage_delay(limit):
+  p=BrakingProfile(floors=(-1.,-1.),limit=limit,jerk=.4)
   assert abs(braking_distance(18.,11.,-.0499,p)-braking_distance(18.,11.,-.0501,p))<.1
   assert shaped_slc_floor(11.3,11.,-.8,approach=True)==-.8
   assert shaped_slc_floor(11.3,11.,-.8,approach=False)>-.8
-  assert BrakingProfile(floors=(-.2,-.2),percent=-50).floor(18.)==-.175
+  assert BrakingProfile(floors=(-.2,-.2),limit=.1).floor(18.)==-.1
 
 @pytest.mark.parametrize('mph,target_mph',[(70,50),(50,30),(42,25),(40,28),(30,20)])
-@pytest.mark.parametrize('percent',[-50,-20,0])
+@pytest.mark.parametrize('limit',[.5,.8,1.])
 @pytest.mark.parametrize('initial_a',[-.3,0.,1.1])
 @pytest.mark.parametrize('initial_rate',[-.4,0.,.35])
-def test_forecast_tracks_production_cruise_with_command_handover(mph,target_mph,percent,initial_a,initial_rate):
-  speed=mph*.44704;target=target_mph*.44704;p=BrakingProfile(floors=(-1.,-1.),percent=percent,jerk=.4)
+def test_forecast_tracks_production_cruise_with_command_handover(mph,target_mph,limit,initial_a,initial_rate):
+  speed=mph*.44704;target=target_mph*.44704;p=BrakingProfile(floors=(-1.,-1.),limit=limit,jerk=.4)
   predicted=braking_distance(speed,target,initial_a,p)
   a=initial_a;distance=0.;t=0.;transition=CruiseTransition();started=False
   # Same selected profile/offset through the real native cruise implementation.
@@ -87,7 +87,7 @@ def test_forecast_tracks_production_cruise_with_command_handover(mph,target_mph,
     if t>=.6-1e-9:
       if not started:
         transition.time_ns=int((t+.95)*1e9);transition.output=a;transition.rate=initial_rate;started=True
-      magnitude=max(.175,1.*(1.+percent/100.))
+      magnitude=min(1.,limit)
       a=get_cruise_accel(False,target,speed,a,0.,CP,dt,0.,True,
         profile=NS(cruise_brake_magnitude=magnitude,acceleration_max=2.),selected_acceleration_max=2.,
         a_target_prev=a,set_speed_comfort=False,set_speed_slowing=True,profile_owned=True,
@@ -104,11 +104,12 @@ def test_forecast_tracks_production_cruise_with_command_handover(mph,target_mph,
 class MissingHost(Host):
   def sample(self,*a,**kw):return None
   def sample_selected(self,*a,**kw):return None
+  def sample_global_braking(self,*a,**kw):return 'eco'
 
 def test_missing_document_does_not_invent_soft_braking():
   assert profile_from_host(MissingHost(),NOW,1,CP,enabled=True) is None
   h=MissingHost();h.disabled=True
-  assert profile_from_host(h,NOW,1,CP,enabled=True).floor(18.)==-1.2
+  assert profile_from_host(h,NOW,1,CP,enabled=True).floor(18.)==-.8
 
 
 def test_real_profile_freshness_gate_remains_twenty_ms():
@@ -122,35 +123,31 @@ def test_real_profile_freshness_gate_remains_twenty_ms():
   assert not _profile_frame_valid(sm,NOW)
   assert profile_from_host(Host(),NOW,1,CP,enabled=True,qualified=_profile_frame_valid(sm,NOW)) is None
 
+
 @pytest.mark.parametrize('direction',[-1,1])
-@pytest.mark.parametrize('abort',[None,'unacknowledged','manual','pedal','force','authority','reengage','override','target','deadline','clock','disabled','error'])
-def test_accepted_target_percentage_survives_requalified_source_but_not_driver_or_authority_abort(direction,abort):
+@pytest.mark.parametrize('abort',[None,'manual','pedal','force','authority','reengage','override','target','deadline','clock','invalid_limits','error'])
+def test_active_episode_survives_driver_target_change_but_not_authority_loss(direction,abort):
   from openpilot.starpilot.speed_limits.transition_comfort import TransitionComfort
   from openpilot.starpilot.speed_limits.custom_settings import CustomSettings
-  c=TransitionComfort();c.target=20.;c.direction=direction;c.started=NOW-500_000_000;c.deadline=NOW+10_000_000_000
+  c=TransitionComfort();c.target=20.;c.direction=direction;c.started=NOW-500_000_000;c.deadline=NOW+10_000_000_000;c.armed=True
   frame=NS(now_ns=NOW,authority=NS(can_control=True),pedal_pressed=False,host=NS(force_decel=False))
-  # Acceptance changed identity/numeric current limit during the preview gap;
-  # card still holds the previously acknowledged target.
-  accepted=NS(candidate=NS(speed_mps=30.,source='map'))
-  result=NS(state=NS(acceptance=NS(accepted=accepted),override=NS(persistent_selected_mps=None)),
-    selection=NS(observation=NS(candidate=accepted.candidate)),domain=NS(context=NS(effective_cluster_mps=30.)),errors=())
-  settings=CustomSettings(transition_offsets=True,accel_percent=-50.,decel_percent=-20.)
-  args=dict(settings=settings,selected=20.,speed=20.-direction*3.,acknowledged=False,selected_acknowledged=True,manual=False,reengage=False)
-  if abort=='unacknowledged':args['selected_acknowledged']=False
-  elif abort=='manual':args['manual']=True
+  result=NS(state=NS(acceptance=NS(accepted=None),override=NS(persistent_selected_mps=None)),selection=None,domain=None,errors=())
+  args=dict(settings=CustomSettings(transition_offsets=True),limits={'acceleration':.7,'braking':.8},selected=20.,speed=20.-direction*3.,
+    acknowledged=False,selected_acknowledged=False,manual=False,reengage=False)
+  if abort=='manual':args['manual']=True
   elif abort=='pedal':frame.pedal_pressed=True
   elif abort=='force':frame.host.force_decel=True
   elif abort=='authority':frame.authority.can_control=False
   elif abort=='reengage':args['reengage']=True
-  elif abort=='override':result.state.override.persistent_selected_mps=20.
+  elif abort=='override':result.state.override.persistent_selected_mps=21.
   elif abort=='target':args['selected']=21.
   elif abort=='deadline':frame.now_ns=c.deadline+1
   elif abort=='clock':frame.now_ns=c.started-1
-  elif abort=='disabled':args['settings']=replace(settings,transition_offsets=False)
-  elif abort=='error':result.errors=('error',)
+  elif abort=='invalid_limits':args['limits']=None
+  elif abort=='error':result.errors=('stale',)
   value=c.step(result,frame,**args)
-  if abort is None:
-    assert value.target==20. and value.percent==(-50. if direction>0 else -20.)
+  if abort in (None,'manual','override','target'):
+    assert value.target==args['selected'] and value.limit==(.7 if direction>0 else .8)
   else:assert value is None
 
 

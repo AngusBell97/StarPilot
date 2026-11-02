@@ -44,10 +44,11 @@ assert.equal(live.states.at(-1).status, "current")
 // Third request is outstanding; the previous sample expires at its original
 // request-based deadline, rather than staying current until another reply.
 await live.advance(2000)
-assert.equal(live.states.at(-1).snapshot, null)
+assert.equal(live.states.at(-1).snapshot.sampledAt, local.sampledAt)
+assert.equal(live.states.at(-1).status, "stale")
 await live.advance(2000)
 assert.equal(live.requests.at(-1).signal.aborted, true)
-assert.equal(live.states.at(-1).status, "unavailable")
+assert.equal(live.states.at(-1).status, "stale")
 live.feed.stop()
 assert.equal(live.timers.size, 0)
 
@@ -58,13 +59,14 @@ await wrong.reply(sample)
 assert.equal(wrong.states.at(-1).snapshot, null)
 wrong.feed.stop()
 
-// Failed refresh drops previous values immediately, and unmount cancels work.
+// Failed refresh retains the previous snapshot as stale; unmount cancels work.
 const failed = fixture()
 failed.feed.start()
 await failed.reply()
 await failed.advance(2000)
 await failed.reply({}, false)
-assert.equal(failed.states.at(-1).snapshot, null)
+assert.equal(failed.states.at(-1).snapshot.sampledAt, local.sampledAt)
+assert.equal(failed.states.at(-1).status, "stale")
 await failed.advance(2000)
 failed.feed.stop()
 const before = failed.states.length
@@ -95,3 +97,63 @@ assert.equal(stalled.states.length, count)
 assert.equal(stalled.states.at(-1).status, "current")
 stalled.feed.stop()
 console.log("Monitor transport, source isolation, expiry, cancellation and failure checks passed")
+
+// Retention across repeated expiry, network/HTTP/JSON/schema failures, recovery,
+// and cancellation. Old values retain their capture timestamp and identity.
+const retained = fixture("local", true)
+retained.feed.start()
+await retained.reply()
+const original = retained.states.at(-1).snapshot
+for (const failure of ["network", "http", "json", "schema", "source"]) {
+  await retained.advance(2000)
+  const request = retained.requests.at(-1)
+  if (failure === "network") request.reject(new Error("Offline"))
+  if (failure === "http") request.resolve({ ok: false, status: 502 })
+  if (failure === "json") request.resolve({ ok: true, json: async () => { throw new Error("Broken JSON") } })
+  if (failure === "schema") request.resolve({ ok: true, json: async () => ({}) })
+  if (failure === "source") request.resolve({ ok: true, json: async () => sample })
+  await flush()
+  assert.equal(retained.states.at(-1).status, "stale", failure)
+  assert.equal(retained.states.at(-1).snapshot, original, failure)
+}
+await retained.advance(2000)
+const late = retained.requests.at(-1)
+await retained.advance(4000)
+assert.equal(retained.states.at(-1).snapshot, original)
+assert.equal(late.signal.aborted, true)
+await retained.advance(2000)
+await retained.reply({ ...local, sampledAt: local.sampledAt + 30, cpuPercent: 42 })
+assert.equal(retained.states.at(-1).status, "current")
+assert.equal(retained.states.at(-1).error, "")
+assert.equal(retained.states.at(-1).snapshot.cpuPercent, 42)
+assert.equal(retained.states.at(-1).snapshot.sampledAt, local.sampledAt + 30)
+const recovered = retained.states.at(-1).snapshot
+late.resolve({ ok: true, json: async () => local })
+await flush()
+assert.equal(retained.states.at(-1).snapshot, recovered)
+retained.feed.stop()
+assert.equal(retained.timers.size, 0)
+
+// Authentication/setup boundaries must clear cached values and end polling.
+for (const [status, code] of [[401, ""], [503, "access_unavailable"], [503, "setup_required"]]) {
+  const denied = fixture()
+  let unauthorized = 0
+  denied.feed.unauthorized = () => unauthorized++
+  denied.feed.start()
+  await denied.reply()
+  await denied.advance(2000)
+  denied.requests.at(-1).resolve({ ok: false, status, json: async () => ({ code }) })
+  await flush()
+  assert.equal(denied.states.at(-1).snapshot, null)
+  assert.equal(denied.feed.lastSnapshot, null)
+  assert.equal(denied.feed.stopped, true)
+  assert.equal(denied.timers.size, 0)
+  assert.equal(unauthorized, 1)
+}
+// Restart has no cached values from the previous subscription.
+retained.feed.start()
+await retained.advance(4000)
+assert.equal(retained.states.at(-1).snapshot, null)
+assert.equal(retained.states.at(-1).status, "unavailable")
+retained.feed.stop()
+console.log("SP-043 retained snapshot, recovery, repeated failures and authorization boundaries passed")

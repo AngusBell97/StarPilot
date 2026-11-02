@@ -13,6 +13,9 @@ from openpilot.starpilot.longitudinal.tests.test_cruise_ceiling import ACTIVE, V
 
 
 class Inputs(dict):
+  def all_checks(self, services):
+    return True
+
   def __init__(self, values, stamp):
     super().__init__(values)
     self.logMonoTime = {'modelV2': stamp}
