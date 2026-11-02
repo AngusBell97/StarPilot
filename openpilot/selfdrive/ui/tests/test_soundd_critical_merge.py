@@ -21,6 +21,7 @@ def soundd(alert, *, builtin=False, saved=AUTO):
   owner.current_volume = owner.ramp_start_volume = .1
   owner.ramp_start_time = 0.
   owner.pending_stop = False
+  owner.slc_warning_playing = False
   owner.loaded_sounds = {key: np.array([.2, .4, .2, 0.], dtype=np.float32) for key in sound_list}
   owner.loaded_sounds[CRITICAL_MAX] = np.array([.1, .2, .3, .2, 0., 0.], dtype=np.float32)
   owner.pack_loader = Mock(is_builtin=Mock(return_value=builtin))

@@ -162,10 +162,10 @@ export const LayoutWidgetPreview = {
   },
   template: `
     <g aria-hidden="true" class="gx-layout-widget-art" :fill="palette.text || '#ffffff'">
-      <template v-if="native">
+      <template v-if="native && (widget.kind !== 'lane_centering_bar' || art?.url && art.sprites?.sprites?.[widget.id])">
         <svg v-if="art?.url && art.sprites?.sprites?.[widget.id]"
           :x="art.sprites.sprites[widget.id].offsetX || 0" :y="art.sprites.sprites[widget.id].offsetY || 0"
-          :width="art.sprites.sprites[widget.id].width" :height="art.sprites.sprites[widget.id].height"
+          :width="art.sprites.sprites[widget.id].displayWidth || art.sprites.sprites[widget.id].width" :height="art.sprites.sprites[widget.id].displayHeight || art.sprites.sprites[widget.id].height"
           :viewBox="[art.sprites.sprites[widget.id].x, art.sprites.sprites[widget.id].y, art.sprites.sprites[widget.id].width, art.sprites.sprites[widget.id].height].join(' ')"
           preserveAspectRatio="xMinYMin meet" data-preview-source="runtime">
           <image :href="art.url" :width="art.sprites.width" :height="art.sprites.height" />
@@ -224,8 +224,14 @@ export const LayoutWidgetPreview = {
             :y="profile === 'large' ? 72 : 24" text-anchor="middle" dominant-baseline="middle"
             :font-size="profile === 'large' ? 64 : 50" font-weight="500">{{ label }}</text>
         </template>
-        <text v-else-if="profile === 'large'" :x="widget.width / 2" y="72" text-anchor="middle" dominant-baseline="middle" font-size="64">Use limit 49</text>
+        <text v-else :x="widget.width / 2" :y="profile === 'large' ? 72 : 24" text-anchor="middle"
+          dominant-baseline="middle" :font-size="profile === 'large' ? 48 : 28">Toyota guidance</text>
       </template>
+      <g v-else-if="widget.kind === 'lane_centering_bar'" fill="none" stroke="#00b0dc" stroke-linecap="round">
+        <text :x="widget.width / 2" :y="widget.height * .35" text-anchor="middle" stroke="none" fill="#00b0dc" :font-size="widget.height * .4">50%</text>
+        <path :d="'M 4 ' + widget.height * .9 + ' Q ' + widget.width / 2 + ' ' + widget.height * .55 + ' ' + (widget.width - 4) + ' ' + widget.height * .9" :stroke-width="widget.height * .18" opacity=".25" />
+        <path :d="'M ' + widget.width / 2 + ' ' + widget.height * .725 + ' Q ' + widget.width * .625 + ' ' + widget.height * .725 + ' ' + widget.width * .75 + ' ' + widget.height * .77" :stroke-width="widget.height * .18" opacity=".9" />
+      </g>
       <g v-else-if="widget.kind === 'torque_bar'" fill="none" stroke="white" stroke-linecap="round">
         <path :d="'M 12 ' + widget.height * .8 + ' Q ' + widget.width / 2 + ' ' + widget.height * .55 + ' ' + (widget.width - 12) + ' ' + widget.height * .8" :stroke-width="widget.height * .18" opacity=".3" />
         <path :d="'M ' + widget.width / 2 + ' ' + widget.height * .68 + ' Q ' + widget.width * .65 + ' ' + widget.height * .68 + ' ' + widget.width * .8 + ' ' + widget.height * .74" :stroke-width="widget.height * .18" opacity=".9" />

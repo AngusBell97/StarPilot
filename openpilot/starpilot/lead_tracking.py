@@ -54,7 +54,7 @@ def _smoothstep(value: float, start: float, end: float) -> float:
   return factor * factor * (3.0 - 2.0 * factor)
 
 
-def _path_at_distance(model: object, distance_m: float) -> tuple[float, float] | None:
+def _path_at_distance(model: object, distance_m: float, *, bound_offsets: bool = True) -> tuple[float, float] | None:
   position = _get(model, 'position')
   try:
     xs = normalized_origin(tuple(position.x))
@@ -64,7 +64,8 @@ def _path_at_distance(model: object, distance_m: float) -> tuple[float, float] |
   if len(xs) != 33 or len(ys) != 33:
     return None
   distances = tuple(_number(x, 0.0, 500.0) for x in xs)
-  offsets = tuple(_number(y, -50.0, 50.0) for y in ys)
+  offsets = tuple(_number(y, -50.0 if bound_offsets else -math.inf,
+                          50.0 if bound_offsets else math.inf) for y in ys)
   if any(value is None for value in distances) or any(value is None for value in offsets):
     return None
   clean_xs = tuple(value for value in distances if value is not None)
@@ -120,7 +121,8 @@ def _radarless_follow_window(speed: float, distance: float, lead_speed: float, h
 class LeadDetector:
   """One detector per drive. Unknown/dead sources reset temporal consensus."""
 
-  def __init__(self):
+  def __init__(self, *, allow_absent_path_offsets: bool = False):
+    self.allow_absent_path_offsets = allow_absent_path_offsets
     self.reset()
 
   def reset(self) -> None:
@@ -158,7 +160,10 @@ class LeadDetector:
     lead_brake = _number(_get(radar_lead, 'aLeadK'), -20.0, 20.0)
     prob = _number(_get(radar_lead, 'modelProb'), 0.0, 1.0)
     y_rel = _number(_get(radar_lead, 'yRel'), -20.0, 20.0)
-    path = _path_at_distance(model, distance) if model_fresh and distance is not None else None
+    # CSC does not associate a path with an explicitly absent lead. Keep shape,
+    # finiteness and longitudinal geometry checks, without rejecting a distant bend.
+    bound_offsets = not (self.allow_absent_path_offsets and raw_present is False and standstill is False)
+    path = _path_at_distance(model, distance, bound_offsets=bound_offsets) if model_fresh and distance is not None else None
     if path is None and model_fresh and standstill is True and speed is not None and speed <= STANDSTILL_RELEASE_SPEED_MPS:
       # Only retain a stopped track; these coordinates never enter interpolation.
       horizon = standstill_clear_horizon(model)

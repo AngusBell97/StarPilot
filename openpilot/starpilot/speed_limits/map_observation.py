@@ -12,7 +12,10 @@ def copy_frame(road, *, event_valid: bool, event_boot_ns: int) -> ms.MapFrame:
     return ms.MapFrame(event_valid, event_boot_ns, int(road.sampleVersion), str(road.roadStatus),
       str(road.gpsSource), int(road.gpsMonoTime), int(road.computedMonoTime),
       int(road.sourceGeneration), int(road.producerSession), float(road.speedLimit),
-      bool(road.tileLoaded), int(road.wayId), str(road.waySelectionType))
+      bool(road.tileLoaded), int(road.wayId), str(road.waySelectionType),
+      float(road.nextSpeedLimit), float(road.nextSpeedLimitDistance), str(road.roadName),
+      float(road.nextSpeedLimitEndDistance), float(road.followingSpeedLimit),
+      int(road.followingSpeedLimitWayId), int(road.nextSpeedLimitWayId))
   except Exception as error:  # pycapnp lazy reads may raise KjException, not ValueError
     raise ValueError('invalid mapdOut reader') from error
 

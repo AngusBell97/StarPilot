@@ -183,7 +183,7 @@ class SpeedLimitWidget:
 
   def _sign(self, state: OnroadState, bounds, now: float) -> None:
     shown, obs = resolve_unified_speed(state), state.speed_limit
-    heading = 'LAST' if str(obs.kind) != 'valid' else SOURCE_LABELS.get(shown.source, 'SPEED')
+    heading = SOURCE_LABELS.get(shown.source, 'SPEED')
     x, top = bounds[0] + 12, bounds[1] + 12
     scale = self.scale
     pending = shown.pending and not obs.automatic_adoption_pending
@@ -195,76 +195,73 @@ class SpeedLimitWidget:
     secondary = self.pulse.color(rl.Color(223, 232, 227, 255), now)
 
     def ink(text, role, size):
-      return tuple(value / scale for value in (*self.fonts.horizontal_ink(text, role, size * self.text_scale),
-                                               *self.fonts.vertical_ink(text, role, size * self.text_scale)))
+      return (*self.fonts.horizontal_ink(text, role, size * self.text_scale),
+              *self.fonts.vertical_ink(text, role, size * self.text_scale))
 
-    def centered(text, role, size, ink_top, color, center_x=59):
+    def centered(text, role, size, ink_top, color, center_x=x + 59 * scale):
+      if isinstance(color, (tuple, list)): color = rl.Color(*color)
       left, right, a, b = ink(text, role, size)
-      # Snap only the final draw, after fitting in the shared 118 x 132 geometry.
-      origin = round(x + (center_x - (left + right) / 2) * scale)
-      y = round(top + (ink_top - a) * scale)
-      self.fonts.draw(text, role, size * self.text_scale, origin, y, color)
-      return origin + left * scale, y + a * scale, origin + right * scale, y + b * scale
+      origin = center_x - (left + right) / 2
+      self.fonts.draw(text, role, size * self.text_scale, origin, ink_top - a, color)
+      return origin + left, ink_top, origin + right, ink_top + b - a
 
-    def circle_fits(left, right, a, b):
-      return all((px - 59) ** 2 + (py - 67) ** 2 <= 46 ** 2
-                 for px in (left, right) for py in (a, b))
-
-    vienna = state.appearance.use_vienna_sign
-    large_steady = self.profile == Profile.LARGE and not vienna and not shown.pending
-    color = rl.Color(0, 0, 0, 255) if vienna else white
-    if vienna:
-      self.shapes.circle(x + 59 * scale, top + 67 * scale, self.pulse.color(rl.Color(201, 34, 49, 255), now))
+    if state.appearance.use_vienna_sign:
+      cx, cy = x + 59 * scale, top + 60 * scale
+      rl.draw_circle_v(rl.Vector2(cx, cy), 52 * scale, rl.WHITE)
+      rl.draw_ring(rl.Vector2(cx, cy), 42 * scale, 52 * scale, 0, 360, 96,
+                   self.pulse.color(rl.Color(201, 34, 49, 255), now))
+      color = rl.BLACK if pending else self.pulse.color(rl.BLACK, now)
+      size = (48 if pending else 52) if len(shown.posted_text) <= 2 else 42
+      number_center = cy + 8 * scale
+      centered(heading, FontRole.SEMI_BOLD, 14, cy - 30 * scale, color, cx - (7 * scale if arrow_direction else 0))
+      while True:
+        left, right, a, b = ink(shown.posted_text, FontRole.BOLD, size)
+        if ((right - left) / 2) ** 2 + (abs(number_center - cy) + (b - a) / 2) ** 2 <= (41 * scale) ** 2 or size <= 28:
+          break
+        size -= 2
+      number = centered(shown.posted_text, FontRole.BOLD, size, number_center - (b - a) / 2, color)
+      if shown.offset_text:
+        left, right, a, b = ink(shown.offset_text, FontRole.MEDIUM, 30)
+        pill_width = max(62 * scale, right - left + 20 * scale)
+        pill_top, pill_height = top + 120 * scale, b - a + 10 * scale
+        rl.draw_rectangle_rounded(rl.Rectangle(cx - pill_width / 2, pill_top, pill_width, pill_height),
+                                  .45, 16, rl.Color(10, 17, 19, 230))
+        centered(shown.offset_text, FontRole.MEDIUM, 30, pill_top + 5 * scale, secondary)
     else:
-      self.shapes.outline(x + 59 * scale, top + 66 * scale, white)
-
-    heading_size = 28 / self.text_scale if large_steady else 18
-    left, right, a, b = ink(heading, FontRole.SEMI_BOLD, heading_size)
-    if large_steady and right - left > 96:
-      heading_size *= 96 / (right - left)
-      left, right, a, b = ink(heading, FontRole.SEMI_BOLD, heading_size)
-    heading_width = right - left
-    header_y = 47 if vienna else 21 if large_steady else 26
-    # The small arrow's visible ink is 12 x 16, with a six-pixel label gap.
-    header_left = 59 - (heading_width + (18 if arrow_direction else 0)) / 2
-    heading_color = self.pulse.color(MUTED, now) if large_steady else color
-    centered(heading, FontRole.SEMI_BOLD, heading_size, header_y - (b - a) / 2, heading_color, header_left + heading_width / 2)
-    if arrow_direction:
-      self.shapes.arrow('compact', round(x + (header_left + heading_width + 12) * scale),
-                        round(top + header_y * scale), arrow_direction, color)
-
-    role = FontRole.SET_SPEED if large_steady else FontRole.BOLD
-    size = 77.92 / self.text_scale if large_steady else 58 if vienna else 64
-    offset_size = 30 if vienna else 27
-    number_center = (73 if shown.offset_text else 80) if vienna else (67 if shown.offset_text else 81)
-    while True:
-      left, right, a, b = ink(shown.posted_text, role, size)
-      width, height = right - left, b - a
-      number_top = number_center - height / 2
-      if vienna:
-        fits = number_top >= 57 and circle_fits(59 - width / 2, 59 + width / 2, number_top, number_top + height)
+      if self.profile == Profile.COMPACT:
+        rect = rl.Rectangle(x + 2, top, 116, 132 + (44 if shown.offset_text else 0))
+        rl.draw_rectangle_rounded_lines_ex(rl.Rectangle(rect.x + 8, rect.y + 8, rect.width - 16, rect.height - 16),
+                                         .14, 16, 2, white)
+        for label, size, label_top, role in ((heading, 20, 18, FontRole.SEMI_BOLD),
+                                              ('LIMIT', 20, 36, FontRole.SEMI_BOLD),
+                                              (shown.posted_text, 50 if len(shown.posted_text) <= 2 else 42, 66, FontRole.BOLD)):
+          measured = self.fonts.measure(label, role, size)
+          origin = rect.x + (rect.width - measured.width) / 2
+          if arrow_direction and role == FontRole.SEMI_BOLD:
+            origin -= 6  # Keep four pixels between the measured header ink and the pending arrow.
+          self.fonts.draw(label, role, size, origin, rect.y + label_top, white)
+          if label == shown.posted_text:
+            number = origin, rect.y + label_top, origin + measured.width, rect.y + label_top + measured.height
         if shown.offset_text:
-          left, right, a, b = ink(shown.offset_text, FontRole.MEDIUM, offset_size)
-          offset_top = number_top + height + 4
-          fits = fits and circle_fits(59 - (right - left) / 2, 59 + (right - left) / 2, offset_top, offset_top + b - a)
+          measured = self.fonts.measure(shown.offset_text, FontRole.MEDIUM, 30)
+          self.fonts.draw(shown.offset_text, FontRole.MEDIUM, 30, rect.x + (rect.width - measured.width) / 2,
+                          rect.y + 118, secondary)
       else:
-        fits = width <= 96 and height <= 54
-      if fits:
-        break
-      size *= .95
-      if vienna:
-        offset_size *= .95
-    number = centered(shown.posted_text, role, size, number_top, color)
-    if shown.offset_text:
-      if not vienna:
-        left, right, a, b = ink(shown.offset_text, FontRole.MEDIUM, offset_size)
-        offset_size *= min(1, 96 / (right - left), 24 / (b - a))
-        offset_top = 97
-      centered(shown.offset_text, FontRole.MEDIUM, offset_size, offset_top, color if vienna else secondary)
+        rect = rl.Rectangle(x + 2 * scale, top + 2 * scale, 114 * scale, 128 * scale)
+        rl.draw_rectangle_rounded(rect, .1, 16, rl.Color(10, 17, 19, 230))
+        rl.draw_rectangle_rounded_lines_ex(rect, .1, 16, 2 * scale, white)
+        for label, y in ((heading, top + 11 * scale), ('LIMIT', top + 27 * scale)):
+          centered(label, FontRole.SEMI_BOLD, 20, y, white, x + (53 if arrow_direction else 59) * scale)
+        number = centered(shown.posted_text, FontRole.BOLD, 58, top + (50 if shown.offset_text else 61) * scale, white)
+        if shown.offset_text:
+          centered(shown.offset_text, FontRole.MEDIUM, 36, top + 98 * scale, secondary)
+    if arrow_direction:
+      ax, ay = ((x + 82 * scale, top + 41 * scale) if state.appearance.use_vienna_sign else (x + 99 * scale, top + 26 * scale))
+      arrow_color = color if state.appearance.use_vienna_sign else white
+      self.shapes.arrow('compact' if state.appearance.use_vienna_sign else 'large', ax, ay, arrow_direction, arrow_color)
     if obs.driver_override_active:
       color = rl.Color(197, 163, 255, 240)
       left, top, right, bottom = number
-      for start, end in ((rl.Vector2(left + 3 * scale, top + 3 * scale), rl.Vector2(right - 3 * scale, bottom - 3 * scale)),
-                         (rl.Vector2(right - 3 * scale, top + 3 * scale), rl.Vector2(left + 3 * scale, bottom - 3 * scale))):
-        rl.draw_line_ex(start, end, 4.5 * scale, rl.Color(6, 14, 10, 220))
-        rl.draw_line_ex(start, end, 2.5 * scale, color)
+      draw_line(self.profile, rl.Vector2(left - 3 * scale, top - 2 * scale), rl.Vector2(right + 3 * scale, bottom + 2 * scale), 2.5 * scale, color)
+      draw_line(self.profile, rl.Vector2(right + 3 * scale, top - 2 * scale), rl.Vector2(left - 3 * scale, bottom + 2 * scale), 2.5 * scale, color)
+

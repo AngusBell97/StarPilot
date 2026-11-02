@@ -353,10 +353,12 @@ def test_runtime_waits_for_bound_fresh_card_projection(helper, manual):
   sm['carState'].vCruise = sm['carState'].vCruiseCluster = 50.0
   sm.data['starpilotCarState'] = messaging.new_message('starpilotCarState').starpilotCarState
   runtime = Runtime(parse({'SpeedLimitController': True, 'SLCConfirmation': manual,
-                           'SLCConfirmationHigher': True, 'SLCPriority1': 'Dashboard'}), session_id='drive')
+                           'SLCConfirmationHigher': manual, 'SLCPriority1': 'Dashboard'}), session_id='drive')
 
   def tick(stamp, **kwargs):
     sm.advance(stamp)
+    sm['slcDashboardObservation'].validUntilMonoTime = stamp + 1_000_000_000
+    sm['slcDashboardObservation'].observedMonoTime = stamp - 100_000_000
     sm.valid['starpilotCarState'] = sm.alive['starpilotCarState'] = True
     companion = sm['starpilotCarState']
     companion.sourceCarStateMonoTime = stamp
@@ -364,7 +366,7 @@ def test_runtime_waits_for_bound_fresh_card_projection(helper, manual):
     return runtime.step(sm, helper.CP, now_ns=stamp, **kwargs)
 
   pending = tick(2_000_000_000).message.slcState
-  accepted_ns = 2_000_000_000 + (10_000_000 if manual else 0)
+  accepted_ns = 2_000_000_000 + (10_000_000 if manual else 3_000_000_000)
   request = Action('drive', 1, pending.decisionId, pending.presentationId, 'accept') if manual else None
   accepted = tick(accepted_ns, request=request)
   assert accepted.message.slcState.hasAccepted and accepted.command is None
@@ -412,7 +414,7 @@ def test_same_limit_adoption_recovers_cancelled_toyota_through_real_runtime(help
   assert helper.toyota.status == 'cancelled' and not helper.toyota.can_apply(25.)
   screen = OnroadState(True, False, 20., helper.v_cruise_cluster_kph, speed_limit_from_message(changed),
                        metric=True, longitudinal_active=True, slc_system_long_available=True, toyota_cruise_status=helper.toyota.status)
-  assert all(slc_controls(profile, screen)[0].label == 'Use 90' for profile in Profile)
+  assert all(slc_controls(profile, screen) == () for profile in Profile)
   adopted = tick(5_020_000_000, request=Action('drive', 1, 0, changed.presentationId, 'adopt')).message.slcState
   assert adopted.actionStatus == 'adopt' and not adopted.driverOverrideActive
   assert adopted.acceptedMonoTime == accepted.acceptedMonoTime

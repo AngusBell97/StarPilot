@@ -5,6 +5,7 @@ This does not modify MPC costs, obstacles, trajectories or ordinary following.
 """
 from dataclasses import dataclass
 import math
+from openpilot.starpilot.model_geometry import tesla_stationary_zero
 
 BREAKAWAY_MIN_DISTANCE = 3.75
 BREAKAWAY_MIN_LEAD_SPEED = .6
@@ -183,7 +184,7 @@ def project(sm, cp, *, now_ns, drive_id, stop_plan, acceleration_max, mpc_accel,
                        abs(radar.distance - float(lead.x[0])) <= 4. for radar in leads)
                    for lead in model.leadsV3)
     return Frame(now_ns, int(sm.logMonoTime['modelV2']), drive_id, bool(eligible), bool(car.standstill),
-                 float(car.vEgo), float(model.action.desiredAcceleration), float(mpc_accel), float(acceleration_max),
+                 0. if tesla_stationary_zero(car, cp) else float(car.vEgo), float(model.action.desiredAcceleration), float(mpc_accel), float(acceleration_max),
                  float(follow_seconds), leads, bool(blocked or not light_current or stop_plan.takeoff_light or
                                                   stop_plan.forcing or stop_plan.should_stop or conflict))
   except (AttributeError, IndexError, KeyError, TypeError, ValueError, OverflowError, RuntimeError):

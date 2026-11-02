@@ -131,7 +131,7 @@ env = Environment(
     "PYTHONPATH": os.pathsep.join(dependency_python_paths),
     "ACADOS_SOURCE_DIR": acados.DIR,
     "ACADOS_PYTHON_INTERFACE_PATH": acados.TEMPLATE_DIR,
-    "TERA_PATH": acados.TERA_PATH
+    "TERA_PATH": os.environ.get("TERA_PATH", acados.TERA_PATH)
   },
   CCFLAGS=[
     "-g",

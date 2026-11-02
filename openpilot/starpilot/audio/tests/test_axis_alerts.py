@@ -8,7 +8,7 @@ from openpilot.cereal import messaging
 from openpilot.common.prefix import OpenpilotPrefix
 from openpilot.selfdrive.car.card import Car
 from openpilot.selfdrive.car.tests.publication_fixture import initialize_publication_sources
-from openpilot.selfdrive.ui.soundd import Soundd
+from openpilot.selfdrive.ui.soundd import Soundd, SlcWarning
 from openpilot.starpilot.aol.intent import AOL_TOGGLE, AolCardIntent, AolSettings
 from openpilot.starpilot.aol.runtime import decide_axes
 from openpilot.starpilot.aol.wire import INTENT_SERVICE, IntentState, decode_intent, encode_intent
@@ -20,6 +20,10 @@ class AudioFixture:
     self.sm = messaging.SubMaster(['selfdriveState', 'aolAxisState', INTENT_SERVICE])
     self.sound = Soundd.__new__(Soundd)
     self.sound.axis_alerts = AxisAlerts()
+    self.sound.slc_warning = SlcWarning()
+    self.sound.slc_warning_playing = False
+    self.sound.slc_warning_volume = 0.
+    self.sound.current_alert = AudibleAlert.none
     self.sound.update_alert = Mock()
     self.now = 1_000_000_000
     self.sequence = 0

@@ -6,13 +6,12 @@ from pathlib import Path
 
 from openpilot.starpilot.system.starport.identity import DATA_DIR
 from openpilot.starpilot.system.starport.display_profile import screen_geometry
-from openpilot.starpilot.ui.onroad_customization import (CEM_GAUGE_WIDGET, CLOCK_WIDGET, JETLINK_WIDGET, MODE_WIDGET,
+from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CEM_GAUGE_WIDGET, CLOCK_WIDGET, JETLINK_WIDGET, MODE_WIDGET,
                                                          STOPPED_TIMER_WIDGET, CEM_GAUGE_FRAME, CEM_GAUGE_INSET, MAP_MIN_SIZE, NAV_CARD_SIZE,
                                                          SPEED_ALIGNMENTS, customization_metadata, validate_map_box, validate_widget_order)
 from openpilot.starpilot.ui.onroad_stopped_timer import timer_size
-from openpilot.starpilot.ui.onroad_torque_geometry import maximum_footprint
-from openpilot.starpilot.ui.onroad_customization import (SPEED_LAYOUT_V7, migrate_speed_layout, migrate_large_sign_layout,
-                                                        place_attached_slc_actions, migrate_confirmation_layout)
+from openpilot.starpilot.ui.onroad_torque_geometry import maximum_footprint, lane_bar_footprint
+from openpilot.starpilot.ui.onroad_customization import SPEED_LAYOUT_V7, migrate_speed_layout, migrate_large_sign_layout, place_attached_slc_actions, migrate_confirmation_layout
 from openpilot.starpilot.ui.large_speed_geometry import sources_extent
 
 MAX_BYTES = 16384
@@ -83,6 +82,9 @@ def layout_metadata_for_viewport(viewport):
   widgets['torque_bar'].update(width=w, height=h)
   widgets['torque_bar'].pop('confirmationObstacle', None)
   widgets['torque_bar']['default'].update(x=x, y=y)
+  x, y, w, h = lane_bar_footprint(30, 30, width - 60, height - 60, width)
+  widgets[LANE_BAR_WIDGET].update(width=w, height=h)
+  widgets[LANE_BAR_WIDGET]['default'].update(x=x, y=y)
   timer_w, _ = timer_size('large')
   widgets[STOPPED_TIMER_WIDGET]['default'].update(x=(width - timer_w) / 2, y=520)
   card_w, card_h = NAV_CARD_SIZE
@@ -222,7 +224,7 @@ def validate_layout_for_viewport(value, viewport, *, _legacy_geometry=False):
       type(value['version']) is not int or value['version'] not in (1, 2, 3, 4, 5) or
       value['canvas'] != {key: metadata[key] for key in ('width', 'height')} or
       type(value['widgets']) is not dict or not set(value['widgets']) <= set(metadata['widgets']) or
-      not set(metadata['widgets']) - set(value['widgets']) <= {CEM_GAUGE_WIDGET, MODE_WIDGET, CLOCK_WIDGET, *PROJECTION_WIDGETS}):
+      not set(metadata['widgets']) - set(value['widgets']) <= {LANE_BAR_WIDGET, CEM_GAUGE_WIDGET, MODE_WIDGET, CLOCK_WIDGET, *PROJECTION_WIDGETS}):
     raise ValueError('Projection layout does not match saved screen')
   result = copy.deepcopy(value)
   if 'clock24Hour' in value and type(value['clock24Hour']) is not bool:
@@ -242,7 +244,7 @@ def validate_layout_for_viewport(value, viewport, *, _legacy_geometry=False):
   if 'widgetOrder' in value:
     order = value['widgetOrder']
     if type(order) is list:
-      order = [*order, *(key for key in (CEM_GAUGE_WIDGET, MODE_WIDGET, CLOCK_WIDGET, *PROJECTION_WIDGETS) if key not in order)]
+      order = [*order, *(key for key in (LANE_BAR_WIDGET, CEM_GAUGE_WIDGET, MODE_WIDGET, CLOCK_WIDGET, *PROJECTION_WIDGETS) if key not in order)]
     order = validate_widget_order(order, metadata['widgets'])
     # Older or hand-edited documents may put the escape control underneath
     # another widget. Preserve their order while restoring this safety layer.
@@ -379,6 +381,8 @@ def projection_customization(document, base_customization):
   assert isinstance(native, dict)
   tx, ty, _, _ = maximum_footprint(30, 30, width - 60, height - 60, width)
   shifts['torque_bar'] = (tx - native['torque_bar']['default']['x'], ty - native['torque_bar']['default']['y'])
+  lx, ly, _, _ = lane_bar_footprint(30, 30, width - 60, height - 60, width)
+  shifts[LANE_BAR_WIDGET] = (lx - native[LANE_BAR_WIDGET]['default']['x'], ly - native[LANE_BAR_WIDGET]['default']['y'])
   result = copy.deepcopy(base_customization)
   result['clock24Hour'] = document.get('clock24Hour', False)
   result.setdefault('widgetOrder', {}).pop('large', None)

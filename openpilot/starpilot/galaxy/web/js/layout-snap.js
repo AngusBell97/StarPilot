@@ -1,7 +1,7 @@
 import { widgetSize } from "./onroad-layout-document.js"
 
 export const SNAP_DISTANCE = { touch: 10, fine: 6 }
-const NON_TARGET_KINDS = ["torque_bar"]
+const NON_TARGET_KINDS = ["torque_bar", "lane_centering_bar"]
 const PRIORITY = { center: 0, bounds: 1, widget: 2, zone: 3 }
 const EPSILON = 1e-6
 

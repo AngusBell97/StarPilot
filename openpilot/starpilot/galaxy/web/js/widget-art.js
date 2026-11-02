@@ -22,14 +22,18 @@ export async function widgetArtMetadata(blob) {
       metadata.width < 1 || metadata.width > 1024 || metadata.height < 1 || metadata.height > 1440 ||
       metadata.width !== view.getUint32(16) || metadata.height !== view.getUint32(20) ||
       !metadata.sprites || typeof metadata.sprites !== "object" || Array.isArray(metadata.sprites) ||
-      Object.keys(metadata.sprites).length > 7) throw new Error("Invalid widget art metadata")
+      Object.keys(metadata.sprites).length > 9) throw new Error("Invalid widget art metadata")
   for (const [id, rect] of Object.entries(metadata.sprites)) {
     if (!/^[a-z_]+$/.test(id) || !rect || ![rect.x,rect.y,rect.width,rect.height].every(Number.isInteger) ||
         rect.x < 0 || rect.y < 0 || rect.width < 1 || rect.height < 1 ||
         rect.x + rect.width > metadata.width || rect.y + rect.height > metadata.height ||
         !Number.isFinite(rect.offsetX ?? 0) || (rect.offsetX ?? 0) <= -1 || (rect.offsetX ?? 0) > 0 ||
         !Number.isFinite(rect.offsetY ?? 0) || (rect.offsetY ?? 0) <= (id === 'speed_limit_actions' ? -33 : -1) ||
-        (rect.offsetY ?? 0) > 0) throw new Error("Invalid widget art rectangle")
+        (rect.offsetY ?? 0) > 0 ||
+        ('displayWidth' in rect && !Number.isInteger(rect.displayWidth)) || ('displayHeight' in rect && !Number.isInteger(rect.displayHeight)) ||
+        !Number.isInteger(rect.displayWidth ?? rect.width) || !Number.isInteger(rect.displayHeight ?? rect.height) ||
+        (rect.displayWidth ?? rect.width) < rect.width || (rect.displayWidth ?? rect.width) > 4096 ||
+        (rect.displayHeight ?? rect.height) < rect.height || (rect.displayHeight ?? rect.height) > 2160) throw new Error("Invalid widget art rectangle")
   }
   return metadata
 }

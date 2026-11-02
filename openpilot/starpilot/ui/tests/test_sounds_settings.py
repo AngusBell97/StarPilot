@@ -49,9 +49,9 @@ class SoundsSettingsTests(unittest.TestCase):
 
   def test_absence_auto_no_writes_and_native_registry(self):
     state = self.owner.snapshot()
-    self.assertEqual(len(state.rows), 8)
+    self.assertEqual(len(state.rows), 11)
     for key, _, _ in VOLUMES:
-      self.assertEqual(self.row(key).value, "Auto")
+      self.assertEqual(self.row(key).value, "0" if key == "GpuModelReadyVolume" else "Auto")
       self.assertEqual((self.row(key).step, self.row(key).maximum, self.row(key).unit), (5.0, 100.0, "%"))
       self.assertIsNone(read_volume(self.params, key).raw)
       self.assertEqual(self.params.get_type(key).name, "INT")
@@ -136,6 +136,7 @@ class SoundsSettingsTests(unittest.TestCase):
 
   def test_soundd_poll_reads_saved_values_without_touching_samples(self):
     sound = Soundd.__new__(Soundd)
+    sound.slc_warning_playing = False
     sound.pack_loader = Mock(is_builtin=Mock(return_value=False))
     sound.volume_params = self.params
     sound.saved_volumes = {key: AUTO for key, _, _ in VOLUMES}
@@ -264,7 +265,7 @@ class SoundsSettingsTests(unittest.TestCase):
     session.sounds_scroll = 5
     state = replace(session.sounds_snapshot(), scroll=5)
     self.assertEqual(state.page, "sounds:overview")
-    self.assertEqual(len(state.rows), 8)
+    self.assertEqual(len(state.rows), 10)
     self.assertTrue(all(value_buttons(state, row) == () for row in state.rows))
     self.assertEqual(next(row for row in state.rows if row.key == "EngageVolume").value, "40")
     received = []
@@ -457,6 +458,7 @@ class SoundsSettingsTests(unittest.TestCase):
 
   def test_soundd_auto_samples_and_protected_warning_ramp(self):
     sound = Soundd.__new__(Soundd)
+    sound.slc_warning_playing = False
     sound.pack_loader = Mock(is_builtin=Mock(return_value=False))
     sound.current_alert = AudibleAlert.engage
     sound.current_sound = AudibleAlert.engage
@@ -482,6 +484,7 @@ class SoundsSettingsTests(unittest.TestCase):
 
   def test_auto_matches_prior_gain_for_every_stock_family_and_timeout(self):
     sound = Soundd.__new__(Soundd)
+    sound.slc_warning_playing = False
     sound.pack_loader = Mock(is_builtin=Mock(return_value=False))
     waveform = np.array([0.5, -0.5], dtype=np.float32)
     sound.loaded_sounds = dict.fromkeys(sound_list, waveform)
@@ -514,6 +517,7 @@ class SoundsSettingsTests(unittest.TestCase):
 
   def test_looping_alert_final_chunk_keeps_producing_alert_gain(self):
     sound = Soundd.__new__(Soundd)
+    sound.slc_warning_playing = False
     sound.pack_loader = Mock(is_builtin=Mock(return_value=False))
     sound.current_alert = AudibleAlert.promptRepeat
     sound.current_sound = AudibleAlert.promptRepeat

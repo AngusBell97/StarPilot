@@ -1,4 +1,4 @@
-import { normalizeSnapshot } from "./system-monitor-data.js"
+import { normalizeSnapshot, MonitorAverage } from "./system-monitor-data.js"
 
 // One request at a time. The deadline starts before the request so slow replies
 // never obtain a fresh lease merely by arriving late.
@@ -7,20 +7,28 @@ export class MonitorFeed {
     schedule = (fn, delay) => setTimeout(fn, delay), cancel = (timer) => clearTimeout(timer), unauthorized = () => {} }) {
     if (!["sample", "local"].includes(mode)) throw new Error("Unsupported monitor source")
     Object.assign(this, { mode, publish, fetcher, clock, schedule, cancel, unauthorized })
+    this.average = new MonitorAverage()
     this.generation = 0
     this.stopped = true
+    this.lastSnapshot = null
     this.timer = this.deadline = this.expiry = this.request = null
   }
 
   start() { this.stop(); this.stopped = false; this.refresh() }
   stop() {
     this.stopped = true
+    this.lastSnapshot = null
+    this.average.reset()
     this.generation++
     this.cancel(this.timer)
     this.cancel(this.deadline)
     this.cancel(this.expiry)
     this.request?.abort()
     this.request = null
+  }
+
+  unavailable(error) {
+    this.publish({ snapshot: this.lastSnapshot, status: this.lastSnapshot ? "stale" : "unavailable", error })
   }
 
   async refresh() {
@@ -31,7 +39,7 @@ export class MonitorFeed {
     this.request = request
     this.deadline = this.schedule(() => {
       if (this.stopped || this.generation !== generation) return
-      this.publish({ snapshot: null, status: "unavailable", error: "System activity could not be refreshed." })
+      this.unavailable("System activity could not be refreshed.")
       this.cancel(this.expiry)
       // Retire it even if a stalled response body ignores cancellation.
       this.generation++
@@ -60,22 +68,24 @@ export class MonitorFeed {
         }
       }
       if (!response.ok) throw new Error("Monitor unavailable")
-      const snapshot = normalizeSnapshot(await response.json(), this.mode === "local" ? "local-runtime" : "synthetic-preview")
+      let snapshot = normalizeSnapshot(await response.json(), this.mode === "local" ? "local-runtime" : "synthetic-preview")
       if (this.stopped || this.generation !== generation || request.signal.aborted) return
       const elapsed = this.clock() - started
       if (elapsed < 0 || elapsed >= 4000) throw new Error("Expired monitor response")
+      snapshot = this.average.add(snapshot)
+      this.lastSnapshot = snapshot
       this.publish({ snapshot, status: this.mode === "local" ? "current" : "sample", error: "" })
       this.cancel(this.deadline)
       this.cancel(this.expiry)
       if (this.mode === "local") {
         this.expiry = this.schedule(() => {
-          if (!this.stopped) this.publish({ snapshot: null, status: "unavailable", error: "System activity is out of date." })
+          if (!this.stopped) this.unavailable("System activity is out of date.")
         }, 4000 - elapsed)
       }
     } catch {
       if (!this.stopped && this.generation === generation) {
         this.cancel(this.expiry)
-        this.publish({ snapshot: null, status: "unavailable", error: "System activity is unavailable." })
+        this.unavailable("System activity is unavailable.")
       }
     } finally {
       if (!this.stopped && this.generation === generation) {

@@ -418,7 +418,7 @@ class TestStateMigration(unittest.TestCase):
       self.assertTrue(self.params.get_bool('StarPortEnabled'))
       self.assertFalse(Path(self.params.get_param_path('AndroidAutoEnabled')).exists())
       self.params.put_bool('AlwaysOnLateral', True, block=True)
-      corrupt = {'SLCFallback': b'broken', 'Offset3': b'',
+      corrupt = {'SLCOverride': b'broken', 'Offset3': b'',
                  'LongitudinalPersonalityProfiles': b'{broken', 'LaneCenterOffset': b'bad'}
       for key, raw in corrupt.items():
         Path(self.params.get_param_path(key)).write_bytes(raw)

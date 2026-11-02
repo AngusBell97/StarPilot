@@ -639,7 +639,7 @@ class ConditionalFeatureTests(unittest.TestCase):
       self.assertEqual(decode_preferences(Path(self.params.get_param_path("ConditionalModeConfig")).read_bytes()).mode.value,
                        "conditional_chill")
       next(card for card in child.items if card.text == "experimental conditions").click()
-      self.assertTrue(any(card.text.startswith("speed threshold") for card in stack[-1].items))
+      self.assertTrue(any(card.text.startswith("experimental below: no lead") for card in stack[-1].items))
       stack.pop()
       Path(self.params.get_param_path("ConditionalModeConfig")).write_bytes(b'{"version":2}')
       adapter.open(FeaturePage.CONDITIONAL)

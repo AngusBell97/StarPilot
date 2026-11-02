@@ -67,15 +67,18 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
     from openpilot.starpilot.speed_limits import offset_document as od
     from openpilot.starpilot.speed_limits.runtime import Action, CruiseEvent
     from openpilot.starpilot.speed_limits.tests.test_runtime_replay import RuntimeReplayTests
-    now = 2_000_000_000
     for confirmation, choice in ((False, 'applied'), (True, 'applied'), (False, 'override'), (True, 'decline')):
       with self.subTest(confirmation=confirmation, choice=choice), tempfile.TemporaryDirectory() as directory:
+        now = 2_000_000_000
         fixture = RuntimeReplayTests()
         fixture.setUp()
         sm, cp = fixture.sm, fixture.cp
         params = Params(directory)
         params.put_bool('SpeedLimitController', True, block=True)
+        params.put_bool('IsMetric', False, block=True)
         params.put_bool('SLCConfirmation', confirmation, block=True)
+        params.put_bool('SLCConfirmationLower', confirmation, block=True)
+        params.put_bool('SLCConfirmationHigher', confirmation, block=True)
         params.put('SLCPriority1', 'Dashboard', block=True)
         params.put('SLCOffsetSchedule', od.to_value(od.adopt_legacy(False, (0.,) * 7)), block=True)
         owner = plannerd.SavedSlcLifecycle(params, cp, {})
@@ -85,6 +88,14 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
         sm['carState'].vCruise = sm['carState'].vCruiseCluster = baseline
         aligned = original.step(sm, cp, now_ns=now)
         self.assertIsNone(aligned.command)
+        if not confirmation:
+          # The custom automatic-adoption path waits three seconds, even if
+          # the selected speed already agrees with the newly observed limit.
+          now += 3_000_000_000
+          sm.advance(now)
+          aligned = original.step(sm, cp, now_ns=now)
+          self.assertIsNone(aligned.command)
+        self.assertTrue(aligned.message.slcState.hasAccepted, (confirmation, choice, aligned.result.acceptance.basis))
         if choice == 'override':
           selected = slc_target_kph(70 * CV.MPH_TO_MS, False)
           sm['carState'].vCruise = sm['carState'].vCruiseCluster = selected
@@ -102,11 +113,14 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
         selected = float(sm['carState'].vCruise)
         params.put_bool('IsMetric', True, block=True)
         metric, changed = owner.refresh(now + 1_000_000_000)
-        self.assertTrue(changed)
+        self.assertFalse(changed)  # Units update in-place without resetting driver choices.
+        self.assertIs(metric, original)
+        self.assertTrue(metric.is_metric)
         sm.advance(now + 1_000_000_000)
         output = metric.step(sm, cp, now_ns=now + 1_000_000_000)
         self.assertIsNone(output.command)
-        self.assertFalse(output.message.slcState.hasPending)
+        self.assertFalse(output.message.slcState.hasPending, (confirmation, choice, output.result.acceptance.basis,
+                                                            output.result.acceptance.state.received_speed_mps))
         self.assertTrue(output.message.slcState.hasAccepted)
         self.assertEqual(sm['carState'].vCruise, selected)
         self.assertEqual(output.message.slcState.driverOverrideActive, choice == 'override')
@@ -262,14 +276,13 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
           self.assertNotIn(service, subscriber.call_args.kwargs[check])
       self.assertIsNone(plannerd.SavedSlcLifecycle(params, cp, {}).refresh(1_000_000_000)[0])
 
-  def test_automatic_chill_joins_native_mpc_radar_and_disabled_slc(self):
+  def test_automatic_chill_ignores_retired_slc_modes_but_keeps_native_radar_veto(self):
     cp = CarInterface.get_non_essential_params(CAR.HONDA_CIVIC)
     planner = LongitudinalPlanner(cp, init_v=25.0)
     with tempfile.TemporaryDirectory() as directory:
       params = Params(directory)
       params.put(DOCUMENT_KEY, json.loads(encode_preferences(SavedPreferences(mode=ModeChoice.CCM))), block=True)
-      owner = ConditionalPlannerHost(params, slc_runtime_enabled=False)
-      missing_slc = ConditionalPlannerHost(params, slc_runtime_enabled=True)
+      owner = ConditionalPlannerHost(params)
       stamp = MONO
       radar = RadarD(adjacent_enabled=True, radar_available=True,
                      clock_pair_fn=lambda: (stamp + 1_000_000, BOOT + stamp - MONO + 1_000_000, 1000))
@@ -295,7 +308,10 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
         def all_checks(self, service_list=None):
           return all(self.valid[service] for service in ('modelV2', 'carState', 'radarTracks'))
 
+      legacy = Path(params.get_param_path('SLCFallback'))
+      saved_modes = (b'0', b'1', b'2', b'broken')
       for index in range(31):
+        legacy.write_bytes(saved_modes[index % len(saved_modes)])
         stamp = MONO + index * 50_000_000
         payloads = serialized_scene(stamp=BOOT + stamp - MONO, speed=25.0, horizon=300.0,
                                     lead_present=False, experimental_mode=True)
@@ -336,23 +352,14 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
         current, _ = owner.sample(sm, cp, planner, now_mono_ns=stamp + 2_000_000,
                                    now_boot_ns=BOOT + stamp - MONO + 2_000_000, sample_skew_ns=1000,
                                    drive_id=MONO - 1_000_000_000, native_plan_valid=True)
-        unavailable, _ = missing_slc.sample(sm, cp, planner, now_mono_ns=stamp + 2_000_000,
-                                             now_boot_ns=BOOT + stamp - MONO + 2_000_000, sample_skew_ns=1000,
-                                             drive_id=MONO - 1_000_000_000, native_plan_valid=True)
-        if index == 29:
+        self.assertEqual(legacy.read_bytes(), saved_modes[index % len(saved_modes)])
+        if 20 <= index < 30:
           self.assertIs(current.projected.scene.adjacent_lead_ambiguous, False)
           self.assertEqual(current.decision.reason.value, 'ccm_speed')
           self.assertIs(current.override_experimental, False)
-          self.assertIsNone(unavailable.projected.scene.slc_experimental)
-          self.assertEqual(unavailable.decision.reason.value, 'scene_unavailable')
-          self.assertIs(unavailable.override_experimental, True)
-      self.assertIs(current.projected.scene.slc_experimental, False)
       self.assertIs(current.projected.scene.adjacent_lead_ambiguous, True)
       self.assertEqual(current.decision.reason.value, 'ccm_veto')
       self.assertIs(current.override_experimental, True)  # Real adjacent radar veto exits Chill immediately.
-      self.assertIsNone(unavailable.projected.scene.slc_experimental)
-      self.assertEqual(unavailable.decision.reason.value, 'ccm_veto')
-      self.assertIs(unavailable.override_experimental, True)
 
   def test_current_build_disabled_scenes_make_chill_launch_known(self):
     cp = CarInterface.get_non_essential_params(CAR.HONDA_CIVIC)
@@ -499,7 +506,7 @@ class TestConditionalRuntimeLoop(unittest.TestCase):
     with tempfile.TemporaryDirectory() as directory:
       params = Params(directory)
       saved = SavedPreferences(mode=ModeChoice.CEM,
-                               cem=CEMOptions(speed_mps=20.0, signal_speed_mps=20.0, signal_lane_width_m=3.0))
+                               cem=CEMOptions(speed_mps=20.0, speed_with_lead_mps=20.0, signal_speed_mps=20.0, signal_lane_width_m=3.0))
       params.put(DOCUMENT_KEY, json.loads(encode_preferences(saved)), block=True)
       owner = ConditionalPlannerHost(params)
       payloads = serialized_scene(left_blinker=True, left_edge=-2.0)

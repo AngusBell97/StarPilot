@@ -162,7 +162,8 @@ class LayoutPreviewRendererTests(unittest.TestCase):
       self.assertEqual(slc_controls(profile, sample_state("engaged", document)), ())
     manual = sample_state("experimental", document)
     self.assertTrue(manual.experimental_enabled)
-    self.assertIsNone(manual.visual_preview)
+    self.assertTrue(manual.visual_preview.layout_sample)
+    self.assertIsNone(manual.visual_preview.cem_reason)
     self.assertIsNone(manual.conditional_effective)
     for scene, reason in (("cem_stop_light", "STOP LIGHT"), ("cem_lead", "LEAD"), ("cem_curve", "CURVE")):
       with self.subTest(scene=scene):

@@ -61,7 +61,32 @@ func TestMapdV1HostWireFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(raw, expected) {
-		t.Fatal("provider wire differs from shared host fixture; review both schemas")
-	}
+    // Appended zero fields may enlarge allocation, but canonical old content
+    // must remain byte-identical. Keep the original fixture as the old reader contract.
+    oldMessage, err := capnp.Unmarshal(expected)
+    if err != nil { t.Fatal(err) }
+    oldEvent, err := log.ReadRootEvent(oldMessage)
+    if err != nil { t.Fatal(err) }
+    oldCanonical, err := capnp.Canonicalize(capnp.Struct(oldEvent))
+    if err != nil { t.Fatal(err) }
+    canonical, err := capnp.Canonicalize(capnp.Struct(event))
+    if err != nil { t.Fatal(err) }
+    if !bytes.Equal(canonical, oldCanonical) { t.Fatal("old schema field layout changed") }
+    _ = raw
+}
+
+func TestTwoBoundaryHostWire(t *testing.T) {
+ msg,seg,err:=capnp.NewMessage(capnp.SingleSegment(nil));if err!=nil{t.Fatal(err)}
+ event,err:=log.NewRootEvent(seg);if err!=nil{t.Fatal(err)}
+ event.SetValid(true);event.SetLogMonoTime(10_000_000_000)
+ out,err:=event.NewMapdOut();if err!=nil{t.Fatal(err)}
+ out.SetSampleVersion(2);out.SetRoadStatus(custom.MapdOut_SampleStatus_matchedLimit)
+ out.SetGpsSource(custom.MapdOut_GpsSource_external);out.SetGpsMonoTime(9_900_000_000)
+ out.SetComputedMonoTime(10_000_000_000);out.SetSourceGeneration(1);out.SetProducerSession(41)
+ out.SetTileLoaded(true);out.SetWaySelectionType(custom.WaySelectionType_current);out.SetWayId(12)
+ out.SetSpeedLimit(30);out.SetNextSpeedLimit(20);out.SetNextSpeedLimitDistance(100)
+ out.SetNextSpeedLimitEndDistance(180);out.SetFollowingSpeedLimit(30)
+ out.SetNextSpeedLimitWayId(22);out.SetFollowingSpeedLimitWayId(33)
+ raw,err:=msg.Marshal();if err!=nil{t.Fatal(err)}
+ if path:=os.Getenv("SP011_BOUNDARY_WIRE");path!="" {if err:=os.WriteFile(path,raw,0600);err!=nil{t.Fatal(err)}}
 }

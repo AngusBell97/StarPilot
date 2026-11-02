@@ -110,6 +110,7 @@ enum class Kind_b8cbd9e666181b95: uint16_t {
   FORCE_COAST_TOGGLE,
   PULSE_GLIDE_TOGGLE,
   DISENGAGE_REQUEST,
+  CRUISE_STEP,
 };
 CAPNP_DECLARE_ENUM(Kind, b8cbd9e666181b95);
 CAPNP_DECLARE_SCHEMA(cd96dafb67a082d0);
@@ -255,6 +256,7 @@ enum class Status_f187d96cea4f09df: uint16_t {
 };
 CAPNP_DECLARE_ENUM(Status, f187d96cea4f09df);
 CAPNP_DECLARE_SCHEMA(c2243c65e0340384);
+CAPNP_DECLARE_SCHEMA(c5cf95e822bf5db9);
 CAPNP_DECLARE_SCHEMA(88f71f4263677d19);
 CAPNP_DECLARE_SCHEMA(c5693d5da66b60b6);
 CAPNP_DECLARE_SCHEMA(bd443b539493bc68);
@@ -263,6 +265,8 @@ enum class Kind_94d51b83b2a8ea50: uint16_t {
   UNKNOWN,
   ADOPT_ACCEPTED_HIGHER_LIMIT,
   ADOPT_ACCEPTED_LIMIT,
+  REENGAGE_ZONE,
+  PREVIEW_ROLLBACK,
 };
 CAPNP_DECLARE_ENUM(Kind, 94d51b83b2a8ea50);
 CAPNP_DECLARE_SCHEMA(fc6241ed8877b611);
@@ -436,6 +440,37 @@ CAPNP_DECLARE_SCHEMA(db85b982067f1bc1);
 CAPNP_DECLARE_SCHEMA(ef6257bed9318012);
 CAPNP_DECLARE_SCHEMA(bbb8f17940692312);
 CAPNP_DECLARE_SCHEMA(daa1a9f0d8968e31);
+CAPNP_DECLARE_SCHEMA(bf4015ccc2ca01a9);
+CAPNP_DECLARE_SCHEMA(a9131438e6379265);
+CAPNP_DECLARE_SCHEMA(d77855e8ff71ba8c);
+CAPNP_DECLARE_SCHEMA(80ab216d1d03df1b);
+CAPNP_DECLARE_SCHEMA(b19fbba537ded85c);
+CAPNP_DECLARE_SCHEMA(e1d45b3494766cfb);
+CAPNP_DECLARE_SCHEMA(93dbf981e613a72a);
+CAPNP_DECLARE_SCHEMA(8c596acec7cd846f);
+CAPNP_DECLARE_SCHEMA(c3f80b80ac4a219b);
+CAPNP_DECLARE_SCHEMA(b199e3912a29c855);
+CAPNP_DECLARE_SCHEMA(ee17ef3d1d71895a);
+CAPNP_DECLARE_SCHEMA(a29110177dfa8ee1);
+CAPNP_DECLARE_SCHEMA(cb7d7cb1a3effefa);
+CAPNP_DECLARE_SCHEMA(b0e70575563c5d32);
+CAPNP_DECLARE_SCHEMA(decd6b8abaedf8f6);
+CAPNP_DECLARE_SCHEMA(b18cb3055758c9b2);
+CAPNP_DECLARE_SCHEMA(eed416ffba029c9d);
+CAPNP_DECLARE_SCHEMA(b29911c6aa00329c);
+CAPNP_DECLARE_SCHEMA(fcb9281bc05e1013);
+CAPNP_DECLARE_SCHEMA(b6d67219b442e4f0);
+CAPNP_DECLARE_SCHEMA(8dadbd222c9b1351);
+CAPNP_DECLARE_SCHEMA(ec1855b6ddfe8c59);
+CAPNP_DECLARE_SCHEMA(c04f1ef66bf5d29e);
+CAPNP_DECLARE_SCHEMA(d813de15090b9f73);
+CAPNP_DECLARE_SCHEMA(8a2806fa4559976d);
+CAPNP_DECLARE_SCHEMA(90d7f9eb75334be3);
+CAPNP_DECLARE_SCHEMA(a916c30e893403d4);
+CAPNP_DECLARE_SCHEMA(f1fa340e46f10c10);
+CAPNP_DECLARE_SCHEMA(d3269521c2df17ed);
+CAPNP_DECLARE_SCHEMA(9b7a36731dad2d39);
+CAPNP_DECLARE_SCHEMA(bfb946aa905d4244);
 
 }  // namespace schemas
 }  // namespace capnp
@@ -729,7 +764,7 @@ struct SlcState {
   struct ConditionalModeState;
 
   struct _capnpPrivate {
-    CAPNP_DECLARE_STRUCT_HEADER(a1680744031fdb2d, 18, 21)
+    CAPNP_DECLARE_STRUCT_HEADER(a1680744031fdb2d, 23, 23)
     #if !CAPNP_LITE
     static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
     #endif  // !CAPNP_LITE
@@ -1194,11 +1229,27 @@ struct StarPilotLateralState {
   class Reader;
   class Builder;
   class Pipeline;
+  struct LanePath;
   struct LaneCentering;
   struct FeedbackConsumption;
 
   struct _capnpPrivate {
-    CAPNP_DECLARE_STRUCT_HEADER(c2243c65e0340384, 4, 5)
+    CAPNP_DECLARE_STRUCT_HEADER(c2243c65e0340384, 4, 6)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct StarPilotLateralState::LanePath {
+  LanePath() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(c5cf95e822bf5db9, 3, 3)
     #if !CAPNP_LITE
     static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
     #endif  // !CAPNP_LITE
@@ -1453,7 +1504,7 @@ struct MapdOut {
 
 
   struct _capnpPrivate {
-    CAPNP_DECLARE_STRUCT_HEADER(a4f1eb3323f5f582, 14, 6)
+    CAPNP_DECLARE_STRUCT_HEADER(a4f1eb3323f5f582, 17, 6)
     #if !CAPNP_LITE
     static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
     #endif  // !CAPNP_LITE
@@ -1828,6 +1879,511 @@ struct LiveTrackingResponseWitness {
 
   struct _capnpPrivate {
     CAPNP_DECLARE_STRUCT_HEADER(daa1a9f0d8968e31, 7, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState {
+  LaneCenteringState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+  struct ReferenceFilter;
+  struct WorkerState;
+  struct SourceIdentity;
+  struct SourceState;
+  struct Admission;
+  struct ModeState;
+  struct ReferenceState;
+  struct Margin;
+  struct EdgeStage;
+  struct EdgeState;
+  struct CurveState;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(bf4015ccc2ca01a9, 33, 24)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::ReferenceFilter {
+  ReferenceFilter() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(a9131438e6379265, 6, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::WorkerState {
+  WorkerState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(d77855e8ff71ba8c, 9, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::SourceIdentity {
+  SourceIdentity() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(80ab216d1d03df1b, 2, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::SourceState {
+  SourceState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b19fbba537ded85c, 3, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::Admission {
+  Admission() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(e1d45b3494766cfb, 2, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::ModeState {
+  ModeState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(93dbf981e613a72a, 1, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::ReferenceState {
+  ReferenceState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(8c596acec7cd846f, 3, 6)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::Margin {
+  Margin() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(c3f80b80ac4a219b, 5, 0)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::EdgeStage {
+  EdgeStage() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b199e3912a29c855, 2, 4)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::EdgeState {
+  EdgeState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(ee17ef3d1d71895a, 9, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringState::CurveState {
+  CurveState() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(a29110177dfa8ee1, 8, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometryRequest {
+  LaneCenteringGeometryRequest() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(cb7d7cb1a3effefa, 5, 7)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometryResult {
+  LaneCenteringGeometryResult() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+  enum Which: uint16_t {
+    GEOMETRY,
+    FAULT,
+  };
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b0e70575563c5d32, 5, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry {
+  LaneCenteringGeometry() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+  struct Comfort;
+  struct EdgeBounds;
+  struct Counts;
+  struct Path;
+  struct Source;
+  struct Frame;
+  struct MotionSample;
+  struct Evidence;
+  struct Bound;
+  struct Candidate;
+  struct SingleClearance;
+  struct Rejection;
+  struct Pair;
+  struct Failure;
+  struct CurveOutcome;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(decd6b8abaedf8f6, 4, 18)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Comfort {
+  Comfort() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b18cb3055758c9b2, 4, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::EdgeBounds {
+  EdgeBounds() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(eed416ffba029c9d, 7, 7)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Counts {
+  Counts() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b29911c6aa00329c, 1, 0)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Path {
+  Path() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(fcb9281bc05e1013, 0, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Source {
+  Source() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(b6d67219b442e4f0, 4, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Frame {
+  Frame() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(8dadbd222c9b1351, 5, 3)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::MotionSample {
+  MotionSample() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(ec1855b6ddfe8c59, 3, 0)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Evidence {
+  Evidence() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(c04f1ef66bf5d29e, 2, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Bound {
+  Bound() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+  enum Which: uint16_t {
+    OPEN,
+    FINITE,
+  };
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(d813de15090b9f73, 1, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Candidate {
+  Candidate() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(8a2806fa4559976d, 2, 10)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::SingleClearance {
+  SingleClearance() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(90d7f9eb75334be3, 2, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Rejection {
+  Rejection() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(a916c30e893403d4, 1, 1)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Pair {
+  Pair() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(f1fa340e46f10c10, 2, 0)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::Failure {
+  Failure() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(d3269521c2df17ed, 0, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringGeometry::CurveOutcome {
+  CurveOutcome() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+  enum Which: uint16_t {
+    FAILURE,
+    PAIR,
+    FIT,
+    GAPS,
+  };
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(9b7a36731dad2d39, 2, 2)
+    #if !CAPNP_LITE
+    static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
+    #endif  // !CAPNP_LITE
+  };
+};
+
+struct LaneCenteringControl {
+  LaneCenteringControl() = delete;
+
+  class Reader;
+  class Builder;
+  class Pipeline;
+
+  struct _capnpPrivate {
+    CAPNP_DECLARE_STRUCT_HEADER(bfb946aa905d4244, 27, 0)
     #if !CAPNP_LITE
     static constexpr ::capnp::_::RawBrandedSchema const* brand() { return &schema->defaultBrand; }
     #endif  // !CAPNP_LITE
@@ -4347,6 +4903,34 @@ public:
 
   inline float getLastReceivedAdjustedLimit() const;
 
+  inline bool hasChangeWarningId() const;
+  inline  ::capnp::Text::Reader getChangeWarningId() const;
+
+  inline  ::uint64_t getChangeWarningIssuedMonoTime() const;
+
+  inline  ::uint64_t getChangeWarningDeadlineMonoTime() const;
+
+  inline bool getWarningPinned() const;
+
+  inline bool hasWarningPinId() const;
+  inline  ::capnp::Text::Reader getWarningPinId() const;
+
+  inline  ::uint64_t getWarningPinIssuedMonoTime() const;
+
+  inline bool getMapApproachActive() const;
+
+  inline float getMapBoundaryDistance() const;
+
+  inline float getMapTriggerDistance() const;
+
+  inline bool getHasReengageTarget() const;
+
+  inline float getReengageTarget() const;
+
+  inline bool getHasRollbackTarget() const;
+
+  inline float getRollbackTarget() const;
+
   inline  ::uint64_t getAcceptedMonoTime() const;
 
 private:
@@ -4628,6 +5212,53 @@ public:
 
   inline float getLastReceivedAdjustedLimit();
   inline void setLastReceivedAdjustedLimit(float value);
+
+  inline bool hasChangeWarningId();
+  inline  ::capnp::Text::Builder getChangeWarningId();
+  inline void setChangeWarningId( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initChangeWarningId(unsigned int size);
+  inline void adoptChangeWarningId(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownChangeWarningId();
+
+  inline  ::uint64_t getChangeWarningIssuedMonoTime();
+  inline void setChangeWarningIssuedMonoTime( ::uint64_t value);
+
+  inline  ::uint64_t getChangeWarningDeadlineMonoTime();
+  inline void setChangeWarningDeadlineMonoTime( ::uint64_t value);
+
+  inline bool getWarningPinned();
+  inline void setWarningPinned(bool value);
+
+  inline bool hasWarningPinId();
+  inline  ::capnp::Text::Builder getWarningPinId();
+  inline void setWarningPinId( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initWarningPinId(unsigned int size);
+  inline void adoptWarningPinId(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownWarningPinId();
+
+  inline  ::uint64_t getWarningPinIssuedMonoTime();
+  inline void setWarningPinIssuedMonoTime( ::uint64_t value);
+
+  inline bool getMapApproachActive();
+  inline void setMapApproachActive(bool value);
+
+  inline float getMapBoundaryDistance();
+  inline void setMapBoundaryDistance(float value);
+
+  inline float getMapTriggerDistance();
+  inline void setMapTriggerDistance(float value);
+
+  inline bool getHasReengageTarget();
+  inline void setHasReengageTarget(bool value);
+
+  inline float getReengageTarget();
+  inline void setReengageTarget(float value);
+
+  inline bool getHasRollbackTarget();
+  inline void setHasRollbackTarget(bool value);
+
+  inline float getRollbackTarget();
+  inline void setRollbackTarget(float value);
 
   inline  ::uint64_t getAcceptedMonoTime();
   inline void setAcceptedMonoTime( ::uint64_t value);
@@ -5628,6 +6259,8 @@ public:
 
   inline float getTargetSpeedMps() const;
 
+  inline  ::int8_t getStepUnits() const;
+
 private:
   ::capnp::_::StructReader _reader;
   template <typename, ::capnp::Kind>
@@ -5710,6 +6343,9 @@ public:
 
   inline float getTargetSpeedMps();
   inline void setTargetSpeedMps(float value);
+
+  inline  ::int8_t getStepUnits();
+  inline void setStepUnits( ::int8_t value);
 
 private:
   ::capnp::_::StructBuilder _builder;
@@ -8440,6 +9076,9 @@ public:
   inline bool hasTrackingApplication() const;
   inline  ::cereal::LiveTrackingApplication::Reader getTrackingApplication() const;
 
+  inline bool hasLanePath() const;
+  inline  ::cereal::StarPilotLateralState::LanePath::Reader getLanePath() const;
+
 private:
   ::capnp::_::StructReader _reader;
   template <typename, ::capnp::Kind>
@@ -8527,6 +9166,13 @@ public:
   inline void adoptTrackingApplication(::capnp::Orphan< ::cereal::LiveTrackingApplication>&& value);
   inline ::capnp::Orphan< ::cereal::LiveTrackingApplication> disownTrackingApplication();
 
+  inline bool hasLanePath();
+  inline  ::cereal::StarPilotLateralState::LanePath::Builder getLanePath();
+  inline void setLanePath( ::cereal::StarPilotLateralState::LanePath::Reader value);
+  inline  ::cereal::StarPilotLateralState::LanePath::Builder initLanePath();
+  inline void adoptLanePath(::capnp::Orphan< ::cereal::StarPilotLateralState::LanePath>&& value);
+  inline ::capnp::Orphan< ::cereal::StarPilotLateralState::LanePath> disownLanePath();
+
 private:
   ::capnp::_::StructBuilder _builder;
   template <typename, ::capnp::Kind>
@@ -8550,6 +9196,136 @@ public:
   inline  ::cereal::LearningApplication::Pipeline getLearningApplication();
   inline  ::cereal::StarPilotLateralState::FeedbackConsumption::Pipeline getFeedbackConsumption();
   inline  ::cereal::LiveTrackingApplication::Pipeline getTrackingApplication();
+  inline  ::cereal::StarPilotLateralState::LanePath::Pipeline getLanePath();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class StarPilotLateralState::LanePath::Reader {
+public:
+  typedef LanePath Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getVersion() const;
+
+  inline bool getValid() const;
+
+  inline  ::uint64_t getModelMonoTime() const;
+
+  inline  ::uint64_t getControlMonoTime() const;
+
+  inline bool hasX() const;
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader getX() const;
+
+  inline bool hasY() const;
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader getY() const;
+
+  inline bool hasZ() const;
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader getZ() const;
+
+  inline float getRequestedCurvatureCorrection() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class StarPilotLateralState::LanePath::Builder {
+public:
+  typedef LanePath Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getVersion();
+  inline void setVersion( ::uint16_t value);
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline  ::uint64_t getModelMonoTime();
+  inline void setModelMonoTime( ::uint64_t value);
+
+  inline  ::uint64_t getControlMonoTime();
+  inline void setControlMonoTime( ::uint64_t value);
+
+  inline bool hasX();
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder getX();
+  inline void setX( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setX(::kj::ArrayPtr<const float> value);
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder initX(unsigned int size);
+  inline void adoptX(::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> disownX();
+
+  inline bool hasY();
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder getY();
+  inline void setY( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setY(::kj::ArrayPtr<const float> value);
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder initY(unsigned int size);
+  inline void adoptY(::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> disownY();
+
+  inline bool hasZ();
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder getZ();
+  inline void setZ( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setZ(::kj::ArrayPtr<const float> value);
+  inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder initZ(unsigned int size);
+  inline void adoptZ(::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> disownZ();
+
+  inline float getRequestedCurvatureCorrection();
+  inline void setRequestedCurvatureCorrection(float value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class StarPilotLateralState::LanePath::Pipeline {
+public:
+  typedef LanePath Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
 private:
   ::capnp::AnyPointer::Pipeline _typeless;
   friend class ::capnp::PipelineHook;
@@ -8589,6 +9365,8 @@ public:
 
   inline bool hasReason() const;
   inline  ::capnp::Text::Reader getReason() const;
+
+  inline float getCorrectionLimit() const;
 
 private:
   ::capnp::_::StructReader _reader;
@@ -8642,6 +9420,9 @@ public:
   inline  ::capnp::Text::Builder initReason(unsigned int size);
   inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
   inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+  inline float getCorrectionLimit();
+  inline void setCorrectionLimit(float value);
 
 private:
   ::capnp::_::StructBuilder _builder;
@@ -10431,6 +11212,14 @@ public:
 
   inline  ::uint64_t getProducerSession() const;
 
+  inline float getNextSpeedLimitEndDistance() const;
+
+  inline float getFollowingSpeedLimit() const;
+
+  inline  ::int64_t getFollowingSpeedLimitWayId() const;
+
+  inline  ::int64_t getNextSpeedLimitWayId() const;
+
 private:
   ::capnp::_::StructReader _reader;
   template <typename, ::capnp::Kind>
@@ -10584,6 +11373,18 @@ public:
 
   inline  ::uint64_t getProducerSession();
   inline void setProducerSession( ::uint64_t value);
+
+  inline float getNextSpeedLimitEndDistance();
+  inline void setNextSpeedLimitEndDistance(float value);
+
+  inline float getFollowingSpeedLimit();
+  inline void setFollowingSpeedLimit(float value);
+
+  inline  ::int64_t getFollowingSpeedLimitWayId();
+  inline void setFollowingSpeedLimitWayId( ::int64_t value);
+
+  inline  ::int64_t getNextSpeedLimitWayId();
+  inline void setNextSpeedLimitWayId( ::int64_t value);
 
 private:
   ::capnp::_::StructBuilder _builder;
@@ -14733,6 +15534,4499 @@ public:
       : _typeless(kj::mv(typeless)) {}
 
   inline  ::cereal::LiveTrackingResponseCertificate::Pipeline getCertificate();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::Reader {
+public:
+  typedef LaneCenteringState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getSchemaVersion() const;
+
+  inline  ::uint64_t getControlTimeNs() const;
+
+  inline  ::uint64_t getModelFrameId() const;
+
+  inline  ::uint64_t getModelCaptureNs() const;
+
+  inline  ::uint64_t getModelPublishNs() const;
+
+  inline  ::uint64_t getGeometryTimeNs() const;
+
+  inline  ::uint16_t getConfigVersion() const;
+
+  inline  ::uint64_t getConfigRevision() const;
+
+  inline bool hasConfigHash() const;
+  inline  ::capnp::Text::Reader getConfigHash() const;
+
+  inline bool hasConfigJson() const;
+  inline  ::capnp::Text::Reader getConfigJson() const;
+
+  inline bool hasConfigUnitsJson() const;
+  inline  ::capnp::Text::Reader getConfigUnitsJson() const;
+
+  inline bool getValid() const;
+
+  inline bool getBarVisible() const;
+
+  inline bool getMasterEnabled() const;
+
+  inline bool getDisplayEnabled() const;
+
+  inline bool getLateralActive() const;
+
+  inline  ::uint8_t getMode() const;
+
+  inline bool hasModeEnabled() const;
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader getModeEnabled() const;
+
+  inline bool hasModeAllowE2E() const;
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader getModeAllowE2E() const;
+
+  inline double getBaseCurvature() const;
+
+  inline double getRawOptionalCurvature() const;
+
+  inline double getBoundedDemandCurvature() const;
+
+  inline double getResponseLimitedCurvature() const;
+
+  inline double getPreYieldCurvature() const;
+
+  inline double getFinalOptionalCurvature() const;
+
+  inline double getTotalCurvature() const;
+
+  inline double getMaximumCorrection() const;
+
+  inline double getAuthority() const;
+
+  inline double getDeviation() const;
+
+  inline double getRequestedYield() const;
+
+  inline double getAppliedYield() const;
+
+  inline double getRemovedByE2E() const;
+
+  inline double getSignalTailCurvature() const;
+
+  inline double getPreviewDistance() const;
+
+  inline double getCentringError() const;
+
+  inline bool hasReason() const;
+  inline  ::capnp::Text::Reader getReason() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+  inline bool hasResponseKind() const;
+  inline  ::capnp::Text::Reader getResponseKind() const;
+
+  inline bool getReentry() const;
+
+  inline bool getModelFresh() const;
+
+  inline bool hasSources() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Reader getSources() const;
+
+  inline bool hasSelectedSources() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader getSelectedSources() const;
+
+  inline bool hasSelectionCause() const;
+  inline  ::capnp::Text::Reader getSelectionCause() const;
+
+  inline bool hasSelectionAnchor() const;
+  inline  ::capnp::Text::Reader getSelectionAnchor() const;
+
+  inline bool hasSelectionScores() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getSelectionScores() const;
+
+  inline bool hasSelectionTransition() const;
+  inline  ::capnp::Text::Reader getSelectionTransition() const;
+
+  inline bool hasPromotionWaiting() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getPromotionWaiting() const;
+
+  inline bool hasModes() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Reader getModes() const;
+
+  inline bool hasReference() const;
+  inline  ::cereal::LaneCenteringState::ReferenceState::Reader getReference() const;
+
+  inline bool hasEdge() const;
+  inline  ::cereal::LaneCenteringState::EdgeState::Reader getEdge() const;
+
+  inline bool hasCurve() const;
+  inline  ::cereal::LaneCenteringState::CurveState::Reader getCurve() const;
+
+  inline bool getDownstreamCommandLimitKnown() const;
+
+  inline bool getDownstreamCommandLimited() const;
+
+  inline double getDownstreamCurvature() const;
+
+  inline bool getVehicleLimitKnown() const;
+
+  inline bool hasConfigEvents() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getConfigEvents() const;
+
+  inline bool hasClockDomain() const;
+  inline  ::capnp::Text::Reader getClockDomain() const;
+
+  inline bool getClockValid() const;
+
+  inline  ::uint64_t getClockOffsetNs() const;
+
+  inline  ::uint64_t getClockEpoch() const;
+
+  inline  ::uint64_t getClockMonoSampleNs() const;
+
+  inline  ::uint64_t getRawModelPublishNs() const;
+
+  inline  ::uint64_t getRawCarStateNs() const;
+
+  inline  ::uint64_t getRawLivePoseNs() const;
+
+  inline  ::uint64_t getClockEpochStartMonoNs() const;
+
+  inline bool hasWorker() const;
+  inline  ::cereal::LaneCenteringState::WorkerState::Reader getWorker() const;
+
+  inline bool getDetailPresent() const;
+
+  inline  ::uint64_t getPlanSequence() const;
+
+  inline  ::uint64_t getPlanCaptureNs() const;
+
+  inline bool hasPlanConfigHash() const;
+  inline  ::capnp::Text::Reader getPlanConfigHash() const;
+
+  inline bool hasReferenceFilter() const;
+  inline  ::cereal::LaneCenteringState::ReferenceFilter::Reader getReferenceFilter() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::Builder {
+public:
+  typedef LaneCenteringState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getSchemaVersion();
+  inline void setSchemaVersion( ::uint16_t value);
+
+  inline  ::uint64_t getControlTimeNs();
+  inline void setControlTimeNs( ::uint64_t value);
+
+  inline  ::uint64_t getModelFrameId();
+  inline void setModelFrameId( ::uint64_t value);
+
+  inline  ::uint64_t getModelCaptureNs();
+  inline void setModelCaptureNs( ::uint64_t value);
+
+  inline  ::uint64_t getModelPublishNs();
+  inline void setModelPublishNs( ::uint64_t value);
+
+  inline  ::uint64_t getGeometryTimeNs();
+  inline void setGeometryTimeNs( ::uint64_t value);
+
+  inline  ::uint16_t getConfigVersion();
+  inline void setConfigVersion( ::uint16_t value);
+
+  inline  ::uint64_t getConfigRevision();
+  inline void setConfigRevision( ::uint64_t value);
+
+  inline bool hasConfigHash();
+  inline  ::capnp::Text::Builder getConfigHash();
+  inline void setConfigHash( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initConfigHash(unsigned int size);
+  inline void adoptConfigHash(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownConfigHash();
+
+  inline bool hasConfigJson();
+  inline  ::capnp::Text::Builder getConfigJson();
+  inline void setConfigJson( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initConfigJson(unsigned int size);
+  inline void adoptConfigJson(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownConfigJson();
+
+  inline bool hasConfigUnitsJson();
+  inline  ::capnp::Text::Builder getConfigUnitsJson();
+  inline void setConfigUnitsJson( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initConfigUnitsJson(unsigned int size);
+  inline void adoptConfigUnitsJson(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownConfigUnitsJson();
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline bool getBarVisible();
+  inline void setBarVisible(bool value);
+
+  inline bool getMasterEnabled();
+  inline void setMasterEnabled(bool value);
+
+  inline bool getDisplayEnabled();
+  inline void setDisplayEnabled(bool value);
+
+  inline bool getLateralActive();
+  inline void setLateralActive(bool value);
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline bool hasModeEnabled();
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder getModeEnabled();
+  inline void setModeEnabled( ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setModeEnabled(::kj::ArrayPtr<const bool> value);
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder initModeEnabled(unsigned int size);
+  inline void adoptModeEnabled(::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>> disownModeEnabled();
+
+  inline bool hasModeAllowE2E();
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder getModeAllowE2E();
+  inline void setModeAllowE2E( ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setModeAllowE2E(::kj::ArrayPtr<const bool> value);
+  inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder initModeAllowE2E(unsigned int size);
+  inline void adoptModeAllowE2E(::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>> disownModeAllowE2E();
+
+  inline double getBaseCurvature();
+  inline void setBaseCurvature(double value);
+
+  inline double getRawOptionalCurvature();
+  inline void setRawOptionalCurvature(double value);
+
+  inline double getBoundedDemandCurvature();
+  inline void setBoundedDemandCurvature(double value);
+
+  inline double getResponseLimitedCurvature();
+  inline void setResponseLimitedCurvature(double value);
+
+  inline double getPreYieldCurvature();
+  inline void setPreYieldCurvature(double value);
+
+  inline double getFinalOptionalCurvature();
+  inline void setFinalOptionalCurvature(double value);
+
+  inline double getTotalCurvature();
+  inline void setTotalCurvature(double value);
+
+  inline double getMaximumCorrection();
+  inline void setMaximumCorrection(double value);
+
+  inline double getAuthority();
+  inline void setAuthority(double value);
+
+  inline double getDeviation();
+  inline void setDeviation(double value);
+
+  inline double getRequestedYield();
+  inline void setRequestedYield(double value);
+
+  inline double getAppliedYield();
+  inline void setAppliedYield(double value);
+
+  inline double getRemovedByE2E();
+  inline void setRemovedByE2E(double value);
+
+  inline double getSignalTailCurvature();
+  inline void setSignalTailCurvature(double value);
+
+  inline double getPreviewDistance();
+  inline void setPreviewDistance(double value);
+
+  inline double getCentringError();
+  inline void setCentringError(double value);
+
+  inline bool hasReason();
+  inline  ::capnp::Text::Builder getReason();
+  inline void setReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initReason(unsigned int size);
+  inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+  inline bool hasResponseKind();
+  inline  ::capnp::Text::Builder getResponseKind();
+  inline void setResponseKind( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initResponseKind(unsigned int size);
+  inline void adoptResponseKind(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownResponseKind();
+
+  inline bool getReentry();
+  inline void setReentry(bool value);
+
+  inline bool getModelFresh();
+  inline void setModelFresh(bool value);
+
+  inline bool hasSources();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Builder getSources();
+  inline void setSources( ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Builder initSources(unsigned int size);
+  inline void adoptSources(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>> disownSources();
+
+  inline bool hasSelectedSources();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder getSelectedSources();
+  inline void setSelectedSources( ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder initSelectedSources(unsigned int size);
+  inline void adoptSelectedSources(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>> disownSelectedSources();
+
+  inline bool hasSelectionCause();
+  inline  ::capnp::Text::Builder getSelectionCause();
+  inline void setSelectionCause( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionCause(unsigned int size);
+  inline void adoptSelectionCause(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionCause();
+
+  inline bool hasSelectionAnchor();
+  inline  ::capnp::Text::Builder getSelectionAnchor();
+  inline void setSelectionAnchor( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionAnchor(unsigned int size);
+  inline void adoptSelectionAnchor(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionAnchor();
+
+  inline bool hasSelectionScores();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getSelectionScores();
+  inline void setSelectionScores( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setSelectionScores(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initSelectionScores(unsigned int size);
+  inline void adoptSelectionScores(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownSelectionScores();
+
+  inline bool hasSelectionTransition();
+  inline  ::capnp::Text::Builder getSelectionTransition();
+  inline void setSelectionTransition( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionTransition(unsigned int size);
+  inline void adoptSelectionTransition(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionTransition();
+
+  inline bool hasPromotionWaiting();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getPromotionWaiting();
+  inline void setPromotionWaiting( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setPromotionWaiting(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initPromotionWaiting(unsigned int size);
+  inline void adoptPromotionWaiting(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownPromotionWaiting();
+
+  inline bool hasModes();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Builder getModes();
+  inline void setModes( ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Builder initModes(unsigned int size);
+  inline void adoptModes(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>> disownModes();
+
+  inline bool hasReference();
+  inline  ::cereal::LaneCenteringState::ReferenceState::Builder getReference();
+  inline void setReference( ::cereal::LaneCenteringState::ReferenceState::Reader value);
+  inline  ::cereal::LaneCenteringState::ReferenceState::Builder initReference();
+  inline void adoptReference(::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceState>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceState> disownReference();
+
+  inline bool hasEdge();
+  inline  ::cereal::LaneCenteringState::EdgeState::Builder getEdge();
+  inline void setEdge( ::cereal::LaneCenteringState::EdgeState::Reader value);
+  inline  ::cereal::LaneCenteringState::EdgeState::Builder initEdge();
+  inline void adoptEdge(::capnp::Orphan< ::cereal::LaneCenteringState::EdgeState>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::EdgeState> disownEdge();
+
+  inline bool hasCurve();
+  inline  ::cereal::LaneCenteringState::CurveState::Builder getCurve();
+  inline void setCurve( ::cereal::LaneCenteringState::CurveState::Reader value);
+  inline  ::cereal::LaneCenteringState::CurveState::Builder initCurve();
+  inline void adoptCurve(::capnp::Orphan< ::cereal::LaneCenteringState::CurveState>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState> disownCurve();
+
+  inline bool getDownstreamCommandLimitKnown();
+  inline void setDownstreamCommandLimitKnown(bool value);
+
+  inline bool getDownstreamCommandLimited();
+  inline void setDownstreamCommandLimited(bool value);
+
+  inline double getDownstreamCurvature();
+  inline void setDownstreamCurvature(double value);
+
+  inline bool getVehicleLimitKnown();
+  inline void setVehicleLimitKnown(bool value);
+
+  inline bool hasConfigEvents();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getConfigEvents();
+  inline void setConfigEvents( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setConfigEvents(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initConfigEvents(unsigned int size);
+  inline void adoptConfigEvents(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownConfigEvents();
+
+  inline bool hasClockDomain();
+  inline  ::capnp::Text::Builder getClockDomain();
+  inline void setClockDomain( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initClockDomain(unsigned int size);
+  inline void adoptClockDomain(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownClockDomain();
+
+  inline bool getClockValid();
+  inline void setClockValid(bool value);
+
+  inline  ::uint64_t getClockOffsetNs();
+  inline void setClockOffsetNs( ::uint64_t value);
+
+  inline  ::uint64_t getClockEpoch();
+  inline void setClockEpoch( ::uint64_t value);
+
+  inline  ::uint64_t getClockMonoSampleNs();
+  inline void setClockMonoSampleNs( ::uint64_t value);
+
+  inline  ::uint64_t getRawModelPublishNs();
+  inline void setRawModelPublishNs( ::uint64_t value);
+
+  inline  ::uint64_t getRawCarStateNs();
+  inline void setRawCarStateNs( ::uint64_t value);
+
+  inline  ::uint64_t getRawLivePoseNs();
+  inline void setRawLivePoseNs( ::uint64_t value);
+
+  inline  ::uint64_t getClockEpochStartMonoNs();
+  inline void setClockEpochStartMonoNs( ::uint64_t value);
+
+  inline bool hasWorker();
+  inline  ::cereal::LaneCenteringState::WorkerState::Builder getWorker();
+  inline void setWorker( ::cereal::LaneCenteringState::WorkerState::Reader value);
+  inline  ::cereal::LaneCenteringState::WorkerState::Builder initWorker();
+  inline void adoptWorker(::capnp::Orphan< ::cereal::LaneCenteringState::WorkerState>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::WorkerState> disownWorker();
+
+  inline bool getDetailPresent();
+  inline void setDetailPresent(bool value);
+
+  inline  ::uint64_t getPlanSequence();
+  inline void setPlanSequence( ::uint64_t value);
+
+  inline  ::uint64_t getPlanCaptureNs();
+  inline void setPlanCaptureNs( ::uint64_t value);
+
+  inline bool hasPlanConfigHash();
+  inline  ::capnp::Text::Builder getPlanConfigHash();
+  inline void setPlanConfigHash( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initPlanConfigHash(unsigned int size);
+  inline void adoptPlanConfigHash(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownPlanConfigHash();
+
+  inline bool hasReferenceFilter();
+  inline  ::cereal::LaneCenteringState::ReferenceFilter::Builder getReferenceFilter();
+  inline void setReferenceFilter( ::cereal::LaneCenteringState::ReferenceFilter::Reader value);
+  inline  ::cereal::LaneCenteringState::ReferenceFilter::Builder initReferenceFilter();
+  inline void adoptReferenceFilter(::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceFilter>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceFilter> disownReferenceFilter();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::Pipeline {
+public:
+  typedef LaneCenteringState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringState::ReferenceState::Pipeline getReference();
+  inline  ::cereal::LaneCenteringState::EdgeState::Pipeline getEdge();
+  inline  ::cereal::LaneCenteringState::CurveState::Pipeline getCurve();
+  inline  ::cereal::LaneCenteringState::WorkerState::Pipeline getWorker();
+  inline  ::cereal::LaneCenteringState::ReferenceFilter::Pipeline getReferenceFilter();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::ReferenceFilter::Reader {
+public:
+  typedef ReferenceFilter Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool getAvailable() const;
+
+  inline bool hasBiases() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getBiases() const;
+
+  inline double getRawError() const;
+
+  inline double getComfortError() const;
+
+  inline double getRawRequest() const;
+
+  inline double getComfortRequest() const;
+
+  inline double getComfortBounded() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::ReferenceFilter::Builder {
+public:
+  typedef ReferenceFilter Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool getAvailable();
+  inline void setAvailable(bool value);
+
+  inline bool hasBiases();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getBiases();
+  inline void setBiases( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setBiases(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initBiases(unsigned int size);
+  inline void adoptBiases(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownBiases();
+
+  inline double getRawError();
+  inline void setRawError(double value);
+
+  inline double getComfortError();
+  inline void setComfortError(double value);
+
+  inline double getRawRequest();
+  inline void setRawRequest(double value);
+
+  inline double getComfortRequest();
+  inline void setComfortRequest(double value);
+
+  inline double getComfortBounded();
+  inline void setComfortBounded(double value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::ReferenceFilter::Pipeline {
+public:
+  typedef ReferenceFilter Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::WorkerState::Reader {
+public:
+  typedef WorkerState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasSession() const;
+  inline  ::capnp::Text::Reader getSession() const;
+
+  inline  ::uint64_t getGeneration() const;
+
+  inline  ::uint16_t getPendingRequests() const;
+
+  inline bool hasReason() const;
+  inline  ::capnp::Text::Reader getReason() const;
+
+  inline  ::uint64_t getSequence() const;
+
+  inline bool hasBoot() const;
+  inline  ::capnp::Text::Reader getBoot() const;
+
+  inline  ::uint64_t getRequestedNs() const;
+
+  inline  ::uint64_t getStartedNs() const;
+
+  inline  ::uint64_t getCompletedNs() const;
+
+  inline  ::uint64_t getReceivedNs() const;
+
+  inline bool getHasGeometry() const;
+
+  inline  ::uint64_t getCaptureNs() const;
+
+  inline double getPreview() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::WorkerState::Builder {
+public:
+  typedef WorkerState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasSession();
+  inline  ::capnp::Text::Builder getSession();
+  inline void setSession( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSession(unsigned int size);
+  inline void adoptSession(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSession();
+
+  inline  ::uint64_t getGeneration();
+  inline void setGeneration( ::uint64_t value);
+
+  inline  ::uint16_t getPendingRequests();
+  inline void setPendingRequests( ::uint16_t value);
+
+  inline bool hasReason();
+  inline  ::capnp::Text::Builder getReason();
+  inline void setReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initReason(unsigned int size);
+  inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+  inline  ::uint64_t getSequence();
+  inline void setSequence( ::uint64_t value);
+
+  inline bool hasBoot();
+  inline  ::capnp::Text::Builder getBoot();
+  inline void setBoot( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initBoot(unsigned int size);
+  inline void adoptBoot(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownBoot();
+
+  inline  ::uint64_t getRequestedNs();
+  inline void setRequestedNs( ::uint64_t value);
+
+  inline  ::uint64_t getStartedNs();
+  inline void setStartedNs( ::uint64_t value);
+
+  inline  ::uint64_t getCompletedNs();
+  inline void setCompletedNs( ::uint64_t value);
+
+  inline  ::uint64_t getReceivedNs();
+  inline void setReceivedNs( ::uint64_t value);
+
+  inline bool getHasGeometry();
+  inline void setHasGeometry(bool value);
+
+  inline  ::uint64_t getCaptureNs();
+  inline void setCaptureNs( ::uint64_t value);
+
+  inline double getPreview();
+  inline void setPreview(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::WorkerState::Pipeline {
+public:
+  typedef WorkerState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::SourceIdentity::Reader {
+public:
+  typedef SourceIdentity Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasKind() const;
+  inline  ::capnp::Text::Reader getKind() const;
+
+  inline  ::int8_t getSide() const;
+
+  inline  ::uint8_t getSlot() const;
+
+  inline  ::uint64_t getEpoch() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::SourceIdentity::Builder {
+public:
+  typedef SourceIdentity Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasKind();
+  inline  ::capnp::Text::Builder getKind();
+  inline void setKind( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initKind(unsigned int size);
+  inline void adoptKind(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownKind();
+
+  inline  ::int8_t getSide();
+  inline void setSide( ::int8_t value);
+
+  inline  ::uint8_t getSlot();
+  inline void setSlot( ::uint8_t value);
+
+  inline  ::uint64_t getEpoch();
+  inline void setEpoch( ::uint64_t value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::SourceIdentity::Pipeline {
+public:
+  typedef SourceIdentity Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::SourceState::Reader {
+public:
+  typedef SourceState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasIdentity() const;
+  inline  ::cereal::LaneCenteringState::SourceIdentity::Reader getIdentity() const;
+
+  inline double getConfidence() const;
+
+  inline double getUncertainty() const;
+
+  inline bool getContinued() const;
+
+  inline bool hasAdmissions() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader getAdmissions() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::SourceState::Builder {
+public:
+  typedef SourceState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasIdentity();
+  inline  ::cereal::LaneCenteringState::SourceIdentity::Builder getIdentity();
+  inline void setIdentity( ::cereal::LaneCenteringState::SourceIdentity::Reader value);
+  inline  ::cereal::LaneCenteringState::SourceIdentity::Builder initIdentity();
+  inline void adoptIdentity(::capnp::Orphan< ::cereal::LaneCenteringState::SourceIdentity>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::SourceIdentity> disownIdentity();
+
+  inline double getConfidence();
+  inline void setConfidence(double value);
+
+  inline double getUncertainty();
+  inline void setUncertainty(double value);
+
+  inline bool getContinued();
+  inline void setContinued(bool value);
+
+  inline bool hasAdmissions();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder getAdmissions();
+  inline void setAdmissions( ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder initAdmissions(unsigned int size);
+  inline void adoptAdmissions(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>> disownAdmissions();
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::SourceState::Pipeline {
+public:
+  typedef SourceState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringState::SourceIdentity::Pipeline getIdentity();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::Admission::Reader {
+public:
+  typedef Admission Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode() const;
+
+  inline bool getValid() const;
+
+  inline bool getQualified() const;
+
+  inline  ::uint32_t getCount() const;
+
+  inline  ::uint64_t getSinceNs() const;
+
+  inline bool hasReason() const;
+  inline  ::capnp::Text::Reader getReason() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::Admission::Builder {
+public:
+  typedef Admission Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline bool getQualified();
+  inline void setQualified(bool value);
+
+  inline  ::uint32_t getCount();
+  inline void setCount( ::uint32_t value);
+
+  inline  ::uint64_t getSinceNs();
+  inline void setSinceNs( ::uint64_t value);
+
+  inline bool hasReason();
+  inline  ::capnp::Text::Builder getReason();
+  inline void setReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initReason(unsigned int size);
+  inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::Admission::Pipeline {
+public:
+  typedef Admission Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::ModeState::Reader {
+public:
+  typedef ModeState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode() const;
+
+  inline bool getEnabled() const;
+
+  inline bool getAllowE2E() const;
+
+  inline  ::uint8_t getCandidateCount() const;
+
+  inline  ::uint8_t getQualifiedCount() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::ModeState::Builder {
+public:
+  typedef ModeState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline bool getEnabled();
+  inline void setEnabled(bool value);
+
+  inline bool getAllowE2E();
+  inline void setAllowE2E(bool value);
+
+  inline  ::uint8_t getCandidateCount();
+  inline void setCandidateCount( ::uint8_t value);
+
+  inline  ::uint8_t getQualifiedCount();
+  inline void setQualifiedCount( ::uint8_t value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::ModeState::Pipeline {
+public:
+  typedef ModeState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::ReferenceState::Reader {
+public:
+  typedef ReferenceState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool getValid() const;
+
+  inline bool hasX() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getX() const;
+
+  inline bool hasY() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getY() const;
+
+  inline bool hasRate() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getRate() const;
+
+  inline bool hasDestinationX() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getDestinationX() const;
+
+  inline bool hasDestinationY() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getDestinationY() const;
+
+  inline bool getSettled() const;
+
+  inline bool getPaused() const;
+
+  inline  ::uint64_t getPauseDeadlineNs() const;
+
+  inline double getRemainingDuration() const;
+
+  inline bool getRateLimitLoweredTransient() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::ReferenceState::Builder {
+public:
+  typedef ReferenceState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline bool hasX();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getX();
+  inline void setX( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setX(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initX(unsigned int size);
+  inline void adoptX(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownX();
+
+  inline bool hasY();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getY();
+  inline void setY( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setY(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initY(unsigned int size);
+  inline void adoptY(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownY();
+
+  inline bool hasRate();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getRate();
+  inline void setRate( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setRate(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initRate(unsigned int size);
+  inline void adoptRate(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownRate();
+
+  inline bool hasDestinationX();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getDestinationX();
+  inline void setDestinationX( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setDestinationX(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initDestinationX(unsigned int size);
+  inline void adoptDestinationX(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownDestinationX();
+
+  inline bool hasDestinationY();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getDestinationY();
+  inline void setDestinationY( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setDestinationY(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initDestinationY(unsigned int size);
+  inline void adoptDestinationY(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownDestinationY();
+
+  inline bool getSettled();
+  inline void setSettled(bool value);
+
+  inline bool getPaused();
+  inline void setPaused(bool value);
+
+  inline  ::uint64_t getPauseDeadlineNs();
+  inline void setPauseDeadlineNs( ::uint64_t value);
+
+  inline double getRemainingDuration();
+  inline void setRemainingDuration(double value);
+
+  inline bool getRateLimitLoweredTransient();
+  inline void setRateLimitLoweredTransient(bool value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::ReferenceState::Pipeline {
+public:
+  typedef ReferenceState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::Margin::Reader {
+public:
+  typedef Margin Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool getAvailable() const;
+
+  inline double getCurrent() const;
+
+  inline double getMinimum() const;
+
+  inline double getPreview() const;
+
+  inline double getShortfall() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::Margin::Builder {
+public:
+  typedef Margin Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool getAvailable();
+  inline void setAvailable(bool value);
+
+  inline double getCurrent();
+  inline void setCurrent(double value);
+
+  inline double getMinimum();
+  inline void setMinimum(double value);
+
+  inline double getPreview();
+  inline void setPreview(double value);
+
+  inline double getShortfall();
+  inline void setShortfall(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::Margin::Pipeline {
+public:
+  typedef Margin Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::EdgeStage::Reader {
+public:
+  typedef EdgeStage Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasName() const;
+  inline  ::capnp::Text::Reader getName() const;
+
+  inline bool getValid() const;
+
+  inline double getAddition() const;
+
+  inline bool hasLeft() const;
+  inline  ::cereal::LaneCenteringState::Margin::Reader getLeft() const;
+
+  inline bool hasRight() const;
+  inline  ::cereal::LaneCenteringState::Margin::Reader getRight() const;
+
+  inline bool hasReason() const;
+  inline  ::capnp::Text::Reader getReason() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::EdgeStage::Builder {
+public:
+  typedef EdgeStage Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasName();
+  inline  ::capnp::Text::Builder getName();
+  inline void setName( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initName(unsigned int size);
+  inline void adoptName(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownName();
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline double getAddition();
+  inline void setAddition(double value);
+
+  inline bool hasLeft();
+  inline  ::cereal::LaneCenteringState::Margin::Builder getLeft();
+  inline void setLeft( ::cereal::LaneCenteringState::Margin::Reader value);
+  inline  ::cereal::LaneCenteringState::Margin::Builder initLeft();
+  inline void adoptLeft(::capnp::Orphan< ::cereal::LaneCenteringState::Margin>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::Margin> disownLeft();
+
+  inline bool hasRight();
+  inline  ::cereal::LaneCenteringState::Margin::Builder getRight();
+  inline void setRight( ::cereal::LaneCenteringState::Margin::Reader value);
+  inline  ::cereal::LaneCenteringState::Margin::Builder initRight();
+  inline void adoptRight(::capnp::Orphan< ::cereal::LaneCenteringState::Margin>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::Margin> disownRight();
+
+  inline bool hasReason();
+  inline  ::capnp::Text::Builder getReason();
+  inline void setReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initReason(unsigned int size);
+  inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::EdgeStage::Pipeline {
+public:
+  typedef EdgeStage Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringState::Margin::Pipeline getLeft();
+  inline  ::cereal::LaneCenteringState::Margin::Pipeline getRight();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::EdgeState::Reader {
+public:
+  typedef EdgeState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool getValid() const;
+
+  inline double getRequestedClearance() const;
+
+  inline double getEffectiveClearance() const;
+
+  inline double getMinimumAddition() const;
+
+  inline double getMaximumAddition() const;
+
+  inline double getFormalAddition() const;
+
+  inline double getRequestedAddition() const;
+
+  inline double getBoundedAddition() const;
+
+  inline double getHeadingLimit() const;
+
+  inline bool hasStages() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Reader getStages() const;
+
+  inline bool hasStates() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getStates() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::EdgeState::Builder {
+public:
+  typedef EdgeState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline double getRequestedClearance();
+  inline void setRequestedClearance(double value);
+
+  inline double getEffectiveClearance();
+  inline void setEffectiveClearance(double value);
+
+  inline double getMinimumAddition();
+  inline void setMinimumAddition(double value);
+
+  inline double getMaximumAddition();
+  inline void setMaximumAddition(double value);
+
+  inline double getFormalAddition();
+  inline void setFormalAddition(double value);
+
+  inline double getRequestedAddition();
+  inline void setRequestedAddition(double value);
+
+  inline double getBoundedAddition();
+  inline void setBoundedAddition(double value);
+
+  inline double getHeadingLimit();
+  inline void setHeadingLimit(double value);
+
+  inline bool hasStages();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Builder getStages();
+  inline void setStages( ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Builder initStages(unsigned int size);
+  inline void adoptStages(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>> disownStages();
+
+  inline bool hasStates();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getStates();
+  inline void setStates( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setStates(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initStates(unsigned int size);
+  inline void adoptStates(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownStates();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::EdgeState::Pipeline {
+public:
+  typedef EdgeState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringState::CurveState::Reader {
+public:
+  typedef CurveState Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool getValidInput() const;
+
+  inline double getAuthority() const;
+
+  inline double getTargetAuthority() const;
+
+  inline double getWeight() const;
+
+  inline double getTargetWeight() const;
+
+  inline bool getHasCurvature() const;
+
+  inline double getCurvature() const;
+
+  inline bool hasKind() const;
+  inline  ::capnp::Text::Reader getKind() const;
+
+  inline bool getConfirmed() const;
+
+  inline  ::uint32_t getCount() const;
+
+  inline  ::uint64_t getLastPairNs() const;
+
+  inline bool hasSupport() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader getSupport() const;
+
+  inline bool getHasWidth() const;
+
+  inline double getWidthHorizontal() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringState::CurveState::Builder {
+public:
+  typedef CurveState Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool getValidInput();
+  inline void setValidInput(bool value);
+
+  inline double getAuthority();
+  inline void setAuthority(double value);
+
+  inline double getTargetAuthority();
+  inline void setTargetAuthority(double value);
+
+  inline double getWeight();
+  inline void setWeight(double value);
+
+  inline double getTargetWeight();
+  inline void setTargetWeight(double value);
+
+  inline bool getHasCurvature();
+  inline void setHasCurvature(bool value);
+
+  inline double getCurvature();
+  inline void setCurvature(double value);
+
+  inline bool hasKind();
+  inline  ::capnp::Text::Builder getKind();
+  inline void setKind( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initKind(unsigned int size);
+  inline void adoptKind(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownKind();
+
+  inline bool getConfirmed();
+  inline void setConfirmed(bool value);
+
+  inline  ::uint32_t getCount();
+  inline void setCount( ::uint32_t value);
+
+  inline  ::uint64_t getLastPairNs();
+  inline void setLastPairNs( ::uint64_t value);
+
+  inline bool hasSupport();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder getSupport();
+  inline void setSupport( ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder initSupport(unsigned int size);
+  inline void adoptSupport(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>> disownSupport();
+
+  inline bool getHasWidth();
+  inline void setHasWidth(bool value);
+
+  inline double getWidthHorizontal();
+  inline void setWidthHorizontal(double value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringState::CurveState::Pipeline {
+public:
+  typedef CurveState Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometryRequest::Reader {
+public:
+  typedef LaneCenteringGeometryRequest Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getVersion() const;
+
+  inline bool hasSession() const;
+  inline  ::capnp::Text::Reader getSession() const;
+
+  inline  ::uint64_t getSequence() const;
+
+  inline  ::uint64_t getRequestedNs() const;
+
+  inline bool hasConfig() const;
+  inline  ::capnp::Data::Reader getConfig() const;
+
+  inline double getSpeed() const;
+
+  inline bool hasFrame() const;
+  inline  ::cereal::LaneCenteringGeometry::Frame::Reader getFrame() const;
+
+  inline bool hasSpeedMotion() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader getSpeedMotion() const;
+
+  inline bool hasYawMotion() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader getYawMotion() const;
+
+  inline bool hasQualityGenerations() const;
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader getQualityGenerations() const;
+
+  inline  ::uint64_t getSelectionEpoch() const;
+
+  inline bool hasResetGenerations() const;
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader getResetGenerations() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometryRequest::Builder {
+public:
+  typedef LaneCenteringGeometryRequest Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint16_t getVersion();
+  inline void setVersion( ::uint16_t value);
+
+  inline bool hasSession();
+  inline  ::capnp::Text::Builder getSession();
+  inline void setSession( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSession(unsigned int size);
+  inline void adoptSession(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSession();
+
+  inline  ::uint64_t getSequence();
+  inline void setSequence( ::uint64_t value);
+
+  inline  ::uint64_t getRequestedNs();
+  inline void setRequestedNs( ::uint64_t value);
+
+  inline bool hasConfig();
+  inline  ::capnp::Data::Builder getConfig();
+  inline void setConfig( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initConfig(unsigned int size);
+  inline void adoptConfig(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownConfig();
+
+  inline double getSpeed();
+  inline void setSpeed(double value);
+
+  inline bool hasFrame();
+  inline  ::cereal::LaneCenteringGeometry::Frame::Builder getFrame();
+  inline void setFrame( ::cereal::LaneCenteringGeometry::Frame::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Frame::Builder initFrame();
+  inline void adoptFrame(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Frame>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Frame> disownFrame();
+
+  inline bool hasSpeedMotion();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder getSpeedMotion();
+  inline void setSpeedMotion( ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder initSpeedMotion(unsigned int size);
+  inline void adoptSpeedMotion(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>> disownSpeedMotion();
+
+  inline bool hasYawMotion();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder getYawMotion();
+  inline void setYawMotion( ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder initYawMotion(unsigned int size);
+  inline void adoptYawMotion(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>> disownYawMotion();
+
+  inline bool hasQualityGenerations();
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder getQualityGenerations();
+  inline void setQualityGenerations( ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setQualityGenerations(::kj::ArrayPtr<const  ::uint64_t> value);
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder initQualityGenerations(unsigned int size);
+  inline void adoptQualityGenerations(::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>> disownQualityGenerations();
+
+  inline  ::uint64_t getSelectionEpoch();
+  inline void setSelectionEpoch( ::uint64_t value);
+
+  inline bool hasResetGenerations();
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder getResetGenerations();
+  inline void setResetGenerations( ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setResetGenerations(::kj::ArrayPtr<const  ::uint64_t> value);
+  inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder initResetGenerations(unsigned int size);
+  inline void adoptResetGenerations(::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>> disownResetGenerations();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometryRequest::Pipeline {
+public:
+  typedef LaneCenteringGeometryRequest Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringGeometry::Frame::Pipeline getFrame();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometryResult::Reader {
+public:
+  typedef LaneCenteringGeometryResult Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline Which which() const;
+  inline  ::uint16_t getVersion() const;
+
+  inline bool hasSession() const;
+  inline  ::capnp::Text::Reader getSession() const;
+
+  inline  ::uint64_t getSequence() const;
+
+  inline bool hasBoot() const;
+  inline  ::capnp::Text::Reader getBoot() const;
+
+  inline  ::uint64_t getRequestedNs() const;
+
+  inline  ::uint64_t getStartedNs() const;
+
+  inline  ::uint64_t getCompletedNs() const;
+
+  inline bool isGeometry() const;
+  inline bool hasGeometry() const;
+  inline  ::cereal::LaneCenteringGeometry::Reader getGeometry() const;
+
+  inline bool isFault() const;
+  inline bool hasFault() const;
+  inline  ::capnp::Text::Reader getFault() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometryResult::Builder {
+public:
+  typedef LaneCenteringGeometryResult Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline Which which();
+  inline  ::uint16_t getVersion();
+  inline void setVersion( ::uint16_t value);
+
+  inline bool hasSession();
+  inline  ::capnp::Text::Builder getSession();
+  inline void setSession( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSession(unsigned int size);
+  inline void adoptSession(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSession();
+
+  inline  ::uint64_t getSequence();
+  inline void setSequence( ::uint64_t value);
+
+  inline bool hasBoot();
+  inline  ::capnp::Text::Builder getBoot();
+  inline void setBoot( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initBoot(unsigned int size);
+  inline void adoptBoot(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownBoot();
+
+  inline  ::uint64_t getRequestedNs();
+  inline void setRequestedNs( ::uint64_t value);
+
+  inline  ::uint64_t getStartedNs();
+  inline void setStartedNs( ::uint64_t value);
+
+  inline  ::uint64_t getCompletedNs();
+  inline void setCompletedNs( ::uint64_t value);
+
+  inline bool isGeometry();
+  inline bool hasGeometry();
+  inline  ::cereal::LaneCenteringGeometry::Builder getGeometry();
+  inline void setGeometry( ::cereal::LaneCenteringGeometry::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Builder initGeometry();
+  inline void adoptGeometry(::capnp::Orphan< ::cereal::LaneCenteringGeometry>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry> disownGeometry();
+
+  inline bool isFault();
+  inline bool hasFault();
+  inline  ::capnp::Text::Builder getFault();
+  inline void setFault( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initFault(unsigned int size);
+  inline void adoptFault(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownFault();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometryResult::Pipeline {
+public:
+  typedef LaneCenteringGeometryResult Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Reader {
+public:
+  typedef LaneCenteringGeometry Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline double getPreview() const;
+
+  inline double getBuildExtent() const;
+
+  inline bool hasEvidence() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Reader getEvidence() const;
+
+  inline bool hasCandidates() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Reader getCandidates() const;
+
+  inline bool hasRejections() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Reader getRejections() const;
+
+  inline bool hasCurvePairs() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader getCurvePairs() const;
+
+  inline bool hasCurveStrong() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader getCurveStrong() const;
+
+  inline bool hasCurveGaps() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader getCurveGaps() const;
+
+  inline  ::uint8_t getSelectedMode() const;
+
+  inline bool hasSelectedSources() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getSelectedSources() const;
+
+  inline bool hasSelectionCause() const;
+  inline  ::capnp::Text::Reader getSelectionCause() const;
+
+  inline bool hasSelectionTransition() const;
+  inline  ::capnp::Text::Reader getSelectionTransition() const;
+
+  inline bool hasSelectionScores() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getSelectionScores() const;
+
+  inline bool hasSelectionAnchor() const;
+  inline  ::capnp::Text::Reader getSelectionAnchor() const;
+
+  inline bool hasPromotionWaiting() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getPromotionWaiting() const;
+
+  inline bool hasSelectionReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getSelectionReasons() const;
+
+  inline bool hasCounts() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Reader getCounts() const;
+
+  inline bool hasCurveDecision() const;
+  inline  ::cereal::LaneCenteringState::CurveState::Reader getCurveDecision() const;
+
+  inline bool hasCurveDependencies() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getCurveDependencies() const;
+
+  inline double getCentringError() const;
+
+  inline bool hasEdgeBounds() const;
+  inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Reader getEdgeBounds() const;
+
+  inline bool hasComfort() const;
+  inline  ::cereal::LaneCenteringGeometry::Comfort::Reader getComfort() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Builder {
+public:
+  typedef LaneCenteringGeometry Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline double getPreview();
+  inline void setPreview(double value);
+
+  inline double getBuildExtent();
+  inline void setBuildExtent(double value);
+
+  inline bool hasEvidence();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Builder getEvidence();
+  inline void setEvidence( ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Builder initEvidence(unsigned int size);
+  inline void adoptEvidence(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>> disownEvidence();
+
+  inline bool hasCandidates();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Builder getCandidates();
+  inline void setCandidates( ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Builder initCandidates(unsigned int size);
+  inline void adoptCandidates(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>> disownCandidates();
+
+  inline bool hasRejections();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Builder getRejections();
+  inline void setRejections( ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Builder initRejections(unsigned int size);
+  inline void adoptRejections(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>> disownRejections();
+
+  inline bool hasCurvePairs();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder getCurvePairs();
+  inline void setCurvePairs( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder initCurvePairs(unsigned int size);
+  inline void adoptCurvePairs(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> disownCurvePairs();
+
+  inline bool hasCurveStrong();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder getCurveStrong();
+  inline void setCurveStrong( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder initCurveStrong(unsigned int size);
+  inline void adoptCurveStrong(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> disownCurveStrong();
+
+  inline bool hasCurveGaps();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder getCurveGaps();
+  inline void setCurveGaps( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder initCurveGaps(unsigned int size);
+  inline void adoptCurveGaps(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> disownCurveGaps();
+
+  inline  ::uint8_t getSelectedMode();
+  inline void setSelectedMode( ::uint8_t value);
+
+  inline bool hasSelectedSources();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getSelectedSources();
+  inline void setSelectedSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setSelectedSources(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initSelectedSources(unsigned int size);
+  inline void adoptSelectedSources(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownSelectedSources();
+
+  inline bool hasSelectionCause();
+  inline  ::capnp::Text::Builder getSelectionCause();
+  inline void setSelectionCause( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionCause(unsigned int size);
+  inline void adoptSelectionCause(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionCause();
+
+  inline bool hasSelectionTransition();
+  inline  ::capnp::Text::Builder getSelectionTransition();
+  inline void setSelectionTransition( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionTransition(unsigned int size);
+  inline void adoptSelectionTransition(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionTransition();
+
+  inline bool hasSelectionScores();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getSelectionScores();
+  inline void setSelectionScores( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setSelectionScores(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initSelectionScores(unsigned int size);
+  inline void adoptSelectionScores(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownSelectionScores();
+
+  inline bool hasSelectionAnchor();
+  inline  ::capnp::Text::Builder getSelectionAnchor();
+  inline void setSelectionAnchor( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initSelectionAnchor(unsigned int size);
+  inline void adoptSelectionAnchor(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownSelectionAnchor();
+
+  inline bool hasPromotionWaiting();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getPromotionWaiting();
+  inline void setPromotionWaiting( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setPromotionWaiting(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initPromotionWaiting(unsigned int size);
+  inline void adoptPromotionWaiting(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownPromotionWaiting();
+
+  inline bool hasSelectionReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getSelectionReasons();
+  inline void setSelectionReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setSelectionReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initSelectionReasons(unsigned int size);
+  inline void adoptSelectionReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownSelectionReasons();
+
+  inline bool hasCounts();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Builder getCounts();
+  inline void setCounts( ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Builder initCounts(unsigned int size);
+  inline void adoptCounts(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>> disownCounts();
+
+  inline bool hasCurveDecision();
+  inline  ::cereal::LaneCenteringState::CurveState::Builder getCurveDecision();
+  inline void setCurveDecision( ::cereal::LaneCenteringState::CurveState::Reader value);
+  inline  ::cereal::LaneCenteringState::CurveState::Builder initCurveDecision();
+  inline void adoptCurveDecision(::capnp::Orphan< ::cereal::LaneCenteringState::CurveState>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState> disownCurveDecision();
+
+  inline bool hasCurveDependencies();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getCurveDependencies();
+  inline void setCurveDependencies( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setCurveDependencies(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initCurveDependencies(unsigned int size);
+  inline void adoptCurveDependencies(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownCurveDependencies();
+
+  inline double getCentringError();
+  inline void setCentringError(double value);
+
+  inline bool hasEdgeBounds();
+  inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Builder getEdgeBounds();
+  inline void setEdgeBounds( ::cereal::LaneCenteringGeometry::EdgeBounds::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Builder initEdgeBounds();
+  inline void adoptEdgeBounds(::capnp::Orphan< ::cereal::LaneCenteringGeometry::EdgeBounds>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::EdgeBounds> disownEdgeBounds();
+
+  inline bool hasComfort();
+  inline  ::cereal::LaneCenteringGeometry::Comfort::Builder getComfort();
+  inline void setComfort( ::cereal::LaneCenteringGeometry::Comfort::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Comfort::Builder initComfort();
+  inline void adoptComfort(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Comfort>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Comfort> disownComfort();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Pipeline {
+public:
+  typedef LaneCenteringGeometry Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringState::CurveState::Pipeline getCurveDecision();
+  inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Pipeline getEdgeBounds();
+  inline  ::cereal::LaneCenteringGeometry::Comfort::Pipeline getComfort();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Comfort::Reader {
+public:
+  typedef Comfort Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline double getError() const;
+
+  inline bool hasBiases() const;
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader getBiases() const;
+
+  inline bool hasClearance() const;
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Reader getClearance() const;
+
+  inline bool getHasEdge() const;
+
+  inline double getLower() const;
+
+  inline double getUpper() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Comfort::Builder {
+public:
+  typedef Comfort Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline double getError();
+  inline void setError(double value);
+
+  inline bool hasBiases();
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder getBiases();
+  inline void setBiases( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setBiases(::kj::ArrayPtr<const double> value);
+  inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder initBiases(unsigned int size);
+  inline void adoptBiases(::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> disownBiases();
+
+  inline bool hasClearance();
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder getClearance();
+  inline void setClearance( ::cereal::LaneCenteringGeometry::SingleClearance::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder initClearance();
+  inline void adoptClearance(::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance> disownClearance();
+
+  inline bool getHasEdge();
+  inline void setHasEdge(bool value);
+
+  inline double getLower();
+  inline void setLower(double value);
+
+  inline double getUpper();
+  inline void setUpper(double value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Comfort::Pipeline {
+public:
+  typedef Comfort Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline getClearance();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::EdgeBounds::Reader {
+public:
+  typedef EdgeBounds Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasGrid() const;
+  inline  ::capnp::Data::Reader getGrid() const;
+
+  inline bool hasLeftY() const;
+  inline  ::capnp::Data::Reader getLeftY() const;
+
+  inline bool hasLeftSlope() const;
+  inline  ::capnp::Data::Reader getLeftSlope() const;
+
+  inline bool hasRightY() const;
+  inline  ::capnp::Data::Reader getRightY() const;
+
+  inline bool hasRightSlope() const;
+  inline  ::capnp::Data::Reader getRightSlope() const;
+
+  inline double getHalfWidth() const;
+
+  inline double getRequestedClearance() const;
+
+  inline double getEffectiveClearance() const;
+
+  inline double getLower() const;
+
+  inline double getUpper() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+  inline bool hasGuardSources() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getGuardSources() const;
+
+  inline double getGuardLower() const;
+
+  inline double getGuardUpper() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::EdgeBounds::Builder {
+public:
+  typedef EdgeBounds Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasGrid();
+  inline  ::capnp::Data::Builder getGrid();
+  inline void setGrid( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initGrid(unsigned int size);
+  inline void adoptGrid(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownGrid();
+
+  inline bool hasLeftY();
+  inline  ::capnp::Data::Builder getLeftY();
+  inline void setLeftY( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initLeftY(unsigned int size);
+  inline void adoptLeftY(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownLeftY();
+
+  inline bool hasLeftSlope();
+  inline  ::capnp::Data::Builder getLeftSlope();
+  inline void setLeftSlope( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initLeftSlope(unsigned int size);
+  inline void adoptLeftSlope(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownLeftSlope();
+
+  inline bool hasRightY();
+  inline  ::capnp::Data::Builder getRightY();
+  inline void setRightY( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initRightY(unsigned int size);
+  inline void adoptRightY(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownRightY();
+
+  inline bool hasRightSlope();
+  inline  ::capnp::Data::Builder getRightSlope();
+  inline void setRightSlope( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initRightSlope(unsigned int size);
+  inline void adoptRightSlope(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownRightSlope();
+
+  inline double getHalfWidth();
+  inline void setHalfWidth(double value);
+
+  inline double getRequestedClearance();
+  inline void setRequestedClearance(double value);
+
+  inline double getEffectiveClearance();
+  inline void setEffectiveClearance(double value);
+
+  inline double getLower();
+  inline void setLower(double value);
+
+  inline double getUpper();
+  inline void setUpper(double value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+  inline bool hasGuardSources();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getGuardSources();
+  inline void setGuardSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setGuardSources(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initGuardSources(unsigned int size);
+  inline void adoptGuardSources(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownGuardSources();
+
+  inline double getGuardLower();
+  inline void setGuardLower(double value);
+
+  inline double getGuardUpper();
+  inline void setGuardUpper(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::EdgeBounds::Pipeline {
+public:
+  typedef EdgeBounds Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Counts::Reader {
+public:
+  typedef Counts Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getCandidates() const;
+
+  inline  ::uint8_t getQualified() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Counts::Builder {
+public:
+  typedef Counts Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getCandidates();
+  inline void setCandidates( ::uint8_t value);
+
+  inline  ::uint8_t getQualified();
+  inline void setQualified( ::uint8_t value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Counts::Pipeline {
+public:
+  typedef Counts Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Path::Reader {
+public:
+  typedef Path Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasX() const;
+  inline  ::capnp::Data::Reader getX() const;
+
+  inline bool hasY() const;
+  inline  ::capnp::Data::Reader getY() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Path::Builder {
+public:
+  typedef Path Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasX();
+  inline  ::capnp::Data::Builder getX();
+  inline void setX( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initX(unsigned int size);
+  inline void adoptX(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownX();
+
+  inline bool hasY();
+  inline  ::capnp::Data::Builder getY();
+  inline void setY( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initY(unsigned int size);
+  inline void adoptY(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownY();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Path::Pipeline {
+public:
+  typedef Path Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Source::Reader {
+public:
+  typedef Source Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasKind() const;
+  inline  ::capnp::Text::Reader getKind() const;
+
+  inline  ::int8_t getSide() const;
+
+  inline  ::uint8_t getSlot() const;
+
+  inline  ::uint64_t getEpoch() const;
+
+  inline double getUncertainty() const;
+
+  inline double getConfidence() const;
+
+  inline bool hasPath() const;
+  inline  ::cereal::LaneCenteringGeometry::Path::Reader getPath() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Source::Builder {
+public:
+  typedef Source Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasKind();
+  inline  ::capnp::Text::Builder getKind();
+  inline void setKind( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initKind(unsigned int size);
+  inline void adoptKind(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownKind();
+
+  inline  ::int8_t getSide();
+  inline void setSide( ::int8_t value);
+
+  inline  ::uint8_t getSlot();
+  inline void setSlot( ::uint8_t value);
+
+  inline  ::uint64_t getEpoch();
+  inline void setEpoch( ::uint64_t value);
+
+  inline double getUncertainty();
+  inline void setUncertainty(double value);
+
+  inline double getConfidence();
+  inline void setConfidence(double value);
+
+  inline bool hasPath();
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder getPath();
+  inline void setPath( ::cereal::LaneCenteringGeometry::Path::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder initPath();
+  inline void adoptPath(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> disownPath();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Source::Pipeline {
+public:
+  typedef Source Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringGeometry::Path::Pipeline getPath();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Frame::Reader {
+public:
+  typedef Frame Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getFrameId() const;
+
+  inline  ::uint64_t getCaptureNs() const;
+
+  inline  ::uint64_t getPublishNs() const;
+
+  inline bool getValid() const;
+
+  inline bool hasPath() const;
+  inline  ::cereal::LaneCenteringGeometry::Path::Reader getPath() const;
+
+  inline bool hasSources() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Reader getSources() const;
+
+  inline double getPathUncertainty() const;
+
+  inline bool hasLaneChange() const;
+  inline  ::capnp::Text::Reader getLaneChange() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Frame::Builder {
+public:
+  typedef Frame Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getFrameId();
+  inline void setFrameId( ::uint64_t value);
+
+  inline  ::uint64_t getCaptureNs();
+  inline void setCaptureNs( ::uint64_t value);
+
+  inline  ::uint64_t getPublishNs();
+  inline void setPublishNs( ::uint64_t value);
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline bool hasPath();
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder getPath();
+  inline void setPath( ::cereal::LaneCenteringGeometry::Path::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder initPath();
+  inline void adoptPath(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> disownPath();
+
+  inline bool hasSources();
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Builder getSources();
+  inline void setSources( ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Builder initSources(unsigned int size);
+  inline void adoptSources(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>> disownSources();
+
+  inline double getPathUncertainty();
+  inline void setPathUncertainty(double value);
+
+  inline bool hasLaneChange();
+  inline  ::capnp::Text::Builder getLaneChange();
+  inline void setLaneChange( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initLaneChange(unsigned int size);
+  inline void adoptLaneChange(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownLaneChange();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Frame::Pipeline {
+public:
+  typedef Frame Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringGeometry::Path::Pipeline getPath();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::MotionSample::Reader {
+public:
+  typedef MotionSample Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getTimeNs() const;
+
+  inline double getValue() const;
+
+  inline bool getValid() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::MotionSample::Builder {
+public:
+  typedef MotionSample Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getTimeNs();
+  inline void setTimeNs( ::uint64_t value);
+
+  inline double getValue();
+  inline void setValue(double value);
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::MotionSample::Pipeline {
+public:
+  typedef MotionSample Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Evidence::Reader {
+public:
+  typedef Evidence Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getEpoch() const;
+
+  inline bool hasAdmissions() const;
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader getAdmissions() const;
+
+  inline bool getContinued() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Evidence::Builder {
+public:
+  typedef Evidence Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint64_t getEpoch();
+  inline void setEpoch( ::uint64_t value);
+
+  inline bool hasAdmissions();
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder getAdmissions();
+  inline void setAdmissions( ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader value);
+  inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder initAdmissions(unsigned int size);
+  inline void adoptAdmissions(::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>> disownAdmissions();
+
+  inline bool getContinued();
+  inline void setContinued(bool value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Evidence::Pipeline {
+public:
+  typedef Evidence Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Bound::Reader {
+public:
+  typedef Bound Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline Which which() const;
+  inline bool isOpen() const;
+  inline  ::capnp::Void getOpen() const;
+
+  inline bool isFinite() const;
+  inline bool hasFinite() const;
+  inline  ::capnp::Data::Reader getFinite() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Bound::Builder {
+public:
+  typedef Bound Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline Which which();
+  inline bool isOpen();
+  inline  ::capnp::Void getOpen();
+  inline void setOpen( ::capnp::Void value = ::capnp::VOID);
+
+  inline bool isFinite();
+  inline bool hasFinite();
+  inline  ::capnp::Data::Builder getFinite();
+  inline void setFinite( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initFinite(unsigned int size);
+  inline void adoptFinite(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownFinite();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Bound::Pipeline {
+public:
+  typedef Bound Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Candidate::Reader {
+public:
+  typedef Candidate Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode() const;
+
+  inline bool getReady() const;
+
+  inline bool hasSources() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getSources() const;
+
+  inline bool hasBoundaries() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getBoundaries() const;
+
+  inline bool hasOrdering() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getOrdering() const;
+
+  inline bool hasTarget() const;
+  inline  ::cereal::LaneCenteringGeometry::Path::Reader getTarget() const;
+
+  inline bool hasSlope() const;
+  inline  ::capnp::Data::Reader getSlope() const;
+
+  inline bool hasLower() const;
+  inline  ::cereal::LaneCenteringGeometry::Bound::Reader getLower() const;
+
+  inline bool hasUpper() const;
+  inline  ::cereal::LaneCenteringGeometry::Bound::Reader getUpper() const;
+
+  inline bool hasWidth() const;
+  inline  ::capnp::Data::Reader getWidth() const;
+
+  inline bool hasPrefixReason() const;
+  inline  ::capnp::Text::Reader getPrefixReason() const;
+
+  inline double getPrefixEnd() const;
+
+  inline bool hasClearance() const;
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Reader getClearance() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Candidate::Builder {
+public:
+  typedef Candidate Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline bool getReady();
+  inline void setReady(bool value);
+
+  inline bool hasSources();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getSources();
+  inline void setSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setSources(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initSources(unsigned int size);
+  inline void adoptSources(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownSources();
+
+  inline bool hasBoundaries();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getBoundaries();
+  inline void setBoundaries( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setBoundaries(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initBoundaries(unsigned int size);
+  inline void adoptBoundaries(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownBoundaries();
+
+  inline bool hasOrdering();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getOrdering();
+  inline void setOrdering( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setOrdering(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initOrdering(unsigned int size);
+  inline void adoptOrdering(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownOrdering();
+
+  inline bool hasTarget();
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder getTarget();
+  inline void setTarget( ::cereal::LaneCenteringGeometry::Path::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Path::Builder initTarget();
+  inline void adoptTarget(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> disownTarget();
+
+  inline bool hasSlope();
+  inline  ::capnp::Data::Builder getSlope();
+  inline void setSlope( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initSlope(unsigned int size);
+  inline void adoptSlope(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownSlope();
+
+  inline bool hasLower();
+  inline  ::cereal::LaneCenteringGeometry::Bound::Builder getLower();
+  inline void setLower( ::cereal::LaneCenteringGeometry::Bound::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Bound::Builder initLower();
+  inline void adoptLower(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound> disownLower();
+
+  inline bool hasUpper();
+  inline  ::cereal::LaneCenteringGeometry::Bound::Builder getUpper();
+  inline void setUpper( ::cereal::LaneCenteringGeometry::Bound::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Bound::Builder initUpper();
+  inline void adoptUpper(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound> disownUpper();
+
+  inline bool hasWidth();
+  inline  ::capnp::Data::Builder getWidth();
+  inline void setWidth( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initWidth(unsigned int size);
+  inline void adoptWidth(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownWidth();
+
+  inline bool hasPrefixReason();
+  inline  ::capnp::Text::Builder getPrefixReason();
+  inline void setPrefixReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initPrefixReason(unsigned int size);
+  inline void adoptPrefixReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownPrefixReason();
+
+  inline double getPrefixEnd();
+  inline void setPrefixEnd(double value);
+
+  inline bool hasClearance();
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder getClearance();
+  inline void setClearance( ::cereal::LaneCenteringGeometry::SingleClearance::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder initClearance();
+  inline void adoptClearance(::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance> disownClearance();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Candidate::Pipeline {
+public:
+  typedef Candidate Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+  inline  ::cereal::LaneCenteringGeometry::Path::Pipeline getTarget();
+  inline  ::cereal::LaneCenteringGeometry::Bound::Pipeline getLower();
+  inline  ::cereal::LaneCenteringGeometry::Bound::Pipeline getUpper();
+  inline  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline getClearance();
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::SingleClearance::Reader {
+public:
+  typedef SingleClearance Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasSlopes() const;
+  inline  ::capnp::Data::Reader getSlopes() const;
+
+  inline bool hasIntercepts() const;
+  inline  ::capnp::Data::Reader getIntercepts() const;
+
+  inline double getGuardLower() const;
+
+  inline double getGuardUpper() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::SingleClearance::Builder {
+public:
+  typedef SingleClearance Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasSlopes();
+  inline  ::capnp::Data::Builder getSlopes();
+  inline void setSlopes( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initSlopes(unsigned int size);
+  inline void adoptSlopes(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownSlopes();
+
+  inline bool hasIntercepts();
+  inline  ::capnp::Data::Builder getIntercepts();
+  inline void setIntercepts( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initIntercepts(unsigned int size);
+  inline void adoptIntercepts(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownIntercepts();
+
+  inline double getGuardLower();
+  inline void setGuardLower(double value);
+
+  inline double getGuardUpper();
+  inline void setGuardUpper(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::SingleClearance::Pipeline {
+public:
+  typedef SingleClearance Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Rejection::Reader {
+public:
+  typedef Rejection Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode() const;
+
+  inline bool hasReasons() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getReasons() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Rejection::Builder {
+public:
+  typedef Rejection Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline bool hasReasons();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getReasons();
+  inline void setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initReasons(unsigned int size);
+  inline void adoptReasons(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownReasons();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Rejection::Pipeline {
+public:
+  typedef Rejection Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Pair::Reader {
+public:
+  typedef Pair Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline double getCurvature() const;
+
+  inline double getWidthHorizontal() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Pair::Builder {
+public:
+  typedef Pair Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline double getCurvature();
+  inline void setCurvature(double value);
+
+  inline double getWidthHorizontal();
+  inline void setWidthHorizontal(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Pair::Pipeline {
+public:
+  typedef Pair Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::Failure::Reader {
+public:
+  typedef Failure Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline bool hasReason() const;
+  inline  ::capnp::Text::Reader getReason() const;
+
+  inline bool hasDetails() const;
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader getDetails() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::Failure::Builder {
+public:
+  typedef Failure Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline bool hasReason();
+  inline  ::capnp::Text::Builder getReason();
+  inline void setReason( ::capnp::Text::Reader value);
+  inline  ::capnp::Text::Builder initReason(unsigned int size);
+  inline void adoptReason(::capnp::Orphan< ::capnp::Text>&& value);
+  inline ::capnp::Orphan< ::capnp::Text> disownReason();
+
+  inline bool hasDetails();
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder getDetails();
+  inline void setDetails( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value);
+  inline void setDetails(::kj::ArrayPtr<const  ::capnp::Text::Reader> value);
+  inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder initDetails(unsigned int size);
+  inline void adoptDetails(::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> disownDetails();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::Failure::Pipeline {
+public:
+  typedef Failure Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringGeometry::CurveOutcome::Reader {
+public:
+  typedef CurveOutcome Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline Which which() const;
+  inline bool hasSources() const;
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader getSources() const;
+
+  inline bool isFailure() const;
+  inline bool hasFailure() const;
+  inline  ::cereal::LaneCenteringGeometry::Failure::Reader getFailure() const;
+
+  inline bool isPair() const;
+  inline bool hasPair() const;
+  inline  ::cereal::LaneCenteringGeometry::Pair::Reader getPair() const;
+
+  inline bool isFit() const;
+  inline double getFit() const;
+
+  inline bool isGaps() const;
+  inline bool hasGaps() const;
+  inline  ::capnp::Data::Reader getGaps() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringGeometry::CurveOutcome::Builder {
+public:
+  typedef CurveOutcome Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline Which which();
+  inline bool hasSources();
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder getSources();
+  inline void setSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value);
+  inline void setSources(::kj::ArrayPtr<const  ::uint8_t> value);
+  inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder initSources(unsigned int size);
+  inline void adoptSources(::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value);
+  inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> disownSources();
+
+  inline bool isFailure();
+  inline bool hasFailure();
+  inline  ::cereal::LaneCenteringGeometry::Failure::Builder getFailure();
+  inline void setFailure( ::cereal::LaneCenteringGeometry::Failure::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Failure::Builder initFailure();
+  inline void adoptFailure(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Failure>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Failure> disownFailure();
+
+  inline bool isPair();
+  inline bool hasPair();
+  inline  ::cereal::LaneCenteringGeometry::Pair::Builder getPair();
+  inline void setPair( ::cereal::LaneCenteringGeometry::Pair::Reader value);
+  inline  ::cereal::LaneCenteringGeometry::Pair::Builder initPair();
+  inline void adoptPair(::capnp::Orphan< ::cereal::LaneCenteringGeometry::Pair>&& value);
+  inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Pair> disownPair();
+
+  inline bool isFit();
+  inline double getFit();
+  inline void setFit(double value);
+
+  inline bool isGaps();
+  inline bool hasGaps();
+  inline  ::capnp::Data::Builder getGaps();
+  inline void setGaps( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initGaps(unsigned int size);
+  inline void adoptGaps(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownGaps();
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringGeometry::CurveOutcome::Pipeline {
+public:
+  typedef CurveOutcome Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
+private:
+  ::capnp::AnyPointer::Pipeline _typeless;
+  friend class ::capnp::PipelineHook;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+};
+#endif  // !CAPNP_LITE
+
+class LaneCenteringControl::Reader {
+public:
+  typedef LaneCenteringControl Reads;
+
+  Reader() = default;
+  inline explicit Reader(::capnp::_::StructReader base): _reader(base) {}
+
+  inline ::capnp::MessageSize totalSize() const {
+    return _reader.totalSize().asPublic();
+  }
+
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const {
+    return ::capnp::_::structString(_reader, *_capnpPrivate::brand());
+  }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getSchemaVersion() const;
+
+  inline  ::uint8_t getConfigVersion() const;
+
+  inline  ::uint8_t getMode() const;
+
+  inline  ::uint8_t getModeEnabled() const;
+
+  inline  ::uint8_t getModeAllowE2E() const;
+
+  inline  ::uint8_t getReasonCode() const;
+
+  inline  ::uint32_t getGateBits() const;
+
+  inline bool getValid() const;
+
+  inline bool getBarVisible() const;
+
+  inline bool getMasterEnabled() const;
+
+  inline bool getDisplayEnabled() const;
+
+  inline bool getLateralActive() const;
+
+  inline bool getClockValid() const;
+
+  inline bool getClockBoottime() const;
+
+  inline bool getModelFresh() const;
+
+  inline bool getDownstreamCommandLimitKnown() const;
+
+  inline bool getDownstreamCommandLimited() const;
+
+  inline  ::uint64_t getControlTimeNs() const;
+
+  inline  ::int64_t getClockOffsetNs() const;
+
+  inline  ::uint64_t getClockEpoch() const;
+
+  inline  ::uint64_t getClockMonoSampleNs() const;
+
+  inline  ::uint64_t getClockEpochStartMonoNs() const;
+
+  inline  ::uint64_t getPlanSessionHigh() const;
+
+  inline  ::uint64_t getPlanSessionLow() const;
+
+  inline  ::uint64_t getPlanSequence() const;
+
+  inline  ::uint64_t getPlanCaptureNs() const;
+
+  inline  ::uint64_t getModelCaptureNs() const;
+
+  inline  ::int64_t getConfigRevision() const;
+
+  inline double getBaseCurvature() const;
+
+  inline double getRawOptionalCurvature() const;
+
+  inline double getBoundedDemandCurvature() const;
+
+  inline double getPreYieldCurvature() const;
+
+  inline double getFinalOptionalCurvature() const;
+
+  inline double getMaximumCorrection() const;
+
+  inline double getAuthority() const;
+
+  inline double getDeviation() const;
+
+  inline double getRequestedYield() const;
+
+  inline double getAppliedYield() const;
+
+  inline double getSignalTailCurvature() const;
+
+  inline double getPreviewDistance() const;
+
+  inline double getCentringError() const;
+
+  inline double getDownstreamCurvature() const;
+
+private:
+  ::capnp::_::StructReader _reader;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::List;
+  friend class ::capnp::MessageBuilder;
+  friend class ::capnp::Orphanage;
+};
+
+class LaneCenteringControl::Builder {
+public:
+  typedef LaneCenteringControl Builds;
+
+  Builder() = delete;  // Deleted to discourage incorrect usage.
+                       // You can explicitly initialize to nullptr instead.
+  inline Builder(decltype(nullptr)) {}
+  inline explicit Builder(::capnp::_::StructBuilder base): _builder(base) {}
+  inline operator Reader() const { return Reader(_builder.asReader()); }
+  inline Reader asReader() const { return *this; }
+
+  inline ::capnp::MessageSize totalSize() const { return asReader().totalSize(); }
+#if !CAPNP_LITE
+  inline ::kj::StringTree toString() const { return asReader().toString(); }
+#endif  // !CAPNP_LITE
+
+  inline  ::uint8_t getSchemaVersion();
+  inline void setSchemaVersion( ::uint8_t value);
+
+  inline  ::uint8_t getConfigVersion();
+  inline void setConfigVersion( ::uint8_t value);
+
+  inline  ::uint8_t getMode();
+  inline void setMode( ::uint8_t value);
+
+  inline  ::uint8_t getModeEnabled();
+  inline void setModeEnabled( ::uint8_t value);
+
+  inline  ::uint8_t getModeAllowE2E();
+  inline void setModeAllowE2E( ::uint8_t value);
+
+  inline  ::uint8_t getReasonCode();
+  inline void setReasonCode( ::uint8_t value);
+
+  inline  ::uint32_t getGateBits();
+  inline void setGateBits( ::uint32_t value);
+
+  inline bool getValid();
+  inline void setValid(bool value);
+
+  inline bool getBarVisible();
+  inline void setBarVisible(bool value);
+
+  inline bool getMasterEnabled();
+  inline void setMasterEnabled(bool value);
+
+  inline bool getDisplayEnabled();
+  inline void setDisplayEnabled(bool value);
+
+  inline bool getLateralActive();
+  inline void setLateralActive(bool value);
+
+  inline bool getClockValid();
+  inline void setClockValid(bool value);
+
+  inline bool getClockBoottime();
+  inline void setClockBoottime(bool value);
+
+  inline bool getModelFresh();
+  inline void setModelFresh(bool value);
+
+  inline bool getDownstreamCommandLimitKnown();
+  inline void setDownstreamCommandLimitKnown(bool value);
+
+  inline bool getDownstreamCommandLimited();
+  inline void setDownstreamCommandLimited(bool value);
+
+  inline  ::uint64_t getControlTimeNs();
+  inline void setControlTimeNs( ::uint64_t value);
+
+  inline  ::int64_t getClockOffsetNs();
+  inline void setClockOffsetNs( ::int64_t value);
+
+  inline  ::uint64_t getClockEpoch();
+  inline void setClockEpoch( ::uint64_t value);
+
+  inline  ::uint64_t getClockMonoSampleNs();
+  inline void setClockMonoSampleNs( ::uint64_t value);
+
+  inline  ::uint64_t getClockEpochStartMonoNs();
+  inline void setClockEpochStartMonoNs( ::uint64_t value);
+
+  inline  ::uint64_t getPlanSessionHigh();
+  inline void setPlanSessionHigh( ::uint64_t value);
+
+  inline  ::uint64_t getPlanSessionLow();
+  inline void setPlanSessionLow( ::uint64_t value);
+
+  inline  ::uint64_t getPlanSequence();
+  inline void setPlanSequence( ::uint64_t value);
+
+  inline  ::uint64_t getPlanCaptureNs();
+  inline void setPlanCaptureNs( ::uint64_t value);
+
+  inline  ::uint64_t getModelCaptureNs();
+  inline void setModelCaptureNs( ::uint64_t value);
+
+  inline  ::int64_t getConfigRevision();
+  inline void setConfigRevision( ::int64_t value);
+
+  inline double getBaseCurvature();
+  inline void setBaseCurvature(double value);
+
+  inline double getRawOptionalCurvature();
+  inline void setRawOptionalCurvature(double value);
+
+  inline double getBoundedDemandCurvature();
+  inline void setBoundedDemandCurvature(double value);
+
+  inline double getPreYieldCurvature();
+  inline void setPreYieldCurvature(double value);
+
+  inline double getFinalOptionalCurvature();
+  inline void setFinalOptionalCurvature(double value);
+
+  inline double getMaximumCorrection();
+  inline void setMaximumCorrection(double value);
+
+  inline double getAuthority();
+  inline void setAuthority(double value);
+
+  inline double getDeviation();
+  inline void setDeviation(double value);
+
+  inline double getRequestedYield();
+  inline void setRequestedYield(double value);
+
+  inline double getAppliedYield();
+  inline void setAppliedYield(double value);
+
+  inline double getSignalTailCurvature();
+  inline void setSignalTailCurvature(double value);
+
+  inline double getPreviewDistance();
+  inline void setPreviewDistance(double value);
+
+  inline double getCentringError();
+  inline void setCentringError(double value);
+
+  inline double getDownstreamCurvature();
+  inline void setDownstreamCurvature(double value);
+
+private:
+  ::capnp::_::StructBuilder _builder;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::ToDynamic_;
+  friend class ::capnp::Orphanage;
+  template <typename, ::capnp::Kind>
+  friend struct ::capnp::_::PointerHelpers;
+};
+
+#if !CAPNP_LITE
+class LaneCenteringControl::Pipeline {
+public:
+  typedef LaneCenteringControl Pipelines;
+
+  inline Pipeline(decltype(nullptr)): _typeless(nullptr) {}
+  inline explicit Pipeline(::capnp::AnyPointer::Pipeline&& typeless)
+      : _typeless(kj::mv(typeless)) {}
+
 private:
   ::capnp::AnyPointer::Pipeline _typeless;
   friend class ::capnp::PipelineHook;
@@ -19550,18 +24844,240 @@ inline void SlcState::Builder::setLastReceivedAdjustedLimit(float value) {
       ::capnp::bounded<32>() * ::capnp::ELEMENTS, value);
 }
 
-inline  ::uint64_t SlcState::Reader::getAcceptedMonoTime() const {
+inline bool SlcState::Reader::hasChangeWarningId() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS).isNull();
+}
+inline bool SlcState::Builder::hasChangeWarningId() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader SlcState::Reader::getChangeWarningId() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder SlcState::Builder::getChangeWarningId() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+inline void SlcState::Builder::setChangeWarningId( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder SlcState::Builder::initChangeWarningId(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS), size);
+}
+inline void SlcState::Builder::adoptChangeWarningId(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> SlcState::Builder::disownChangeWarningId() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t SlcState::Reader::getChangeWarningIssuedMonoTime() const {
   return _reader.getDataField< ::uint64_t>(
       ::capnp::bounded<17>() * ::capnp::ELEMENTS);
 }
 
-inline  ::uint64_t SlcState::Builder::getAcceptedMonoTime() {
+inline  ::uint64_t SlcState::Builder::getChangeWarningIssuedMonoTime() {
   return _builder.getDataField< ::uint64_t>(
       ::capnp::bounded<17>() * ::capnp::ELEMENTS);
 }
-inline void SlcState::Builder::setAcceptedMonoTime( ::uint64_t value) {
+inline void SlcState::Builder::setChangeWarningIssuedMonoTime( ::uint64_t value) {
   _builder.setDataField< ::uint64_t>(
       ::capnp::bounded<17>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t SlcState::Reader::getChangeWarningDeadlineMonoTime() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t SlcState::Builder::getChangeWarningDeadlineMonoTime() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setChangeWarningDeadlineMonoTime( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool SlcState::Reader::getWarningPinned() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<141>() * ::capnp::ELEMENTS);
+}
+
+inline bool SlcState::Builder::getWarningPinned() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<141>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setWarningPinned(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<141>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool SlcState::Reader::hasWarningPinId() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS).isNull();
+}
+inline bool SlcState::Builder::hasWarningPinId() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader SlcState::Reader::getWarningPinId() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder SlcState::Builder::getWarningPinId() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+inline void SlcState::Builder::setWarningPinId( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder SlcState::Builder::initWarningPinId(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), size);
+}
+inline void SlcState::Builder::adoptWarningPinId(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> SlcState::Builder::disownWarningPinId() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t SlcState::Reader::getWarningPinIssuedMonoTime() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t SlcState::Builder::getWarningPinIssuedMonoTime() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setWarningPinIssuedMonoTime( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool SlcState::Reader::getMapApproachActive() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<142>() * ::capnp::ELEMENTS);
+}
+
+inline bool SlcState::Builder::getMapApproachActive() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<142>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setMapApproachActive(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<142>() * ::capnp::ELEMENTS, value);
+}
+
+inline float SlcState::Reader::getMapBoundaryDistance() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS);
+}
+
+inline float SlcState::Builder::getMapBoundaryDistance() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setMapBoundaryDistance(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS, value);
+}
+
+inline float SlcState::Reader::getMapTriggerDistance() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<40>() * ::capnp::ELEMENTS);
+}
+
+inline float SlcState::Builder::getMapTriggerDistance() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<40>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setMapTriggerDistance(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<40>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool SlcState::Reader::getHasReengageTarget() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<143>() * ::capnp::ELEMENTS);
+}
+
+inline bool SlcState::Builder::getHasReengageTarget() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<143>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setHasReengageTarget(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<143>() * ::capnp::ELEMENTS, value);
+}
+
+inline float SlcState::Reader::getReengageTarget() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<41>() * ::capnp::ELEMENTS);
+}
+
+inline float SlcState::Builder::getReengageTarget() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<41>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setReengageTarget(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<41>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool SlcState::Reader::getHasRollbackTarget() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<144>() * ::capnp::ELEMENTS);
+}
+
+inline bool SlcState::Builder::getHasRollbackTarget() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<144>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setHasRollbackTarget(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<144>() * ::capnp::ELEMENTS, value);
+}
+
+inline float SlcState::Reader::getRollbackTarget() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<42>() * ::capnp::ELEMENTS);
+}
+
+inline float SlcState::Builder::getRollbackTarget() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<42>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setRollbackTarget(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<42>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t SlcState::Reader::getAcceptedMonoTime() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t SlcState::Builder::getAcceptedMonoTime() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+inline void SlcState::Builder::setAcceptedMonoTime( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS, value);
 }
 
 inline bool SlcState::SourceReading::Reader::hasSource() const {
@@ -21331,6 +26847,20 @@ inline float SlcAction::ControllerCruiseAction::Builder::getTargetSpeedMps() {
 inline void SlcAction::ControllerCruiseAction::Builder::setTargetSpeedMps(float value) {
   _builder.setDataField<float>(
       ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::int8_t SlcAction::ControllerCruiseAction::Reader::getStepUnits() const {
+  return _reader.getDataField< ::int8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int8_t SlcAction::ControllerCruiseAction::Builder::getStepUnits() {
+  return _builder.getDataField< ::int8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void SlcAction::ControllerCruiseAction::Builder::setStepUnits( ::int8_t value) {
+  _builder.setDataField< ::int8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
 }
 
 inline  ::uint16_t SlcAction::ConditionalManualAction::Reader::getVersion() const {
@@ -25411,6 +30941,229 @@ inline ::capnp::Orphan< ::cereal::LiveTrackingApplication> StarPilotLateralState
       ::capnp::bounded<4>() * ::capnp::POINTERS));
 }
 
+inline bool StarPilotLateralState::Reader::hasLanePath() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool StarPilotLateralState::Builder::hasLanePath() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::StarPilotLateralState::LanePath::Reader StarPilotLateralState::Reader::getLanePath() const {
+  return ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::cereal::StarPilotLateralState::LanePath::Builder StarPilotLateralState::Builder::getLanePath() {
+  return ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::StarPilotLateralState::LanePath::Pipeline StarPilotLateralState::Pipeline::getLanePath() {
+  return  ::cereal::StarPilotLateralState::LanePath::Pipeline(_typeless.getPointerField(5));
+}
+#endif  // !CAPNP_LITE
+inline void StarPilotLateralState::Builder::setLanePath( ::cereal::StarPilotLateralState::LanePath::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::StarPilotLateralState::LanePath::Builder StarPilotLateralState::Builder::initLanePath() {
+  return ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void StarPilotLateralState::Builder::adoptLanePath(
+    ::capnp::Orphan< ::cereal::StarPilotLateralState::LanePath>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::StarPilotLateralState::LanePath> StarPilotLateralState::Builder::disownLanePath() {
+  return ::capnp::_::PointerHelpers< ::cereal::StarPilotLateralState::LanePath>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline  ::uint16_t StarPilotLateralState::LanePath::Reader::getVersion() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t StarPilotLateralState::LanePath::Builder::getVersion() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LanePath::Builder::setVersion( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool StarPilotLateralState::LanePath::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+
+inline bool StarPilotLateralState::LanePath::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LanePath::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t StarPilotLateralState::LanePath::Reader::getModelMonoTime() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t StarPilotLateralState::LanePath::Builder::getModelMonoTime() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LanePath::Builder::setModelMonoTime( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t StarPilotLateralState::LanePath::Reader::getControlMonoTime() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t StarPilotLateralState::LanePath::Builder::getControlMonoTime() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LanePath::Builder::setControlMonoTime( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool StarPilotLateralState::LanePath::Reader::hasX() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool StarPilotLateralState::LanePath::Builder::hasX() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader StarPilotLateralState::LanePath::Reader::getX() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::getX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void StarPilotLateralState::LanePath::Builder::setX( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void StarPilotLateralState::LanePath::Builder::setX(::kj::ArrayPtr<const float> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::initX(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void StarPilotLateralState::LanePath::Builder::adoptX(
+    ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> StarPilotLateralState::LanePath::Builder::disownX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool StarPilotLateralState::LanePath::Reader::hasY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool StarPilotLateralState::LanePath::Builder::hasY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader StarPilotLateralState::LanePath::Reader::getY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::getY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void StarPilotLateralState::LanePath::Builder::setY( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void StarPilotLateralState::LanePath::Builder::setY(::kj::ArrayPtr<const float> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::initY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void StarPilotLateralState::LanePath::Builder::adoptY(
+    ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> StarPilotLateralState::LanePath::Builder::disownY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool StarPilotLateralState::LanePath::Reader::hasZ() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool StarPilotLateralState::LanePath::Builder::hasZ() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader StarPilotLateralState::LanePath::Reader::getZ() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::getZ() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void StarPilotLateralState::LanePath::Builder::setZ( ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void StarPilotLateralState::LanePath::Builder::setZ(::kj::ArrayPtr<const float> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>::Builder StarPilotLateralState::LanePath::Builder::initZ(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void StarPilotLateralState::LanePath::Builder::adoptZ(
+    ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>> StarPilotLateralState::LanePath::Builder::disownZ() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<float,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline float StarPilotLateralState::LanePath::Reader::getRequestedCurvatureCorrection() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline float StarPilotLateralState::LanePath::Builder::getRequestedCurvatureCorrection() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LanePath::Builder::setRequestedCurvatureCorrection(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
 inline  ::uint16_t StarPilotLateralState::LaneCentering::Reader::getVersion() const {
   return _reader.getDataField< ::uint16_t>(
       ::capnp::bounded<0>() * ::capnp::ELEMENTS);
@@ -25527,6 +31280,20 @@ inline void StarPilotLateralState::LaneCentering::Builder::adoptReason(
 inline ::capnp::Orphan< ::capnp::Text> StarPilotLateralState::LaneCentering::Builder::disownReason() {
   return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
       ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline float StarPilotLateralState::LaneCentering::Reader::getCorrectionLimit() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline float StarPilotLateralState::LaneCentering::Builder::getCorrectionLimit() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void StarPilotLateralState::LaneCentering::Builder::setCorrectionLimit(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
 }
 
 inline  ::uint16_t StarPilotLateralState::FeedbackConsumption::Reader::getVersion() const {
@@ -28367,6 +34134,62 @@ inline  ::uint64_t MapdOut::Builder::getProducerSession() {
 inline void MapdOut::Builder::setProducerSession( ::uint64_t value) {
   _builder.setDataField< ::uint64_t>(
       ::capnp::bounded<13>() * ::capnp::ELEMENTS, value);
+}
+
+inline float MapdOut::Reader::getNextSpeedLimitEndDistance() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+
+inline float MapdOut::Builder::getNextSpeedLimitEndDistance() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+inline void MapdOut::Builder::setNextSpeedLimitEndDistance(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS, value);
+}
+
+inline float MapdOut::Reader::getFollowingSpeedLimit() const {
+  return _reader.getDataField<float>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS);
+}
+
+inline float MapdOut::Builder::getFollowingSpeedLimit() {
+  return _builder.getDataField<float>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS);
+}
+inline void MapdOut::Builder::setFollowingSpeedLimit(float value) {
+  _builder.setDataField<float>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::int64_t MapdOut::Reader::getFollowingSpeedLimitWayId() const {
+  return _reader.getDataField< ::int64_t>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int64_t MapdOut::Builder::getFollowingSpeedLimitWayId() {
+  return _builder.getDataField< ::int64_t>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+inline void MapdOut::Builder::setFollowingSpeedLimitWayId( ::int64_t value) {
+  _builder.setDataField< ::int64_t>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::int64_t MapdOut::Reader::getNextSpeedLimitWayId() const {
+  return _reader.getDataField< ::int64_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int64_t MapdOut::Builder::getNextSpeedLimitWayId() {
+  return _builder.getDataField< ::int64_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+inline void MapdOut::Builder::setNextSpeedLimitWayId( ::int64_t value) {
+  _builder.setDataField< ::int64_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS, value);
 }
 
 inline  ::uint16_t LearningControlEvidence::Reader::getVersion() const {
@@ -36195,6 +42018,7326 @@ inline  ::uint64_t LiveTrackingResponseWitness::Builder::getValidUntilMonoTime()
 inline void LiveTrackingResponseWitness::Builder::setValidUntilMonoTime( ::uint64_t value) {
   _builder.setDataField< ::uint64_t>(
       ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint16_t LaneCenteringState::Reader::getSchemaVersion() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringState::Builder::getSchemaVersion() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setSchemaVersion( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getControlTimeNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getControlTimeNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setControlTimeNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getModelFrameId() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getModelFrameId() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setModelFrameId( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getModelCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getModelCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setModelCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getModelPublishNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getModelPublishNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setModelPublishNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getGeometryTimeNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getGeometryTimeNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setGeometryTimeNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint16_t LaneCenteringState::Reader::getConfigVersion() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringState::Builder::getConfigVersion() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setConfigVersion( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getConfigRevision() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getConfigRevision() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setConfigRevision( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasConfigHash() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasConfigHash() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getConfigHash() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getConfigHash() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setConfigHash( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initConfigHash(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptConfigHash(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownConfigHash() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasConfigJson() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasConfigJson() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getConfigJson() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getConfigJson() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setConfigJson( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initConfigJson(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptConfigJson(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownConfigJson() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasConfigUnitsJson() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasConfigUnitsJson() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getConfigUnitsJson() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getConfigUnitsJson() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setConfigUnitsJson( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initConfigUnitsJson(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptConfigUnitsJson(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownConfigUnitsJson() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getBarVisible() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getBarVisible() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setBarVisible(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<33>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getMasterEnabled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<34>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getMasterEnabled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<34>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setMasterEnabled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<34>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getDisplayEnabled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<35>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getDisplayEnabled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<35>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDisplayEnabled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<35>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getLateralActive() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<36>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getLateralActive() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<36>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setLateralActive(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<36>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringState::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasModeEnabled() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasModeEnabled() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::Reader::getModeEnabled() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::getModeEnabled() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setModeEnabled( ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setModeEnabled(::kj::ArrayPtr<const bool> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::initModeEnabled(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptModeEnabled(
+    ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::Builder::disownModeEnabled() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasModeAllowE2E() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasModeAllowE2E() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::Reader::getModeAllowE2E() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::getModeAllowE2E() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setModeAllowE2E( ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setModeAllowE2E(::kj::ArrayPtr<const bool> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::initModeAllowE2E(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptModeAllowE2E(
+    ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::Builder::disownModeAllowE2E() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<bool,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringState::Reader::getBaseCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getBaseCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setBaseCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getRawOptionalCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getRawOptionalCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRawOptionalCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getBoundedDemandCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getBoundedDemandCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setBoundedDemandCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getResponseLimitedCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getResponseLimitedCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setResponseLimitedCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getPreYieldCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getPreYieldCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setPreYieldCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getFinalOptionalCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getFinalOptionalCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setFinalOptionalCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getTotalCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getTotalCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setTotalCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getMaximumCorrection() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getMaximumCorrection() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setMaximumCorrection(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getAuthority() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getAuthority() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setAuthority(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getDeviation() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getDeviation() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDeviation(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getRequestedYield() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getRequestedYield() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRequestedYield(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getAppliedYield() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getAppliedYield() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setAppliedYield(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getRemovedByE2E() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getRemovedByE2E() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRemovedByE2E(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getSignalTailCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getSignalTailCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setSignalTailCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getPreviewDistance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getPreviewDistance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setPreviewDistance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getCentringError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getCentringError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setCentringError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasResponseKind() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasResponseKind() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getResponseKind() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getResponseKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setResponseKind( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initResponseKind(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptResponseKind(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownResponseKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::getReentry() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<37>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getReentry() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<37>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setReentry(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<37>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getModelFresh() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<38>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getModelFresh() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<38>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setModelFresh(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<38>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::Reader::getSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::getSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSources( ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::initSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSources(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>> LaneCenteringState::Builder::disownSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceState,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasSelectedSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSelectedSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::Reader::getSelectedSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::getSelectedSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSelectedSources( ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::initSelectedSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSelectedSources(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>> LaneCenteringState::Builder::disownSelectedSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasSelectionCause() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSelectionCause() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getSelectionCause() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getSelectionCause() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSelectionCause( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initSelectionCause(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSelectionCause(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownSelectionCause() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasSelectionAnchor() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSelectionAnchor() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getSelectionAnchor() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getSelectionAnchor() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSelectionAnchor( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initSelectionAnchor(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSelectionAnchor(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownSelectionAnchor() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasSelectionScores() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSelectionScores() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::Reader::getSelectionScores() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::getSelectionScores() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSelectionScores( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setSelectionScores(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::initSelectionScores(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSelectionScores(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::Builder::disownSelectionScores() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasSelectionTransition() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasSelectionTransition() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getSelectionTransition() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getSelectionTransition() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setSelectionTransition( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initSelectionTransition(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptSelectionTransition(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownSelectionTransition() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasPromotionWaiting() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasPromotionWaiting() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::Reader::getPromotionWaiting() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::getPromotionWaiting() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setPromotionWaiting( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setPromotionWaiting(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::Builder::initPromotionWaiting(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptPromotionWaiting(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::Builder::disownPromotionWaiting() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasModes() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasModes() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::Reader::getModes() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::getModes() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setModes( ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::Builder::initModes(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptModes(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>> LaneCenteringState::Builder::disownModes() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::ModeState,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasReference() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasReference() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::ReferenceState::Reader LaneCenteringState::Reader::getReference() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::get(_reader.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::ReferenceState::Builder LaneCenteringState::Builder::getReference() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::get(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::ReferenceState::Pipeline LaneCenteringState::Pipeline::getReference() {
+  return  ::cereal::LaneCenteringState::ReferenceState::Pipeline(_typeless.getPointerField(16));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::Builder::setReference( ::cereal::LaneCenteringState::ReferenceState::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::set(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::ReferenceState::Builder LaneCenteringState::Builder::initReference() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::init(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::adoptReference(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceState>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::adopt(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceState> LaneCenteringState::Builder::disownReference() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceState>::disown(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasEdge() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasEdge() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::EdgeState::Reader LaneCenteringState::Reader::getEdge() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::get(_reader.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::EdgeState::Builder LaneCenteringState::Builder::getEdge() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::get(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::EdgeState::Pipeline LaneCenteringState::Pipeline::getEdge() {
+  return  ::cereal::LaneCenteringState::EdgeState::Pipeline(_typeless.getPointerField(17));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::Builder::setEdge( ::cereal::LaneCenteringState::EdgeState::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::set(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::EdgeState::Builder LaneCenteringState::Builder::initEdge() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::init(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::adoptEdge(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::EdgeState>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::adopt(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::EdgeState> LaneCenteringState::Builder::disownEdge() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::EdgeState>::disown(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasCurve() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasCurve() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::CurveState::Reader LaneCenteringState::Reader::getCurve() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::get(_reader.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::CurveState::Builder LaneCenteringState::Builder::getCurve() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::get(_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::CurveState::Pipeline LaneCenteringState::Pipeline::getCurve() {
+  return  ::cereal::LaneCenteringState::CurveState::Pipeline(_typeless.getPointerField(18));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::Builder::setCurve( ::cereal::LaneCenteringState::CurveState::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::set(_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::CurveState::Builder LaneCenteringState::Builder::initCurve() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::init(_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::adoptCurve(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::adopt(_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState> LaneCenteringState::Builder::disownCurve() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::disown(_builder.getPointerField(
+      ::capnp::bounded<18>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::getDownstreamCommandLimitKnown() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<39>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getDownstreamCommandLimitKnown() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<39>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDownstreamCommandLimitKnown(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<39>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getDownstreamCommandLimited() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getDownstreamCommandLimited() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDownstreamCommandLimited(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Reader::getDownstreamCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Builder::getDownstreamCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDownstreamCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::getVehicleLimitKnown() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getVehicleLimitKnown() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setVehicleLimitKnown(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasConfigEvents() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasConfigEvents() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::Reader::getConfigEvents() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::Builder::getConfigEvents() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setConfigEvents( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::Builder::setConfigEvents(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::Builder::initConfigEvents(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptConfigEvents(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::Builder::disownConfigEvents() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<19>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasClockDomain() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasClockDomain() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getClockDomain() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getClockDomain() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setClockDomain( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initClockDomain(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptClockDomain(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownClockDomain() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<20>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::getClockValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getClockValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setClockValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getClockOffsetNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getClockOffsetNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setClockOffsetNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getClockEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getClockEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setClockEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getClockMonoSampleNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getClockMonoSampleNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setClockMonoSampleNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getRawModelPublishNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<27>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getRawModelPublishNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<27>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRawModelPublishNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<27>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getRawCarStateNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getRawCarStateNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRawCarStateNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<28>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getRawLivePoseNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<29>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getRawLivePoseNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<29>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setRawLivePoseNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<29>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getClockEpochStartMonoNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<30>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getClockEpochStartMonoNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<30>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setClockEpochStartMonoNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<30>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasWorker() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasWorker() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::WorkerState::Reader LaneCenteringState::Reader::getWorker() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::get(_reader.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::WorkerState::Builder LaneCenteringState::Builder::getWorker() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::get(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::WorkerState::Pipeline LaneCenteringState::Pipeline::getWorker() {
+  return  ::cereal::LaneCenteringState::WorkerState::Pipeline(_typeless.getPointerField(21));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::Builder::setWorker( ::cereal::LaneCenteringState::WorkerState::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::set(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::WorkerState::Builder LaneCenteringState::Builder::initWorker() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::init(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::adoptWorker(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::WorkerState>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::adopt(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::WorkerState> LaneCenteringState::Builder::disownWorker() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::WorkerState>::disown(_builder.getPointerField(
+      ::capnp::bounded<21>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::getDetailPresent() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Builder::getDetailPresent() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setDetailPresent(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getPlanSequence() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<31>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getPlanSequence() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<31>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setPlanSequence( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<31>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Reader::getPlanCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Builder::getPlanCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Builder::setPlanCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<32>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Reader::hasPlanConfigHash() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasPlanConfigHash() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Reader::getPlanConfigHash() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::getPlanConfigHash() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::setPlanConfigHash( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Builder::initPlanConfigHash(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Builder::adoptPlanConfigHash(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Builder::disownPlanConfigHash() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<22>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Reader::hasReferenceFilter() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Builder::hasReferenceFilter() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::ReferenceFilter::Reader LaneCenteringState::Reader::getReferenceFilter() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::get(_reader.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::ReferenceFilter::Builder LaneCenteringState::Builder::getReferenceFilter() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::get(_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::ReferenceFilter::Pipeline LaneCenteringState::Pipeline::getReferenceFilter() {
+  return  ::cereal::LaneCenteringState::ReferenceFilter::Pipeline(_typeless.getPointerField(23));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::Builder::setReferenceFilter( ::cereal::LaneCenteringState::ReferenceFilter::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::set(_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::ReferenceFilter::Builder LaneCenteringState::Builder::initReferenceFilter() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::init(_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Builder::adoptReferenceFilter(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceFilter>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::adopt(_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::ReferenceFilter> LaneCenteringState::Builder::disownReferenceFilter() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::ReferenceFilter>::disown(_builder.getPointerField(
+      ::capnp::bounded<23>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceFilter::Reader::getAvailable() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ReferenceFilter::Builder::getAvailable() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setAvailable(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceFilter::Reader::hasBiases() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceFilter::Builder::hasBiases() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceFilter::Reader::getBiases() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceFilter::Builder::getBiases() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setBiases( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setBiases(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceFilter::Builder::initBiases(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::adoptBiases(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceFilter::Builder::disownBiases() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringState::ReferenceFilter::Reader::getRawError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Builder::getRawError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setRawError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Reader::getComfortError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Builder::getComfortError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setComfortError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Reader::getRawRequest() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Builder::getRawRequest() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setRawRequest(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Reader::getComfortRequest() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Builder::getComfortRequest() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setComfortRequest(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Reader::getComfortBounded() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceFilter::Builder::getComfortBounded() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setComfortBounded(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceFilter::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceFilter::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::ReferenceFilter::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ReferenceFilter::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ReferenceFilter::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceFilter::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::ReferenceFilter::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::WorkerState::Reader::hasSession() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::WorkerState::Builder::hasSession() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::WorkerState::Reader::getSession() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::getSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::WorkerState::Builder::setSession( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::initSession(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::WorkerState::Builder::adoptSession(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::WorkerState::Builder::disownSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getGeneration() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getGeneration() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setGeneration( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint16_t LaneCenteringState::WorkerState::Reader::getPendingRequests() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringState::WorkerState::Builder::getPendingRequests() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setPendingRequests( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::WorkerState::Reader::hasReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::WorkerState::Builder::hasReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::WorkerState::Reader::getReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::getReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::WorkerState::Builder::setReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::initReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::WorkerState::Builder::adoptReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::WorkerState::Builder::disownReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getSequence() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getSequence() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setSequence( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::WorkerState::Reader::hasBoot() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::WorkerState::Builder::hasBoot() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::WorkerState::Reader::getBoot() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::getBoot() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::WorkerState::Builder::setBoot( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::WorkerState::Builder::initBoot(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::WorkerState::Builder::adoptBoot(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::WorkerState::Builder::disownBoot() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getRequestedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getRequestedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setRequestedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getStartedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getStartedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setStartedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getCompletedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getCompletedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setCompletedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getReceivedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getReceivedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setReceivedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::WorkerState::Reader::getHasGeometry() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<80>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::WorkerState::Builder::getHasGeometry() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<80>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setHasGeometry(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<80>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Reader::getCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::WorkerState::Builder::getCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::WorkerState::Reader::getPreview() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::WorkerState::Builder::getPreview() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::WorkerState::Builder::setPreview(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::SourceIdentity::Reader::hasKind() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::SourceIdentity::Builder::hasKind() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::SourceIdentity::Reader::getKind() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::SourceIdentity::Builder::getKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::SourceIdentity::Builder::setKind( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::SourceIdentity::Builder::initKind(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::SourceIdentity::Builder::adoptKind(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::SourceIdentity::Builder::disownKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::int8_t LaneCenteringState::SourceIdentity::Reader::getSide() const {
+  return _reader.getDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int8_t LaneCenteringState::SourceIdentity::Builder::getSide() {
+  return _builder.getDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceIdentity::Builder::setSide( ::int8_t value) {
+  _builder.setDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringState::SourceIdentity::Reader::getSlot() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::SourceIdentity::Builder::getSlot() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceIdentity::Builder::setSlot( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::SourceIdentity::Reader::getEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::SourceIdentity::Builder::getEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceIdentity::Builder::setEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::SourceState::Reader::hasIdentity() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::SourceState::Builder::hasIdentity() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::SourceIdentity::Reader LaneCenteringState::SourceState::Reader::getIdentity() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::SourceIdentity::Builder LaneCenteringState::SourceState::Builder::getIdentity() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::SourceIdentity::Pipeline LaneCenteringState::SourceState::Pipeline::getIdentity() {
+  return  ::cereal::LaneCenteringState::SourceIdentity::Pipeline(_typeless.getPointerField(0));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::SourceState::Builder::setIdentity( ::cereal::LaneCenteringState::SourceIdentity::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::SourceIdentity::Builder LaneCenteringState::SourceState::Builder::initIdentity() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::SourceState::Builder::adoptIdentity(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::SourceIdentity>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::SourceIdentity> LaneCenteringState::SourceState::Builder::disownIdentity() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::SourceIdentity>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringState::SourceState::Reader::getConfidence() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::SourceState::Builder::getConfidence() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceState::Builder::setConfidence(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::SourceState::Reader::getUncertainty() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::SourceState::Builder::getUncertainty() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceState::Builder::setUncertainty(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::SourceState::Reader::getContinued() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::SourceState::Builder::getContinued() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::SourceState::Builder::setContinued(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::SourceState::Reader::hasAdmissions() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::SourceState::Builder::hasAdmissions() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::SourceState::Reader::getAdmissions() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::SourceState::Builder::getAdmissions() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::SourceState::Builder::setAdmissions( ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::SourceState::Builder::initAdmissions(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::SourceState::Builder::adoptAdmissions(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>> LaneCenteringState::SourceState::Builder::disownAdmissions() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::SourceState::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::SourceState::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::SourceState::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::SourceState::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::SourceState::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::SourceState::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::SourceState::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::SourceState::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::SourceState::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline  ::uint8_t LaneCenteringState::Admission::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::Admission::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Admission::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Admission::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Admission::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Admission::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Admission::Reader::getQualified() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Admission::Builder::getQualified() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Admission::Builder::setQualified(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint32_t LaneCenteringState::Admission::Reader::getCount() const {
+  return _reader.getDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint32_t LaneCenteringState::Admission::Builder::getCount() {
+  return _builder.getDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Admission::Builder::setCount( ::uint32_t value) {
+  _builder.setDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::Admission::Reader::getSinceNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::Admission::Builder::getSinceNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Admission::Builder::setSinceNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::Admission::Reader::hasReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::Admission::Builder::hasReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::Admission::Reader::getReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Admission::Builder::getReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::Admission::Builder::setReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::Admission::Builder::initReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::Admission::Builder::adoptReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::Admission::Builder::disownReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ModeState::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ModeState::Reader::getEnabled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ModeState::Builder::getEnabled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ModeState::Builder::setEnabled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ModeState::Reader::getAllowE2E() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ModeState::Builder::getAllowE2E() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ModeState::Builder::setAllowE2E(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Reader::getCandidateCount() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Builder::getCandidateCount() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ModeState::Builder::setCandidateCount( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Reader::getQualifiedCount() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringState::ModeState::Builder::getQualifiedCount() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ModeState::Builder::setQualifiedCount( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ModeState::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ModeState::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::ModeState::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ModeState::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ModeState::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ModeState::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ModeState::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ModeState::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::ModeState::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ReferenceState::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasX() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasX() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceState::Reader::getX() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::getX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setX( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setX(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::initX(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptX(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceState::Builder::disownX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceState::Reader::getY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::getY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setY( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setY(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::initY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptY(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceState::Builder::disownY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasRate() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasRate() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceState::Reader::getRate() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::getRate() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setRate( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setRate(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::initRate(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptRate(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceState::Builder::disownRate() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasDestinationX() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasDestinationX() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceState::Reader::getDestinationX() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::getDestinationX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setDestinationX( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setDestinationX(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::initDestinationX(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptDestinationX(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceState::Builder::disownDestinationX() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasDestinationY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasDestinationY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringState::ReferenceState::Reader::getDestinationY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::getDestinationY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setDestinationY( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setDestinationY(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringState::ReferenceState::Builder::initDestinationY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptDestinationY(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringState::ReferenceState::Builder::disownDestinationY() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::getSettled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ReferenceState::Builder::getSettled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setSettled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::getPaused() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ReferenceState::Builder::getPaused() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setPaused(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::ReferenceState::Reader::getPauseDeadlineNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::ReferenceState::Builder::getPauseDeadlineNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setPauseDeadlineNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::ReferenceState::Reader::getRemainingDuration() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::ReferenceState::Builder::getRemainingDuration() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setRemainingDuration(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::getRateLimitLoweredTransient() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::ReferenceState::Builder::getRateLimitLoweredTransient() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setRateLimitLoweredTransient(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::ReferenceState::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::ReferenceState::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::ReferenceState::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ReferenceState::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::ReferenceState::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::ReferenceState::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::ReferenceState::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::ReferenceState::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::ReferenceState::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::Margin::Reader::getAvailable() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::Margin::Builder::getAvailable() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Margin::Builder::setAvailable(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Margin::Reader::getCurrent() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Margin::Builder::getCurrent() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Margin::Builder::setCurrent(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Margin::Reader::getMinimum() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Margin::Builder::getMinimum() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Margin::Builder::setMinimum(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Margin::Reader::getPreview() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Margin::Builder::getPreview() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Margin::Builder::setPreview(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::Margin::Reader::getShortfall() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::Margin::Builder::getShortfall() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::Margin::Builder::setShortfall(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::EdgeStage::Reader::hasName() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeStage::Builder::hasName() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::EdgeStage::Reader::getName() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::EdgeStage::Builder::getName() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeStage::Builder::setName( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::EdgeStage::Builder::initName(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::EdgeStage::Builder::adoptName(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::EdgeStage::Builder::disownName() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::EdgeStage::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::EdgeStage::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeStage::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeStage::Reader::getAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeStage::Builder::getAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeStage::Builder::setAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::EdgeStage::Reader::hasLeft() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeStage::Builder::hasLeft() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::Margin::Reader LaneCenteringState::EdgeStage::Reader::getLeft() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::Margin::Builder LaneCenteringState::EdgeStage::Builder::getLeft() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::Margin::Pipeline LaneCenteringState::EdgeStage::Pipeline::getLeft() {
+  return  ::cereal::LaneCenteringState::Margin::Pipeline(_typeless.getPointerField(1));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::EdgeStage::Builder::setLeft( ::cereal::LaneCenteringState::Margin::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::Margin::Builder LaneCenteringState::EdgeStage::Builder::initLeft() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeStage::Builder::adoptLeft(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::Margin>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::Margin> LaneCenteringState::EdgeStage::Builder::disownLeft() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::EdgeStage::Reader::hasRight() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeStage::Builder::hasRight() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::Margin::Reader LaneCenteringState::EdgeStage::Reader::getRight() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::Margin::Builder LaneCenteringState::EdgeStage::Builder::getRight() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::Margin::Pipeline LaneCenteringState::EdgeStage::Pipeline::getRight() {
+  return  ::cereal::LaneCenteringState::Margin::Pipeline(_typeless.getPointerField(2));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringState::EdgeStage::Builder::setRight( ::cereal::LaneCenteringState::Margin::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::Margin::Builder LaneCenteringState::EdgeStage::Builder::initRight() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeStage::Builder::adoptRight(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::Margin>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::Margin> LaneCenteringState::EdgeStage::Builder::disownRight() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::Margin>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::EdgeStage::Reader::hasReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeStage::Builder::hasReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::EdgeStage::Reader::getReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::EdgeStage::Builder::getReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeStage::Builder::setReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::EdgeStage::Builder::initReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::EdgeStage::Builder::adoptReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::EdgeStage::Builder::disownReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::EdgeState::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::EdgeState::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getRequestedClearance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getRequestedClearance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setRequestedClearance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getEffectiveClearance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getEffectiveClearance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setEffectiveClearance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getMinimumAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getMinimumAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setMinimumAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getMaximumAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getMaximumAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setMaximumAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getFormalAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getFormalAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setFormalAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getRequestedAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getRequestedAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setRequestedAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getBoundedAddition() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getBoundedAddition() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setBoundedAddition(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::EdgeState::Reader::getHeadingLimit() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::EdgeState::Builder::getHeadingLimit() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::EdgeState::Builder::setHeadingLimit(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::EdgeState::Reader::hasStages() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeState::Builder::hasStages() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::EdgeState::Reader::getStages() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::EdgeState::Builder::getStages() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeState::Builder::setStages( ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::EdgeState::Builder::initStages(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::EdgeState::Builder::adoptStages(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>> LaneCenteringState::EdgeState::Builder::disownStages() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::EdgeStage,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::EdgeState::Reader::hasStates() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::EdgeState::Builder::hasStates() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::EdgeState::Reader::getStates() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::EdgeState::Builder::getStates() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::EdgeState::Builder::setStates( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::EdgeState::Builder::setStates(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::EdgeState::Builder::initStates(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::EdgeState::Builder::adoptStates(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::EdgeState::Builder::disownStates() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::CurveState::Reader::getValidInput() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::CurveState::Builder::getValidInput() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setValidInput(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getAuthority() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getAuthority() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setAuthority(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getTargetAuthority() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getTargetAuthority() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setTargetAuthority(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getWeight() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getWeight() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setWeight(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getTargetWeight() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getTargetWeight() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setTargetWeight(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::CurveState::Reader::getHasCurvature() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::CurveState::Builder::getHasCurvature() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setHasCurvature(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::CurveState::Reader::hasKind() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::CurveState::Builder::hasKind() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringState::CurveState::Reader::getKind() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringState::CurveState::Builder::getKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::CurveState::Builder::setKind( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringState::CurveState::Builder::initKind(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::CurveState::Builder::adoptKind(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringState::CurveState::Builder::disownKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::CurveState::Reader::getConfirmed() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::CurveState::Builder::getConfirmed() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setConfirmed(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint32_t LaneCenteringState::CurveState::Reader::getCount() const {
+  return _reader.getDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint32_t LaneCenteringState::CurveState::Builder::getCount() {
+  return _builder.getDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setCount( ::uint32_t value) {
+  _builder.setDataField< ::uint32_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringState::CurveState::Reader::getLastPairNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringState::CurveState::Builder::getLastPairNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setLastPairNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::CurveState::Reader::hasSupport() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::CurveState::Builder::hasSupport() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader LaneCenteringState::CurveState::Reader::getSupport() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::CurveState::Builder::getSupport() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::CurveState::Builder::setSupport( ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>::Builder LaneCenteringState::CurveState::Builder::initSupport(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::CurveState::Builder::adoptSupport(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>> LaneCenteringState::CurveState::Builder::disownSupport() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::SourceIdentity,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringState::CurveState::Reader::getHasWidth() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringState::CurveState::Builder::getHasWidth() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setHasWidth(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringState::CurveState::Reader::getWidthHorizontal() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringState::CurveState::Builder::getWidthHorizontal() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringState::CurveState::Builder::setWidthHorizontal(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringState::CurveState::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringState::CurveState::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringState::CurveState::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::CurveState::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringState::CurveState::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringState::CurveState::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringState::CurveState::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringState::CurveState::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringState::CurveState::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline  ::uint16_t LaneCenteringGeometryRequest::Reader::getVersion() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringGeometryRequest::Builder::getVersion() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryRequest::Builder::setVersion( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasSession() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasSession() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometryRequest::Reader::getSession() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryRequest::Builder::getSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setSession( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryRequest::Builder::initSession(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptSession(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometryRequest::Builder::disownSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Reader::getSequence() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Builder::getSequence() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryRequest::Builder::setSequence( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Reader::getRequestedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Builder::getRequestedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryRequest::Builder::setRequestedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasConfig() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasConfig() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometryRequest::Reader::getConfig() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometryRequest::Builder::getConfig() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setConfig( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometryRequest::Builder::initConfig(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptConfig(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometryRequest::Builder::disownConfig() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometryRequest::Reader::getSpeed() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometryRequest::Builder::getSpeed() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryRequest::Builder::setSpeed(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasFrame() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasFrame() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Frame::Reader LaneCenteringGeometryRequest::Reader::getFrame() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Frame::Builder LaneCenteringGeometryRequest::Builder::getFrame() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Frame::Pipeline LaneCenteringGeometryRequest::Pipeline::getFrame() {
+  return  ::cereal::LaneCenteringGeometry::Frame::Pipeline(_typeless.getPointerField(2));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometryRequest::Builder::setFrame( ::cereal::LaneCenteringGeometry::Frame::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Frame::Builder LaneCenteringGeometryRequest::Builder::initFrame() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptFrame(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Frame>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Frame> LaneCenteringGeometryRequest::Builder::disownFrame() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Frame>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasSpeedMotion() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasSpeedMotion() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometryRequest::Reader::getSpeedMotion() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometryRequest::Builder::getSpeedMotion() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setSpeedMotion( ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometryRequest::Builder::initSpeedMotion(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptSpeedMotion(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>> LaneCenteringGeometryRequest::Builder::disownSpeedMotion() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasYawMotion() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasYawMotion() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometryRequest::Reader::getYawMotion() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometryRequest::Builder::getYawMotion() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setYawMotion( ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometryRequest::Builder::initYawMotion(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptYawMotion(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>> LaneCenteringGeometryRequest::Builder::disownYawMotion() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::MotionSample,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasQualityGenerations() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasQualityGenerations() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometryRequest::Reader::getQualityGenerations() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometryRequest::Builder::getQualityGenerations() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setQualityGenerations( ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometryRequest::Builder::setQualityGenerations(::kj::ArrayPtr<const  ::uint64_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometryRequest::Builder::initQualityGenerations(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptQualityGenerations(
+    ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometryRequest::Builder::disownQualityGenerations() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Reader::getSelectionEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryRequest::Builder::getSelectionEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryRequest::Builder::setSelectionEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryRequest::Reader::hasResetGenerations() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryRequest::Builder::hasResetGenerations() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometryRequest::Reader::getResetGenerations() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometryRequest::Builder::getResetGenerations() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryRequest::Builder::setResetGenerations( ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometryRequest::Builder::setResetGenerations(::kj::ArrayPtr<const  ::uint64_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometryRequest::Builder::initResetGenerations(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryRequest::Builder::adoptResetGenerations(
+    ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometryRequest::Builder::disownResetGenerations() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint64_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+
+inline  ::cereal::LaneCenteringGeometryResult::Which LaneCenteringGeometryResult::Reader::which() const {
+  return _reader.getDataField<Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline  ::cereal::LaneCenteringGeometryResult::Which LaneCenteringGeometryResult::Builder::which() {
+  return _builder.getDataField<Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringGeometryResult::Reader::getVersion() const {
+  return _reader.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint16_t LaneCenteringGeometryResult::Builder::getVersion() {
+  return _builder.getDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryResult::Builder::setVersion( ::uint16_t value) {
+  _builder.setDataField< ::uint16_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryResult::Reader::hasSession() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryResult::Builder::hasSession() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometryResult::Reader::getSession() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::getSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryResult::Builder::setSession( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::initSession(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryResult::Builder::adoptSession(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometryResult::Builder::disownSession() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Reader::getSequence() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Builder::getSequence() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryResult::Builder::setSequence( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryResult::Reader::hasBoot() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryResult::Builder::hasBoot() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometryResult::Reader::getBoot() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::getBoot() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryResult::Builder::setBoot( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::initBoot(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryResult::Builder::adoptBoot(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometryResult::Builder::disownBoot() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Reader::getRequestedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Builder::getRequestedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryResult::Builder::setRequestedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Reader::getStartedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Builder::getStartedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryResult::Builder::setStartedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Reader::getCompletedNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometryResult::Builder::getCompletedNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometryResult::Builder::setCompletedNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometryResult::Reader::isGeometry() const {
+  return which() == LaneCenteringGeometryResult::GEOMETRY;
+}
+inline bool LaneCenteringGeometryResult::Builder::isGeometry() {
+  return which() == LaneCenteringGeometryResult::GEOMETRY;
+}
+inline bool LaneCenteringGeometryResult::Reader::hasGeometry() const {
+  if (which() != LaneCenteringGeometryResult::GEOMETRY) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryResult::Builder::hasGeometry() {
+  if (which() != LaneCenteringGeometryResult::GEOMETRY) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Reader LaneCenteringGeometryResult::Reader::getGeometry() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::GEOMETRY),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Builder LaneCenteringGeometryResult::Builder::getGeometry() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::GEOMETRY),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryResult::Builder::setGeometry( ::cereal::LaneCenteringGeometry::Reader value) {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::GEOMETRY);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Builder LaneCenteringGeometryResult::Builder::initGeometry() {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::GEOMETRY);
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryResult::Builder::adoptGeometry(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry>&& value) {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::GEOMETRY);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry> LaneCenteringGeometryResult::Builder::disownGeometry() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::GEOMETRY),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometryResult::Reader::isFault() const {
+  return which() == LaneCenteringGeometryResult::FAULT;
+}
+inline bool LaneCenteringGeometryResult::Builder::isFault() {
+  return which() == LaneCenteringGeometryResult::FAULT;
+}
+inline bool LaneCenteringGeometryResult::Reader::hasFault() const {
+  if (which() != LaneCenteringGeometryResult::FAULT) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometryResult::Builder::hasFault() {
+  if (which() != LaneCenteringGeometryResult::FAULT) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometryResult::Reader::getFault() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::FAULT),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::getFault() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::FAULT),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometryResult::Builder::setFault( ::capnp::Text::Reader value) {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::FAULT);
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometryResult::Builder::initFault(unsigned int size) {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::FAULT);
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometryResult::Builder::adoptFault(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  _builder.setDataField<LaneCenteringGeometryResult::Which>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, LaneCenteringGeometryResult::FAULT);
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometryResult::Builder::disownFault() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometryResult::FAULT),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Reader::getPreview() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Builder::getPreview() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Builder::setPreview(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Reader::getBuildExtent() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Builder::getBuildExtent() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Builder::setBuildExtent(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Reader::hasEvidence() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasEvidence() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getEvidence() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getEvidence() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setEvidence( ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initEvidence(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptEvidence(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownEvidence() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Evidence,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCandidates() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCandidates() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getCandidates() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getCandidates() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCandidates( ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initCandidates(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCandidates(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownCandidates() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Candidate,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasRejections() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasRejections() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getRejections() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getRejections() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setRejections( ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initRejections(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptRejections(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownRejections() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Rejection,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCurvePairs() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCurvePairs() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getCurvePairs() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getCurvePairs() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCurvePairs( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initCurvePairs(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCurvePairs(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownCurvePairs() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCurveStrong() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCurveStrong() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getCurveStrong() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getCurveStrong() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCurveStrong( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initCurveStrong(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCurveStrong(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownCurveStrong() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCurveGaps() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCurveGaps() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getCurveGaps() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getCurveGaps() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCurveGaps( ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initCurveGaps(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCurveGaps(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownCurveGaps() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::CurveOutcome,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Reader::getSelectedMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Builder::getSelectedMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Builder::setSelectedMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectedSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectedSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Reader::getSelectedSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::getSelectedSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectedSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Builder::setSelectedSources(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::initSelectedSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectedSources(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Builder::disownSelectedSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectionCause() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectionCause() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Reader::getSelectionCause() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::getSelectionCause() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectionCause( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::initSelectionCause(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectionCause(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Builder::disownSelectionCause() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectionTransition() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectionTransition() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Reader::getSelectionTransition() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::getSelectionTransition() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectionTransition( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::initSelectionTransition(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectionTransition(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Builder::disownSelectionTransition() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectionScores() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectionScores() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Reader::getSelectionScores() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::getSelectionScores() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectionScores( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Builder::setSelectionScores(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::initSelectionScores(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectionScores(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Builder::disownSelectionScores() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectionAnchor() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectionAnchor() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Reader::getSelectionAnchor() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::getSelectionAnchor() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectionAnchor( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Builder::initSelectionAnchor(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectionAnchor(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Builder::disownSelectionAnchor() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<10>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasPromotionWaiting() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasPromotionWaiting() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Reader::getPromotionWaiting() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::getPromotionWaiting() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setPromotionWaiting( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Builder::setPromotionWaiting(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::initPromotionWaiting(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptPromotionWaiting(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Builder::disownPromotionWaiting() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<11>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasSelectionReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasSelectionReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::Reader::getSelectionReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Builder::getSelectionReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setSelectionReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Builder::setSelectionReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Builder::initSelectionReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptSelectionReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::Builder::disownSelectionReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<12>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCounts() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCounts() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Reader::getCounts() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::getCounts() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCounts( ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Builder::initCounts(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCounts(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Builder::disownCounts() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Counts,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<13>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCurveDecision() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCurveDecision() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringState::CurveState::Reader LaneCenteringGeometry::Reader::getCurveDecision() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::get(_reader.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringState::CurveState::Builder LaneCenteringGeometry::Builder::getCurveDecision() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::get(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringState::CurveState::Pipeline LaneCenteringGeometry::Pipeline::getCurveDecision() {
+  return  ::cereal::LaneCenteringState::CurveState::Pipeline(_typeless.getPointerField(14));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Builder::setCurveDecision( ::cereal::LaneCenteringState::CurveState::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::set(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringState::CurveState::Builder LaneCenteringGeometry::Builder::initCurveDecision() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::init(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::adoptCurveDecision(
+    ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::adopt(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringState::CurveState> LaneCenteringGeometry::Builder::disownCurveDecision() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringState::CurveState>::disown(_builder.getPointerField(
+      ::capnp::bounded<14>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasCurveDependencies() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasCurveDependencies() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Reader::getCurveDependencies() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::getCurveDependencies() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::setCurveDependencies( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Builder::setCurveDependencies(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Builder::initCurveDependencies(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Builder::adoptCurveDependencies(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Builder::disownCurveDependencies() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<15>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Reader::getCentringError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Builder::getCentringError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Builder::setCentringError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Reader::hasEdgeBounds() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasEdgeBounds() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Reader LaneCenteringGeometry::Reader::getEdgeBounds() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::get(_reader.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Builder LaneCenteringGeometry::Builder::getEdgeBounds() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::get(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Pipeline LaneCenteringGeometry::Pipeline::getEdgeBounds() {
+  return  ::cereal::LaneCenteringGeometry::EdgeBounds::Pipeline(_typeless.getPointerField(16));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Builder::setEdgeBounds( ::cereal::LaneCenteringGeometry::EdgeBounds::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::set(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::EdgeBounds::Builder LaneCenteringGeometry::Builder::initEdgeBounds() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::init(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::adoptEdgeBounds(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::EdgeBounds>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::adopt(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::EdgeBounds> LaneCenteringGeometry::Builder::disownEdgeBounds() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::EdgeBounds>::disown(_builder.getPointerField(
+      ::capnp::bounded<16>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Reader::hasComfort() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Builder::hasComfort() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Comfort::Reader LaneCenteringGeometry::Reader::getComfort() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::get(_reader.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Comfort::Builder LaneCenteringGeometry::Builder::getComfort() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::get(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Comfort::Pipeline LaneCenteringGeometry::Pipeline::getComfort() {
+  return  ::cereal::LaneCenteringGeometry::Comfort::Pipeline(_typeless.getPointerField(17));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Builder::setComfort( ::cereal::LaneCenteringGeometry::Comfort::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::set(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Comfort::Builder LaneCenteringGeometry::Builder::initComfort() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::init(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Builder::adoptComfort(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Comfort>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::adopt(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Comfort> LaneCenteringGeometry::Builder::disownComfort() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Comfort>::disown(_builder.getPointerField(
+      ::capnp::bounded<17>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Comfort::Reader::getError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Comfort::Builder::getError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Comfort::Reader::hasBiases() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Comfort::Builder::hasBiases() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Comfort::Reader::getBiases() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Comfort::Builder::getBiases() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setBiases( ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setBiases(::kj::ArrayPtr<const double> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Comfort::Builder::initBiases(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::adoptBiases(
+    ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Comfort::Builder::disownBiases() {
+  return ::capnp::_::PointerHelpers< ::capnp::List<double,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Comfort::Reader::hasClearance() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Comfort::Builder::hasClearance() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Reader LaneCenteringGeometry::Comfort::Reader::getClearance() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder LaneCenteringGeometry::Comfort::Builder::getClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline LaneCenteringGeometry::Comfort::Pipeline::getClearance() {
+  return  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline(_typeless.getPointerField(1));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Comfort::Builder::setClearance( ::cereal::LaneCenteringGeometry::SingleClearance::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder LaneCenteringGeometry::Comfort::Builder::initClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Comfort::Builder::adoptClearance(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance> LaneCenteringGeometry::Comfort::Builder::disownClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Comfort::Reader::getHasEdge() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::Comfort::Builder::getHasEdge() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setHasEdge(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Comfort::Reader::getLower() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Comfort::Builder::getLower() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setLower(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Comfort::Reader::getUpper() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Comfort::Builder::getUpper() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setUpper(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Comfort::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Comfort::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::Comfort::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Comfort::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Comfort::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Comfort::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::Comfort::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasGrid() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasGrid() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::EdgeBounds::Reader::getGrid() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::getGrid() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setGrid( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::initGrid(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptGrid(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::EdgeBounds::Builder::disownGrid() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasLeftY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasLeftY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::EdgeBounds::Reader::getLeftY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::getLeftY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setLeftY( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::initLeftY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptLeftY(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::EdgeBounds::Builder::disownLeftY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasLeftSlope() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasLeftSlope() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::EdgeBounds::Reader::getLeftSlope() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::getLeftSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setLeftSlope( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::initLeftSlope(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptLeftSlope(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::EdgeBounds::Builder::disownLeftSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasRightY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasRightY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::EdgeBounds::Reader::getRightY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::getRightY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setRightY( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::initRightY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptRightY(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::EdgeBounds::Builder::disownRightY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasRightSlope() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasRightSlope() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::EdgeBounds::Reader::getRightSlope() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::getRightSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setRightSlope( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::EdgeBounds::Builder::initRightSlope(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptRightSlope(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::EdgeBounds::Builder::disownRightSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getHalfWidth() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getHalfWidth() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setHalfWidth(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getRequestedClearance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getRequestedClearance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setRequestedClearance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getEffectiveClearance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getEffectiveClearance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setEffectiveClearance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getLower() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getLower() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setLower(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getUpper() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getUpper() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setUpper(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::EdgeBounds::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::EdgeBounds::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::EdgeBounds::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::EdgeBounds::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::EdgeBounds::Reader::hasGuardSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::EdgeBounds::Builder::hasGuardSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::EdgeBounds::Reader::getGuardSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::EdgeBounds::Builder::getGuardSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setGuardSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setGuardSources(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::EdgeBounds::Builder::initGuardSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::adoptGuardSources(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::EdgeBounds::Builder::disownGuardSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getGuardLower() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getGuardLower() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setGuardLower(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Reader::getGuardUpper() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::EdgeBounds::Builder::getGuardUpper() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::EdgeBounds::Builder::setGuardUpper(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Counts::Reader::getCandidates() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Counts::Builder::getCandidates() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Counts::Builder::setCandidates( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Counts::Reader::getQualified() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Counts::Builder::getQualified() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Counts::Builder::setQualified( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Path::Reader::hasX() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Path::Builder::hasX() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::Path::Reader::getX() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Path::Builder::getX() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Path::Builder::setX( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Path::Builder::initX(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Path::Builder::adoptX(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::Path::Builder::disownX() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Path::Reader::hasY() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Path::Builder::hasY() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::Path::Reader::getY() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Path::Builder::getY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Path::Builder::setY( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Path::Builder::initY(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Path::Builder::adoptY(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::Path::Builder::disownY() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Source::Reader::hasKind() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Source::Builder::hasKind() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Source::Reader::getKind() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Source::Builder::getKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Source::Builder::setKind( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Source::Builder::initKind(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Source::Builder::adoptKind(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Source::Builder::disownKind() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::int8_t LaneCenteringGeometry::Source::Reader::getSide() const {
+  return _reader.getDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int8_t LaneCenteringGeometry::Source::Builder::getSide() {
+  return _builder.getDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Source::Builder::setSide( ::int8_t value) {
+  _builder.setDataField< ::int8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Source::Reader::getSlot() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Source::Builder::getSlot() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Source::Builder::setSlot( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Source::Reader::getEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Source::Builder::getEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Source::Builder::setEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Source::Reader::getUncertainty() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Source::Builder::getUncertainty() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Source::Builder::setUncertainty(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Source::Reader::getConfidence() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Source::Builder::getConfidence() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Source::Builder::setConfidence(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Source::Reader::hasPath() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Source::Builder::hasPath() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Reader LaneCenteringGeometry::Source::Reader::getPath() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Source::Builder::getPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Path::Pipeline LaneCenteringGeometry::Source::Pipeline::getPath() {
+  return  ::cereal::LaneCenteringGeometry::Path::Pipeline(_typeless.getPointerField(1));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Source::Builder::setPath( ::cereal::LaneCenteringGeometry::Path::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Source::Builder::initPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Source::Builder::adoptPath(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> LaneCenteringGeometry::Source::Builder::disownPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Reader::getFrameId() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Builder::getFrameId() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Frame::Builder::setFrameId( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Reader::getCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Builder::getCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Frame::Builder::setCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Reader::getPublishNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Frame::Builder::getPublishNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Frame::Builder::setPublishNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Frame::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<192>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::Frame::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<192>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Frame::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<192>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Frame::Reader::hasPath() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Frame::Builder::hasPath() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Reader LaneCenteringGeometry::Frame::Reader::getPath() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Frame::Builder::getPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Path::Pipeline LaneCenteringGeometry::Frame::Pipeline::getPath() {
+  return  ::cereal::LaneCenteringGeometry::Path::Pipeline(_typeless.getPointerField(0));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Frame::Builder::setPath( ::cereal::LaneCenteringGeometry::Path::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Frame::Builder::initPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Frame::Builder::adoptPath(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> LaneCenteringGeometry::Frame::Builder::disownPath() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Frame::Reader::hasSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Frame::Builder::hasSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Frame::Reader::getSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Frame::Builder::getSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Frame::Builder::setSources( ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Frame::Builder::initSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Frame::Builder::adoptSources(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Frame::Builder::disownSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringGeometry::Source,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Frame::Reader::getPathUncertainty() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Frame::Builder::getPathUncertainty() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Frame::Builder::setPathUncertainty(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Frame::Reader::hasLaneChange() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Frame::Builder::hasLaneChange() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Frame::Reader::getLaneChange() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Frame::Builder::getLaneChange() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Frame::Builder::setLaneChange( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Frame::Builder::initLaneChange(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Frame::Builder::adoptLaneChange(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Frame::Builder::disownLaneChange() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline  ::uint64_t LaneCenteringGeometry::MotionSample::Reader::getTimeNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::MotionSample::Builder::getTimeNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::MotionSample::Builder::setTimeNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::MotionSample::Reader::getValue() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::MotionSample::Builder::getValue() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::MotionSample::Builder::setValue(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::MotionSample::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::MotionSample::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::MotionSample::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<128>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Evidence::Reader::getEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringGeometry::Evidence::Builder::getEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Evidence::Builder::setEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Evidence::Reader::hasAdmissions() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Evidence::Builder::hasAdmissions() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader LaneCenteringGeometry::Evidence::Reader::getAdmissions() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Evidence::Builder::getAdmissions() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Evidence::Builder::setAdmissions( ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>::Builder LaneCenteringGeometry::Evidence::Builder::initAdmissions(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Evidence::Builder::adoptAdmissions(
+    ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>> LaneCenteringGeometry::Evidence::Builder::disownAdmissions() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::cereal::LaneCenteringState::Admission,  ::capnp::Kind::STRUCT>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Evidence::Reader::getContinued() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::Evidence::Builder::getContinued() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Evidence::Builder::setContinued(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<64>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Evidence::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Evidence::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::Evidence::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Evidence::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Evidence::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Evidence::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Evidence::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Evidence::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::Evidence::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::cereal::LaneCenteringGeometry::Bound::Which LaneCenteringGeometry::Bound::Reader::which() const {
+  return _reader.getDataField<Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Which LaneCenteringGeometry::Bound::Builder::which() {
+  return _builder.getDataField<Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::Bound::Reader::isOpen() const {
+  return which() == LaneCenteringGeometry::Bound::OPEN;
+}
+inline bool LaneCenteringGeometry::Bound::Builder::isOpen() {
+  return which() == LaneCenteringGeometry::Bound::OPEN;
+}
+inline  ::capnp::Void LaneCenteringGeometry::Bound::Reader::getOpen() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::Bound::OPEN),
+              "Must check which() before get()ing a union member.");
+  return _reader.getDataField< ::capnp::Void>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::capnp::Void LaneCenteringGeometry::Bound::Builder::getOpen() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::Bound::OPEN),
+              "Must check which() before get()ing a union member.");
+  return _builder.getDataField< ::capnp::Void>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Bound::Builder::setOpen( ::capnp::Void value) {
+  _builder.setDataField<LaneCenteringGeometry::Bound::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::Bound::OPEN);
+  _builder.setDataField< ::capnp::Void>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Bound::Reader::isFinite() const {
+  return which() == LaneCenteringGeometry::Bound::FINITE;
+}
+inline bool LaneCenteringGeometry::Bound::Builder::isFinite() {
+  return which() == LaneCenteringGeometry::Bound::FINITE;
+}
+inline bool LaneCenteringGeometry::Bound::Reader::hasFinite() const {
+  if (which() != LaneCenteringGeometry::Bound::FINITE) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Bound::Builder::hasFinite() {
+  if (which() != LaneCenteringGeometry::Bound::FINITE) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::Bound::Reader::getFinite() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::Bound::FINITE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Bound::Builder::getFinite() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::Bound::FINITE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Bound::Builder::setFinite( ::capnp::Data::Reader value) {
+  _builder.setDataField<LaneCenteringGeometry::Bound::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::Bound::FINITE);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Bound::Builder::initFinite(unsigned int size) {
+  _builder.setDataField<LaneCenteringGeometry::Bound::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::Bound::FINITE);
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Bound::Builder::adoptFinite(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  _builder.setDataField<LaneCenteringGeometry::Bound::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::Bound::FINITE);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::Bound::Builder::disownFinite() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::Bound::FINITE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Candidate::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Candidate::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::getReady() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::Candidate::Builder::getReady() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setReady(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Candidate::Reader::getSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::getSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setSources(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::initSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptSources(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Candidate::Builder::disownSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasBoundaries() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasBoundaries() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Candidate::Reader::getBoundaries() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::getBoundaries() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setBoundaries( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setBoundaries(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::initBoundaries(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptBoundaries(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Candidate::Builder::disownBoundaries() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasOrdering() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasOrdering() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::Candidate::Reader::getOrdering() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::getOrdering() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setOrdering( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setOrdering(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::Candidate::Builder::initOrdering(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptOrdering(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::Candidate::Builder::disownOrdering() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<2>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasTarget() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasTarget() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Reader LaneCenteringGeometry::Candidate::Reader::getTarget() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_reader.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Candidate::Builder::getTarget() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::get(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Path::Pipeline LaneCenteringGeometry::Candidate::Pipeline::getTarget() {
+  return  ::cereal::LaneCenteringGeometry::Path::Pipeline(_typeless.getPointerField(3));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Candidate::Builder::setTarget( ::cereal::LaneCenteringGeometry::Path::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::set(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Path::Builder LaneCenteringGeometry::Candidate::Builder::initTarget() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::init(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptTarget(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::adopt(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Path> LaneCenteringGeometry::Candidate::Builder::disownTarget() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Path>::disown(_builder.getPointerField(
+      ::capnp::bounded<3>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasSlope() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasSlope() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::Candidate::Reader::getSlope() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Candidate::Builder::getSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setSlope( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Candidate::Builder::initSlope(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptSlope(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::Candidate::Builder::disownSlope() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<4>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasLower() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasLower() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Reader LaneCenteringGeometry::Candidate::Reader::getLower() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::get(_reader.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Builder LaneCenteringGeometry::Candidate::Builder::getLower() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::get(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Bound::Pipeline LaneCenteringGeometry::Candidate::Pipeline::getLower() {
+  return  ::cereal::LaneCenteringGeometry::Bound::Pipeline(_typeless.getPointerField(5));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Candidate::Builder::setLower( ::cereal::LaneCenteringGeometry::Bound::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::set(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Builder LaneCenteringGeometry::Candidate::Builder::initLower() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::init(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptLower(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::adopt(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound> LaneCenteringGeometry::Candidate::Builder::disownLower() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::disown(_builder.getPointerField(
+      ::capnp::bounded<5>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasUpper() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasUpper() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Reader LaneCenteringGeometry::Candidate::Reader::getUpper() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::get(_reader.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Builder LaneCenteringGeometry::Candidate::Builder::getUpper() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::get(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::Bound::Pipeline LaneCenteringGeometry::Candidate::Pipeline::getUpper() {
+  return  ::cereal::LaneCenteringGeometry::Bound::Pipeline(_typeless.getPointerField(6));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Candidate::Builder::setUpper( ::cereal::LaneCenteringGeometry::Bound::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::set(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Bound::Builder LaneCenteringGeometry::Candidate::Builder::initUpper() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::init(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptUpper(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::adopt(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Bound> LaneCenteringGeometry::Candidate::Builder::disownUpper() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Bound>::disown(_builder.getPointerField(
+      ::capnp::bounded<6>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasWidth() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasWidth() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::Candidate::Reader::getWidth() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Candidate::Builder::getWidth() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setWidth( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::Candidate::Builder::initWidth(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptWidth(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::Candidate::Builder::disownWidth() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<7>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasPrefixReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasPrefixReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Candidate::Reader::getPrefixReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Candidate::Builder::getPrefixReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setPrefixReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Candidate::Builder::initPrefixReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptPrefixReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Candidate::Builder::disownPrefixReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<8>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Candidate::Reader::getPrefixEnd() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Candidate::Builder::getPrefixEnd() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Candidate::Builder::setPrefixEnd(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Candidate::Reader::hasClearance() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Candidate::Builder::hasClearance() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Reader LaneCenteringGeometry::Candidate::Reader::getClearance() const {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::get(_reader.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder LaneCenteringGeometry::Candidate::Builder::getClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::get(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+#if !CAPNP_LITE
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline LaneCenteringGeometry::Candidate::Pipeline::getClearance() {
+  return  ::cereal::LaneCenteringGeometry::SingleClearance::Pipeline(_typeless.getPointerField(9));
+}
+#endif  // !CAPNP_LITE
+inline void LaneCenteringGeometry::Candidate::Builder::setClearance( ::cereal::LaneCenteringGeometry::SingleClearance::Reader value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::set(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::SingleClearance::Builder LaneCenteringGeometry::Candidate::Builder::initClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::init(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Candidate::Builder::adoptClearance(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance>&& value) {
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::adopt(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::SingleClearance> LaneCenteringGeometry::Candidate::Builder::disownClearance() {
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::SingleClearance>::disown(_builder.getPointerField(
+      ::capnp::bounded<9>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::SingleClearance::Reader::hasSlopes() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::SingleClearance::Builder::hasSlopes() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::SingleClearance::Reader::getSlopes() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::SingleClearance::Builder::getSlopes() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::setSlopes( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::SingleClearance::Builder::initSlopes(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::adoptSlopes(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::SingleClearance::Builder::disownSlopes() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::SingleClearance::Reader::hasIntercepts() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::SingleClearance::Builder::hasIntercepts() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::SingleClearance::Reader::getIntercepts() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::SingleClearance::Builder::getIntercepts() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::setIntercepts( ::capnp::Data::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::SingleClearance::Builder::initIntercepts(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::adoptIntercepts(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::SingleClearance::Builder::disownIntercepts() {
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::SingleClearance::Reader::getGuardLower() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::SingleClearance::Builder::getGuardLower() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::setGuardLower(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::SingleClearance::Reader::getGuardUpper() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::SingleClearance::Builder::getGuardUpper() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::SingleClearance::Builder::setGuardUpper(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Rejection::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringGeometry::Rejection::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Rejection::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Rejection::Reader::hasReasons() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Rejection::Builder::hasReasons() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::Rejection::Reader::getReasons() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Rejection::Builder::getReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Rejection::Builder::setReasons( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Rejection::Builder::setReasons(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Rejection::Builder::initReasons(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Rejection::Builder::adoptReasons(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::Rejection::Builder::disownReasons() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline double LaneCenteringGeometry::Pair::Reader::getCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Pair::Builder::getCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Pair::Builder::setCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringGeometry::Pair::Reader::getWidthHorizontal() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::Pair::Builder::getWidthHorizontal() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::Pair::Builder::setWidthHorizontal(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::Failure::Reader::hasReason() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Failure::Builder::hasReason() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Text::Reader LaneCenteringGeometry::Failure::Reader::getReason() const {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Failure::Builder::getReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Failure::Builder::setReason( ::capnp::Text::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Text::Builder LaneCenteringGeometry::Failure::Builder::initReason(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Failure::Builder::adoptReason(
+    ::capnp::Orphan< ::capnp::Text>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::Text>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Text> LaneCenteringGeometry::Failure::Builder::disownReason() {
+  return ::capnp::_::PointerHelpers< ::capnp::Text>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::Failure::Reader::hasDetails() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::Failure::Builder::hasDetails() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader LaneCenteringGeometry::Failure::Reader::getDetails() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Failure::Builder::getDetails() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::Failure::Builder::setDetails( ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::Failure::Builder::setDetails(::kj::ArrayPtr<const  ::capnp::Text::Reader> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>::Builder LaneCenteringGeometry::Failure::Builder::initDetails(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::Failure::Builder::adoptDetails(
+    ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>> LaneCenteringGeometry::Failure::Builder::disownDetails() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::capnp::Text,  ::capnp::Kind::BLOB>>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::cereal::LaneCenteringGeometry::CurveOutcome::Which LaneCenteringGeometry::CurveOutcome::Reader::which() const {
+  return _reader.getDataField<Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline  ::cereal::LaneCenteringGeometry::CurveOutcome::Which LaneCenteringGeometry::CurveOutcome::Builder::which() {
+  return _builder.getDataField<Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::hasSources() const {
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::hasSources() {
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader LaneCenteringGeometry::CurveOutcome::Reader::getSources() const {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::CurveOutcome::Builder::getSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setSources( ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Reader value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setSources(::kj::ArrayPtr<const  ::uint8_t> value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>::Builder LaneCenteringGeometry::CurveOutcome::Builder::initSources(unsigned int size) {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::adoptSources(
+    ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>&& value) {
+  ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>> LaneCenteringGeometry::CurveOutcome::Builder::disownSources() {
+  return ::capnp::_::PointerHelpers< ::capnp::List< ::uint8_t,  ::capnp::Kind::PRIMITIVE>>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::isFailure() const {
+  return which() == LaneCenteringGeometry::CurveOutcome::FAILURE;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::isFailure() {
+  return which() == LaneCenteringGeometry::CurveOutcome::FAILURE;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::hasFailure() const {
+  if (which() != LaneCenteringGeometry::CurveOutcome::FAILURE) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::hasFailure() {
+  if (which() != LaneCenteringGeometry::CurveOutcome::FAILURE) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Failure::Reader LaneCenteringGeometry::CurveOutcome::Reader::getFailure() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::FAILURE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Failure::Builder LaneCenteringGeometry::CurveOutcome::Builder::getFailure() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::FAILURE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setFailure( ::cereal::LaneCenteringGeometry::Failure::Reader value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::FAILURE);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Failure::Builder LaneCenteringGeometry::CurveOutcome::Builder::initFailure() {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::FAILURE);
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::adoptFailure(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Failure>&& value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::FAILURE);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Failure> LaneCenteringGeometry::CurveOutcome::Builder::disownFailure() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::FAILURE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Failure>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::isPair() const {
+  return which() == LaneCenteringGeometry::CurveOutcome::PAIR;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::isPair() {
+  return which() == LaneCenteringGeometry::CurveOutcome::PAIR;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::hasPair() const {
+  if (which() != LaneCenteringGeometry::CurveOutcome::PAIR) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::hasPair() {
+  if (which() != LaneCenteringGeometry::CurveOutcome::PAIR) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::cereal::LaneCenteringGeometry::Pair::Reader LaneCenteringGeometry::CurveOutcome::Reader::getPair() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::PAIR),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::cereal::LaneCenteringGeometry::Pair::Builder LaneCenteringGeometry::CurveOutcome::Builder::getPair() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::PAIR),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setPair( ::cereal::LaneCenteringGeometry::Pair::Reader value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::PAIR);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::cereal::LaneCenteringGeometry::Pair::Builder LaneCenteringGeometry::CurveOutcome::Builder::initPair() {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::PAIR);
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::adoptPair(
+    ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Pair>&& value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::PAIR);
+  ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::cereal::LaneCenteringGeometry::Pair> LaneCenteringGeometry::CurveOutcome::Builder::disownPair() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::PAIR),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::cereal::LaneCenteringGeometry::Pair>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::isFit() const {
+  return which() == LaneCenteringGeometry::CurveOutcome::FIT;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::isFit() {
+  return which() == LaneCenteringGeometry::CurveOutcome::FIT;
+}
+inline double LaneCenteringGeometry::CurveOutcome::Reader::getFit() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::FIT),
+              "Must check which() before get()ing a union member.");
+  return _reader.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringGeometry::CurveOutcome::Builder::getFit() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::FIT),
+              "Must check which() before get()ing a union member.");
+  return _builder.getDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setFit(double value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::FIT);
+  _builder.setDataField<double>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::isGaps() const {
+  return which() == LaneCenteringGeometry::CurveOutcome::GAPS;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::isGaps() {
+  return which() == LaneCenteringGeometry::CurveOutcome::GAPS;
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Reader::hasGaps() const {
+  if (which() != LaneCenteringGeometry::CurveOutcome::GAPS) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline bool LaneCenteringGeometry::CurveOutcome::Builder::hasGaps() {
+  if (which() != LaneCenteringGeometry::CurveOutcome::GAPS) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader LaneCenteringGeometry::CurveOutcome::Reader::getGaps() const {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::GAPS),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::CurveOutcome::Builder::getGaps() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::GAPS),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::setGaps( ::capnp::Data::Reader value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::GAPS);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder LaneCenteringGeometry::CurveOutcome::Builder::initGaps(unsigned int size) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::GAPS);
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), size);
+}
+inline void LaneCenteringGeometry::CurveOutcome::Builder::adoptGaps(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  _builder.setDataField<LaneCenteringGeometry::CurveOutcome::Which>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, LaneCenteringGeometry::CurveOutcome::GAPS);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> LaneCenteringGeometry::CurveOutcome::Builder::disownGaps() {
+  KJ_IREQUIRE((which() == LaneCenteringGeometry::CurveOutcome::GAPS),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
+      ::capnp::bounded<1>() * ::capnp::POINTERS));
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getSchemaVersion() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getSchemaVersion() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setSchemaVersion( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<0>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getConfigVersion() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getConfigVersion() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setConfigVersion( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<1>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getMode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getMode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setMode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getModeEnabled() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getModeEnabled() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setModeEnabled( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getModeAllowE2E() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getModeAllowE2E() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setModeAllowE2E( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint8_t LaneCenteringControl::Reader::getReasonCode() const {
+  return _reader.getDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint8_t LaneCenteringControl::Builder::getReasonCode() {
+  return _builder.getDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setReasonCode( ::uint8_t value) {
+  _builder.setDataField< ::uint8_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint32_t LaneCenteringControl::Reader::getGateBits() const {
+  return _reader.getDataField< ::uint32_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint32_t LaneCenteringControl::Builder::getGateBits() {
+  return _builder.getDataField< ::uint32_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setGateBits( ::uint32_t value) {
+  _builder.setDataField< ::uint32_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<48>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getBarVisible() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getBarVisible() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setBarVisible(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<49>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getMasterEnabled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getMasterEnabled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setMasterEnabled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<50>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getDisplayEnabled() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getDisplayEnabled() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setDisplayEnabled(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<51>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getLateralActive() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<52>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getLateralActive() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<52>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setLateralActive(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<52>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getClockValid() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<53>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getClockValid() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<53>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockValid(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<53>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getClockBoottime() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<54>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getClockBoottime() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<54>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockBoottime(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<54>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getModelFresh() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<55>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getModelFresh() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<55>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setModelFresh(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<55>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getDownstreamCommandLimitKnown() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<56>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getDownstreamCommandLimitKnown() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<56>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setDownstreamCommandLimitKnown(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<56>() * ::capnp::ELEMENTS, value);
+}
+
+inline bool LaneCenteringControl::Reader::getDownstreamCommandLimited() const {
+  return _reader.getDataField<bool>(
+      ::capnp::bounded<57>() * ::capnp::ELEMENTS);
+}
+
+inline bool LaneCenteringControl::Builder::getDownstreamCommandLimited() {
+  return _builder.getDataField<bool>(
+      ::capnp::bounded<57>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setDownstreamCommandLimited(bool value) {
+  _builder.setDataField<bool>(
+      ::capnp::bounded<57>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getControlTimeNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getControlTimeNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setControlTimeNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<2>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::int64_t LaneCenteringControl::Reader::getClockOffsetNs() const {
+  return _reader.getDataField< ::int64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int64_t LaneCenteringControl::Builder::getClockOffsetNs() {
+  return _builder.getDataField< ::int64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockOffsetNs( ::int64_t value) {
+  _builder.setDataField< ::int64_t>(
+      ::capnp::bounded<3>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getClockEpoch() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getClockEpoch() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockEpoch( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getClockMonoSampleNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getClockMonoSampleNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockMonoSampleNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<5>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getClockEpochStartMonoNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getClockEpochStartMonoNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setClockEpochStartMonoNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<6>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getPlanSessionHigh() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getPlanSessionHigh() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPlanSessionHigh( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<7>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getPlanSessionLow() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getPlanSessionLow() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPlanSessionLow( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<8>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getPlanSequence() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getPlanSequence() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPlanSequence( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<9>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getPlanCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getPlanCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPlanCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<10>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::uint64_t LaneCenteringControl::Reader::getModelCaptureNs() const {
+  return _reader.getDataField< ::uint64_t>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS);
+}
+
+inline  ::uint64_t LaneCenteringControl::Builder::getModelCaptureNs() {
+  return _builder.getDataField< ::uint64_t>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setModelCaptureNs( ::uint64_t value) {
+  _builder.setDataField< ::uint64_t>(
+      ::capnp::bounded<11>() * ::capnp::ELEMENTS, value);
+}
+
+inline  ::int64_t LaneCenteringControl::Reader::getConfigRevision() const {
+  return _reader.getDataField< ::int64_t>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS);
+}
+
+inline  ::int64_t LaneCenteringControl::Builder::getConfigRevision() {
+  return _builder.getDataField< ::int64_t>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setConfigRevision( ::int64_t value) {
+  _builder.setDataField< ::int64_t>(
+      ::capnp::bounded<12>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getBaseCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getBaseCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setBaseCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<13>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getRawOptionalCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getRawOptionalCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setRawOptionalCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<14>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getBoundedDemandCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getBoundedDemandCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setBoundedDemandCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<15>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getPreYieldCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getPreYieldCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPreYieldCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<16>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getFinalOptionalCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getFinalOptionalCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setFinalOptionalCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<17>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getMaximumCorrection() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getMaximumCorrection() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setMaximumCorrection(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<18>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getAuthority() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getAuthority() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setAuthority(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<19>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getDeviation() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getDeviation() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setDeviation(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<20>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getRequestedYield() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getRequestedYield() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setRequestedYield(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<21>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getAppliedYield() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getAppliedYield() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setAppliedYield(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<22>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getSignalTailCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getSignalTailCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setSignalTailCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<23>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getPreviewDistance() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getPreviewDistance() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setPreviewDistance(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<24>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getCentringError() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getCentringError() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setCentringError(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<25>() * ::capnp::ELEMENTS, value);
+}
+
+inline double LaneCenteringControl::Reader::getDownstreamCurvature() const {
+  return _reader.getDataField<double>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS);
+}
+
+inline double LaneCenteringControl::Builder::getDownstreamCurvature() {
+  return _builder.getDataField<double>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS);
+}
+inline void LaneCenteringControl::Builder::setDownstreamCurvature(double value) {
+  _builder.setDataField<double>(
+      ::capnp::bounded<26>() * ::capnp::ELEMENTS, value);
 }
 
 }  // namespace

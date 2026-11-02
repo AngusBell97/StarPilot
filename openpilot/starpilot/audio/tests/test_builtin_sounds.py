@@ -5,7 +5,7 @@ import pytest
 
 from openpilot.common.basedir import BASEDIR
 from openpilot.common.params import Params
-from openpilot.selfdrive.ui.soundd import Soundd, AudibleAlert, sound_list
+from openpilot.selfdrive.ui.soundd import Soundd, AudibleAlert, sound_list, GPU_MODEL_READY
 from openpilot.starpilot.audio.sound_pack import (
   BUILTIN_FILES, DEFAULT_PACK, installed_packs, read_selection, read_wav, migrate_removed_selection,
 )
@@ -23,7 +23,7 @@ def test_default_builtin_assets_flow_through_soundd_callback(tmp_path):
     output = np.zeros((len(expected), 1), dtype=np.float32)
     with patch('pathlib.Path.open', side_effect=AssertionError('callback file I/O')):
       sound.callback(output, len(expected), None, None)
-    np.testing.assert_array_equal(output[:, 0], expected * .5)
+    np.testing.assert_array_equal(output[:, 0], expected * (0. if alert == GPU_MODEL_READY else .5))
   assert sound_list[AudibleAlert.warningImmediate][1] is None
   assert BUILTIN_FILES[sound_list[AudibleAlert.warningImmediate][0]] == 'warning_3.wav'
 

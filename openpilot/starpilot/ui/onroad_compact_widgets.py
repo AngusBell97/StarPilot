@@ -149,6 +149,8 @@ class CompactHudRenderer:
         speed_size -= 1
       self.fonts.draw(cruise, FontRole.SET_SPEED, speed_size, 17 + mx, -4 + my, color)
       self.fonts.draw("MAX", FontRole.SEMI_BOLD, 36, 25 + mx, 109 + my, color)
+      if state.tesla_sync_caption and state.alert.size == AlertSize.NONE:
+        self.fonts.draw(state.tesla_sync_caption, FontRole.NORMAL, 18, 25 + mx, 145 + my, color)
 
   def render_steering_wheel(self, state: OnroadState) -> None:
     color = self._feedback.update(state.wheel_acceleration, state.appearance.wheel_pedal_feedback, state.observed_ns, state.drive_frame)

@@ -34,7 +34,7 @@ class SlcOffsetFeatureTests(unittest.TestCase):
     return path.read_bytes() if path.exists() else None
 
   def row(self, key):
-    state = self.owner.snapshot("slc", parked=self.parked, system_long=True, lateral_context=True, metric=False)
+    state = self.owner.snapshot("slc" if key == "SpeedLimitController" else "slc/offsets", parked=self.parked, system_long=True, lateral_context=True, metric=False)
     return next(item for item in state.rows if item.key == key)
 
   @staticmethod
@@ -55,7 +55,7 @@ class SlcOffsetFeatureTests(unittest.TestCase):
     assert self.cp is not None
     self.cp.carFingerprint = "TOYOTA_HIGHLANDER_TSS2"
     self.cp.pcmCruise = True
-    state = self.owner.snapshot("slc", parked=True, system_long=False, lateral_context=True, metric=False)
+    state = self.owner.snapshot("slc/offsets", parked=True, system_long=False, lateral_context=True, metric=False)
     adopt = next(row for row in state.rows if row.key == "slc_adopt")
     self.assertTrue(adopt.available)
     self.assertTrue(self.owner.apply(self.confirm(adopt)))
@@ -153,7 +153,7 @@ class SlcOffsetFeatureTests(unittest.TestCase):
     self.assertEqual(rows, [f"{low}–<{high} mph offset" for low, high in
                            (("0", "25"), ("25", "34"), ("34", "44"), ("44", "54"),
                             ("54", "64"), ("64", "74"), ("74", "99"))])
-    state = self.owner.snapshot("slc", parked=True, system_long=True, lateral_context=True, metric=False)
+    state = self.owner.snapshot("slc/offsets", parked=True, system_long=True, lateral_context=True, metric=False)
     self.assertTrue(any(row.label == "99 mph and above" and row.value == "Zero offset" for row in state.rows))
     self.assertEqual(self.raw(DOCUMENT_KEY), original)
     self.assertTrue(self.units.change_units(True, None))
@@ -199,7 +199,7 @@ class SlcOffsetFeatureTests(unittest.TestCase):
     owner = FeatureSettingsOwner(self.params, lambda group: group != "parked_preferences",
                                  vehicle_fingerprint=lambda: self.cp.carFingerprint if self.cp else None,
                                  vehicle_params=lambda: self.cp)
-    state = owner.snapshot("slc", parked=False, system_long=True, lateral_context=True, metric=False,
+    state = owner.snapshot("slc/offsets", parked=False, system_long=True, lateral_context=True, metric=False,
                            configure_while_driving=True)
     offset = next(row for row in state.rows if row.key == "Offset2")
     reset = next(row for row in state.rows if row.key == "slc_reset")

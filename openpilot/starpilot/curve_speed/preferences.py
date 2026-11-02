@@ -12,6 +12,7 @@ import threading
 from openpilot.starpilot.curve_speed.host import CurveHost
 from openpilot.starpilot.curve_speed.learning import LearnedCurve
 from openpilot.starpilot.saved_source import read_saved
+from openpilot.starpilot.curve_speed.steering_load import KEY as STEERING_LOAD_KEY
 
 
 DOCUMENT_KEY = 'CurveComfortData'
@@ -135,6 +136,8 @@ class PreferenceHost:
     valid = all(readable for _enabled, readable in choices)
     host.runtime.enabled = choices[0][0] and valid and not self.closed and not self.conflicted and self.session_fd is not None
     host.runtime.no_lead = choices[1][0] if valid else True
+    host.runtime.steering_load_enabled = (host.runtime.enabled and
+      read_saved(self.params, STEERING_LOAD_KEY, 8) == (b'1', True))
 
   def _write(self, document: dict, revision: int, expected: bytes | None) -> None:
     temporary = None

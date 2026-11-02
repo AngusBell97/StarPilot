@@ -11,9 +11,9 @@ from openpilot.starpilot.lateral.lane_feedback import BLUE, MAX_AGE_NS, SERVICE,
 
 
 class TestLaneFeedback(unittest.TestCase):
-  def reader(self, *, applied=0.0003, requested=0.0005):
+  def reader(self, *, applied=0.0003, requested=0.0005, limit=.0024):
     now = 1_000_000_000
-    event = feedback_message(LaneCenteringResult(0.001, requested, 1, 'qualified'), applied, True, model_mono_time=now, car_control_mono_time=now, valid=True)
+    event = feedback_message(LaneCenteringResult(0.001, requested, 1, 'qualified', limit), applied, True, model_mono_time=now, car_control_mono_time=now, valid=True)
     event.logMonoTime = now
     control = messaging.new_message('carControl', valid=True, logMonoTime=now)
     control.carControl.latActive = True
@@ -54,7 +54,7 @@ class TestLaneFeedback(unittest.TestCase):
     self.assertEqual(direction(sm, now + MAX_AGE_NS + 1, 0), 0)
     self.assertEqual(direction(sm, now - 1, 0), 0)
     self.assertEqual(direction(sm, now, sm.frame), 0)
-    for applied, requested in ((0.0013, 0.0013), (0.0006, 0.0005), (-0.0003, 0.0005), (float('nan'), 0.0005)):
+    for applied, requested in ((0.0025, 0.0025), (0.0006, 0.0005), (-0.0003, 0.0005), (float('nan'), 0.0005)):
       sm, now = self.reader(applied=applied, requested=requested)
       self.assertEqual(direction(sm, now, 0), 0)
     for field, value in (('version', 0), ('lateralActive', False), ('modelMonoTime', 1), ('carControlMonoTime', 1)):

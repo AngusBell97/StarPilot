@@ -14,6 +14,7 @@ def daemon_for(samples, *, builtin):
   daemon.current_sound_frame = 0
   daemon.current_volume = 1.0
   daemon.pending_stop = False
+  daemon.slc_warning_playing = False
   daemon.loaded_sounds = {soundd.AudibleAlert.warningSoft: samples,
                           soundd.AudibleAlert.warningImmediate: -samples}
   daemon.pack_loader = Mock(is_builtin=Mock(return_value=builtin))

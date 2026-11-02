@@ -52,6 +52,27 @@ class FakeSM:
       self.recv_time[key] = (now - 5_000_000) / 1e9
 
 
+class PlannerInputs(dict):
+  """Fresh serialized planner messages, with SubMaster validity checks."""
+  def __init__(self, values, stamp):
+    super().__init__(values)
+    self.logMonoTime = dict.fromkeys(values, stamp)
+    self.recv_time = dict.fromkeys(values, stamp / 1e9)
+    self.seen = dict.fromkeys(values, True)
+    self.alive = dict.fromkeys(values, True)
+    self.valid = dict.fromkeys(values, True)
+    self.freq_ok = dict.fromkeys(values, True)
+
+  def stamp(self, now):
+    self.logMonoTime = dict.fromkeys(self, now)
+    self.recv_time = dict.fromkeys(self, now / 1e9)
+
+  def all_checks(self, services=None):
+    return all(name in self and self.seen.get(name, False) and self.alive.get(name, False)
+               and self.valid.get(name, False) and self.freq_ok.get(name, False)
+               for name in (self if services is None else services))
+
+
 class TrafficOwnerTests(unittest.TestCase):
   def setUp(self):
     directory = tempfile.TemporaryDirectory()
@@ -247,7 +268,8 @@ class TrafficOwnerTests(unittest.TestCase):
 
     def solve(mode, now, *, long_active=True):
       target = host.sample(now, log.LongitudinalPersonality.standard, 20.0, self.cp, traffic_mode=mode)
-      sm, _ = messages(lead=True)
+      payloads, _ = messages(lead=True)
+      sm = PlannerInputs(payloads, now)
       sm['carState'].vEgo = 20.0
       sm['carControl'].longActive = long_active
       update_curve_frame(planner, sm, self.cp, now, profile_tuning=target, traffic_mode=mode)
@@ -306,7 +328,8 @@ class TrafficOwnerTests(unittest.TestCase):
                            traffic_mode=absent.profile_mode)
     self.assertIsNotNone(ordinary)
     self.assertAlmostEqual(ordinary.follow_seconds, 2.1)
-    sm, _ = messages(lead=True)
+    payloads, _ = messages(lead=True)
+    sm = PlannerInputs(payloads, NOW)
     sm['carControl'].longActive = True
     update_curve_frame(planner, sm, self.cp, NOW, profile_tuning=ordinary,
                        traffic_mode=absent.profile_mode)
@@ -318,6 +341,7 @@ class TrafficOwnerTests(unittest.TestCase):
     traffic = host.sample(NOW + 100_000_000, log.LongitudinalPersonality.standard, 20.0, self.cp,
                           traffic_mode=on.profile_mode)
     self.assertIsNotNone(traffic)
+    sm.stamp(NOW + 100_000_000)
     update_curve_frame(planner, sm, self.cp, NOW + 100_000_000,
                        profile_tuning=traffic, traffic_mode=on.profile_mode)
     held = self.sample(NOW + 450_000_000)
@@ -326,6 +350,7 @@ class TrafficOwnerTests(unittest.TestCase):
                            20.0, self.cp, traffic_mode=held.profile_mode)
     self.assertIsNotNone(retained)
     self.assertEqual(retained.follow_seconds, traffic.follow_seconds)
+    sm.stamp(NOW + 450_000_000)
     update_curve_frame(planner, sm, self.cp, NOW + 450_000_000,
                        profile_tuning=retained, traffic_mode=held.profile_mode)
     self.assertIsNotNone(planner.last_profile)
@@ -336,6 +361,7 @@ class TrafficOwnerTests(unittest.TestCase):
     self.assertIsNone(host.sample(NOW + 500_000_000, log.LongitudinalPersonality.standard,
                                   20.0, self.cp, traffic_mode=lost.profile_mode))
     sm['carState'].canValid = False
+    sm.stamp(NOW + 500_000_000)
     update_curve_frame(planner, sm, self.cp, NOW + 500_000_000,
                        profile_tuning=None, traffic_mode=lost.profile_mode)
     self.assertIsNone(planner.last_profile)

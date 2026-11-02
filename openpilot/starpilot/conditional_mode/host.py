@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from openpilot.starpilot.conditional_mode.policy import ConditionalModePolicy, Decision, ManualIntent, ModeChoice, ModeSettings
-from openpilot.starpilot.conditional_mode.preferences import ManualState, ModeSelection
+from openpilot.starpilot.conditional_mode.policy import ConditionalModePolicy, Decision, ManualIntent, ModeChoice, ModeSettings, active_settings_key
+from openpilot.starpilot.conditional_mode.preferences import CEMOptions, ManualState, ModeSelection
 from openpilot.starpilot.conditional_mode.runtime_settings import ConditionalSettingsOwner
 from openpilot.starpilot.conditional_mode.projection import ConditionalOwnerContext, ObservedBool, ProjectedScene, SOURCE_MAX_AGE_NS, SceneProjector
 
@@ -34,12 +34,14 @@ class ConditionalModeHost:
   def __init__(self):
     self.drive_id = 0
     self.choice = ModeChoice.STOCK
+    self.settings_key = None
     self.projector = SceneProjector()
     self.policy = ConditionalModePolicy()
 
   def reset(self) -> None:
     self.drive_id = 0
     self.choice = ModeChoice.STOCK
+    self.settings_key = None
     self.projector = SceneProjector()
     self.policy.reset()
 
@@ -106,6 +108,26 @@ class ConditionalModeHost:
     if self.choice is not selection.choice:
       self.policy.reset()
       self.choice = selection.choice
+    # CEM trigger options must not disable CCM's protective scene detectors.
+    if selection.choice is ModeChoice.CCM:
+      signal_options = CEMOptions()
+    detector_key = None if signal_options is None else (signal_options.lead, signal_options.slower_lead,
+      signal_options.stopped_lead, signal_options.signal_lane_detection, signal_options.signal_lane_width_m,
+      signal_options.stop_lights, signal_options.model_stop_s)
+    settings_key = (selection.choice, active_settings_key(selection.choice, selection.settings), signal_options, detector_key)
+    if self.settings_key is not None and (settings_key[:2], settings_key[3]) != (self.settings_key[:2], self.settings_key[3]):
+      old_options = self.settings_key[2]
+      self.policy.reset_transition(settings_edit=True)
+      self.policy.choice = selection.choice
+      # Speed/unused-mode edits do not restart safety detector histories.
+      if old_options is not None and signal_options is not None:
+        if (old_options.lead, old_options.slower_lead, old_options.stopped_lead) != (signal_options.lead, signal_options.slower_lead, signal_options.stopped_lead):
+          self.projector.slower_lead_detector.reset()
+        if (old_options.signal_lane_detection, old_options.signal_lane_width_m) != (signal_options.signal_lane_detection, signal_options.signal_lane_width_m):
+          self.projector.signal_lane_tracker.reset()
+        if (old_options.stop_lights, old_options.model_stop_s) != (signal_options.stop_lights, signal_options.model_stop_s) and not self.projector.stop_detector.committed:
+          self.projector.stop_detector.reset()
+    self.settings_key = settings_key
     safe_value = _fresh_flag(safe_mode, now_ns=now_mono_ns, barrier_ns=self.projector.barrier_mono_ns)
     if safe_value is True:
       self.projector.stop_detector.reset()
@@ -140,10 +162,12 @@ class ConditionalModeHost:
       or not manual_valid
       or (authority is not None and (not authority.fresh or not authority.system_long_capable or authority.safe_mode))
     ):
-      self.policy.reset()
+      self.policy.reset_transition()
+      self.policy.choice = selection.choice
       return HostProposal(selection.choice, projected, None, None, 'authority_unavailable', settings_revision)
     if authority is None:
-      self.policy.reset()
+      self.policy.reset_transition()
+      self.policy.choice = selection.choice
       return HostProposal(selection.choice, projected, None, None, 'authority_unavailable', settings_revision)
     decision = self.policy.step(now_mono_ns / 1e9, selection.choice,
                                 manual.intent if manual is not None else ManualIntent.NONE,

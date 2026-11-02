@@ -29,13 +29,14 @@ def scene(now: float, speed: float = 20.0, **changes) -> SceneEvidence:
     set_speed_mps=speed + 3.0,
     lead=NO_LEAD,
     following_lead=False,
+    speed_lead_present=changes.get("following_lead", False),
     left_blinker=False,
     right_blinker=False,
     lane_available=True,
     curve_detected=False,
+    curve_raw=changes.get("curve_detected", False),
     slow_lead_detected=False,
     stop_light_detected=False,
-    slc_experimental=False,
     standstill=False,
     traffic_mode=False,
     stop_sign_confirmed=False,
@@ -113,7 +114,7 @@ class ConditionalModePolicyTest(unittest.TestCase):
   def test_cem_frozen_speed_precedence_and_hysteresis_trace(self):
     policy = ConditionalModePolicy()
     settings = replace(ModeSettings(), cem_speed_mps=15.0, cem_curves=True)
-    first = policy.step(10.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.0, speed=10.0, curve_detected=True), settings)
+    first = policy.step(10.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.0, speed=10.0), settings)
     self.assertEqual((first.requested_experimental, first.reason, first.status_code), (True, Reason.CEM_SPEED, 6))
     held = policy.step(10.1, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.1, speed=20.0), settings)
     self.assertEqual((held.reason, held.status_code), (Reason.CEM_HOLD, 6))
@@ -132,7 +133,10 @@ class ConditionalModePolicyTest(unittest.TestCase):
     )
     self.assertEqual(signal.reason, Reason.CEM_SIGNAL)
     unknown_lane = policy.step(2.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(2.0, speed=10.0, left_blinker=True, lane_available=None), settings)
-    self.assertEqual(unknown_lane.reason, Reason.NO_TRIGGER)
+    self.assertEqual(unknown_lane.reason, Reason.NO_TRIGGER)  # CEM needs fresh positive bend evidence after a gap.
+    fresh = ConditionalModePolicy().step(2.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY,
+                                       scene(2.0, speed=10.0, left_blinker=True, lane_available=None), settings)
+    self.assertEqual(fresh.reason, Reason.NO_TRIGGER)
     self.assertFalse(unknown_lane.requested_experimental)
 
   def test_cem_stale_scene_clears_automatic_hold_and_reentry(self):
@@ -143,7 +147,7 @@ class ConditionalModePolicyTest(unittest.TestCase):
     self.assertEqual((stale.reason, stale.requested_experimental), (Reason.SCENE_UNAVAILABLE, False))
     self.assertEqual(policy.step(1.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(1.2, speed=20.0), settings).reason, Reason.NO_TRIGGER)
 
-  def test_cem_scene_reasons_preserve_frozen_priority_and_status(self):
+  def test_cem_scene_reasons_preserve_current_priority_and_status(self):
     policy = ConditionalModePolicy()
     settings = replace(ModeSettings(), cem_curves=True)
     selected = policy.step(
@@ -151,16 +155,18 @@ class ConditionalModePolicyTest(unittest.TestCase):
       ModeChoice.CEM,
       ManualIntent.NONE,
       AUTHORITY,
-      scene(4.0, curve_detected=True, slow_lead_detected=True, stop_light_detected=True, slc_experimental=True),
+      scene(4.0, curve_detected=True, slow_lead_detected=True, stop_light_detected=True),
       settings,
     )
     self.assertEqual((selected.reason, selected.status_code), (Reason.CEM_CURVE, 3))
     policy.reset()
-    selected = policy.step(4.1, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(4.1, stop_light_detected=True, slc_experimental=True), settings)
+    selected = policy.step(4.1, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(4.1, stop_light_detected=True), settings)
     self.assertEqual((selected.reason, selected.status_code), (Reason.CEM_STOP, 8))
     policy.reset()
-    selected = policy.step(4.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(4.2, slc_experimental=True), settings)
-    self.assertEqual((selected.reason, selected.status_code), (Reason.CEM_SPEED_LIMIT, 7))
+    # CEM_SPEED_LIMIT remains a historical route label, not a live scene input.
+    self.assertNotIn('slc_experimental', SceneEvidence.__dataclass_fields__)
+    selected = policy.step(4.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(4.2), settings)
+    self.assertEqual((selected.reason, selected.status_code), (Reason.NO_TRIGGER, 0))
 
   def test_cem_slow_lead_hold_requires_credible_current_lead(self):
     lead = LeadEvidence(True, True, False, 45.0, 15.0, 0.0, 0.9)
@@ -190,7 +196,7 @@ class ConditionalModePolicyTest(unittest.TestCase):
           result = policy.step(now, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(now, set_speed_mps=20.0, lead=lead, following_lead=True), settings)
           self.assertEqual(result.requested_experimental, tick < (11 if closes_fast else 16))
 
-  def test_cem_stop_release_suppresses_reentry_but_retains_new_stop_evidence(self):
+  def test_cem_stop_release_never_suppresses_configured_speed_rule(self):
     settings = replace(ModeSettings(), cem_speed_mps=15.0, cem_open_road=True)
     for release_at_standstill in (False, True):
       with self.subTest(release_at_standstill=release_at_standstill):
@@ -201,22 +207,22 @@ class ConditionalModePolicyTest(unittest.TestCase):
           released = policy.step(
             10.05, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.05, speed=0.0, standstill=True, standstill_stop_hold=False), settings
           )
-          self.assertFalse(released.requested_experimental)
+          self.assertTrue(released.requested_experimental)
         for tick in range(41):
           now = 10.1 + tick * 0.05
           result = policy.step(now, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(now, speed=10.0, set_speed_mps=10.0, slow_lead_detected=True), settings)
-          self.assertEqual(result.requested_experimental, tick == 40)
+          self.assertTrue(result.requested_experimental)
         # A newly qualified stop scene is never masked by launch suppression.
         policy.step(12.15, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(12.15, speed=0.0, standstill=True, standstill_stop_hold=True), settings)
         stop = policy.step(12.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(12.2, speed=10.0, stop_light_detected=True), settings)
-        self.assertEqual((stop.reason, stop.status_code), (Reason.CEM_STOP, 8))
+        self.assertTrue(stop.requested_experimental)
 
   def test_cem_unknown_stop_and_scene_loss_clear_lifecycle_state(self):
     policy = ConditionalModePolicy()
     settings = replace(ModeSettings(), cem_speed_mps=15.0)
     policy.step(10.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.0, speed=0.0, standstill=True, standstill_stop_hold=True), settings)
     unknown = policy.step(10.05, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.05, speed=0.0, standstill=True), settings)
-    self.assertEqual((unknown.reason, unknown.requested_experimental), (Reason.SCENE_UNAVAILABLE, False))
+    self.assertEqual((unknown.reason, unknown.requested_experimental), (Reason.CEM_SPEED, True))
     # Missing decisive stop evidence clears remembered latches, not an invented release.
     resumed = policy.step(10.1, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.1, speed=10.0), settings)
     self.assertEqual(resumed.reason, Reason.CEM_SPEED)
@@ -224,7 +230,7 @@ class ConditionalModePolicyTest(unittest.TestCase):
     cleared = policy.step(10.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.2, speed=20.0), settings)
     self.assertFalse(cleared.requested_experimental)
 
-  def test_cem_manual_override_preserves_observed_stop_release_quiet_period(self):
+  def test_cem_manual_override_returns_to_configured_speed_rule(self):
     settings = replace(ModeSettings(), cem_speed_mps=15.0)
     for manual_on_release in (False, True):
       with self.subTest(manual_on_release=manual_on_release):
@@ -234,7 +240,7 @@ class ConditionalModePolicyTest(unittest.TestCase):
           now = 10.0 + tick * 0.05
           intent = ManualIntent.FORCE_CHILL if tick == (1 if manual_on_release else 3) else ManualIntent.NONE
           result = policy.step(now, ModeChoice.CEM, intent, AUTHORITY, scene(now, speed=10.0), settings)
-          self.assertEqual(result.requested_experimental, tick >= 41)
+          self.assertEqual(result.requested_experimental, intent is ManualIntent.NONE)
         # A different mode/session must not inherit that CEM suppression.
         policy.step(12.15, ModeChoice.CCM, ManualIntent.NONE, AUTHORITY, scene(12.15), settings)
         resumed = policy.step(12.2, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(12.2, speed=10.0), settings)
@@ -282,7 +288,8 @@ class ConditionalModePolicyTest(unittest.TestCase):
     self.assertTrue(policy.step(20.9, ModeChoice.CCM, ManualIntent.NONE, AUTHORITY, followed(20.9)).requested_experimental)
     entered = policy.step(21.01, ModeChoice.CCM, ManualIntent.NONE, AUTHORITY, followed(21.01))
     self.assertEqual((entered.reason, entered.status_code, entered.requested_experimental), (Reason.CCM_LEAD, 4, False))
-    veto = policy.step(21.02, ModeChoice.CCM, ManualIntent.NONE, AUTHORITY, replace(followed(21.02), slc_experimental=True))
+    # Use a current hard veto; the historical SLC mode link no longer exists.
+    veto = policy.step(21.02, ModeChoice.CCM, ManualIntent.NONE, AUTHORITY, replace(followed(21.02), left_blinker=True))
     self.assertEqual((veto.reason, veto.requested_experimental), (Reason.CCM_VETO, True))
 
   def test_ccm_qualified_launch_and_missing_launch_proof(self):

@@ -41,6 +41,13 @@ class MapFrame:
   tile_loaded: bool
   way_id: int
   way_selection: str
+  next_speed_mps: float = 0.0
+  next_distance_m: float = 0.0
+  road_name: str = ""
+  next_end_distance_m: float = 0.0
+  following_speed_mps: float = 0.0
+  following_way_id: int = 0
+  next_way_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -70,7 +77,10 @@ def decode_event(raw: bytes) -> MapFrame:
       return MapFrame(bool(event.valid), int(event.logMonoTime), int(road.sampleVersion), str(road.roadStatus),
                       str(road.gpsSource), int(road.gpsMonoTime), int(road.computedMonoTime),
                       int(road.sourceGeneration), int(road.producerSession), float(road.speedLimit),
-                      bool(road.tileLoaded), int(road.wayId), str(road.waySelectionType))
+                      bool(road.tileLoaded), int(road.wayId), str(road.waySelectionType),
+                      float(road.nextSpeedLimit), float(road.nextSpeedLimitDistance), str(road.roadName),
+      float(road.nextSpeedLimitEndDistance), float(road.followingSpeedLimit),
+      int(road.followingSpeedLimitWayId), int(road.nextSpeedLimitWayId))
   except (ValueError, TypeError) as error:
     raise ValueError('invalid mapdOut event') from error
   except Exception as error:  # pycapnp reports malformed segment/pointer errors as KjException
@@ -138,7 +148,9 @@ def _classify(frame: MapFrame, now_boot_ns: int) -> MapEvidence:
         frame.way_selection not in WAY_SELECTIONS or frame.speed_mps != 0):
       return MapEvidence('unknown', UNKNOWN)
     return MapEvidence('matched_no_limit_unqualified', UNKNOWN)
-  if frame.event_valid or frame.speed_mps != 0 or frame.way_id != 0 or frame.tile_loaded:
+  # A loaded tile with no road match remains loss, never numeric evidence.
+  if (frame.event_valid or frame.speed_mps != 0 or frame.way_id != 0 or
+      frame.tile_loaded and frame.status != 'noMatch'):
     return MapEvidence('unknown', UNKNOWN)
   if frame.status == 'noGps' and frame.source == 'none' and frame.gps_mono_ns != 0:
     return MapEvidence('unknown', UNKNOWN)

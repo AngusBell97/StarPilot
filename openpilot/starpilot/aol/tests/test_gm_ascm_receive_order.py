@@ -42,7 +42,7 @@ def test_ascm_exact_card_raw_companion_survives_older_cached_projection(c9, rada
     cp_before = sd.CP.to_dict()
     step = bind_steering_receipts(sd, step, cleanup)
     assert step(0)[0].lateralActive
-    pm = messaging.PubMaster(['carState', 'carOutput', 'starpilotCarState'])
+    pm = messaging.PubMaster(['carState', 'carOutput', 'starpilotCarState', 'starpilotCarControl'])
     sd.car_state_sock = messaging.sub_sock('carState', timeout=100)
     sd.steering_companion = SteeringCompanion(messaging.sub_sock('starpilotCarState', conflate=False))
     latest = messaging.sub_sock('starpilotCarState', conflate=True, timeout=100)
@@ -219,7 +219,7 @@ def test_normal_control_receipts_with_aol_disabled(sdgm, c9, initial_active, con
     saved.put('CarParams', cp.to_bytes(), block=True)
     controls = Controls()
     assert not controls.aol_replay
-    pm = messaging.PubMaster(['carState', 'carOutput', 'starpilotCarState'])
+    pm = messaging.PubMaster(['carState', 'carOutput', 'starpilotCarState', 'starpilotCarControl'])
     cs_sock = messaging.sub_sock('carState', timeout=100)
     raw_sock = messaging.sub_sock('starpilotCarState', conflate=False)
     cached_sock = messaging.sub_sock('starpilotCarState', conflate=True, timeout=100)

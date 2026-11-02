@@ -179,7 +179,7 @@ class SignalLaneTracker:
     if not frame.left_blinker and not frame.right_blinker:
       return SignalLaneObservation(*(self._widths or (None, None)), None, None, False, stamp, "no_signal")
     selected = (self._widths[0] if frame.left_blinker else self._widths[1]) if self._widths is not None else None
-    available = (selected >= frame.lane_detection_width_m if selected is not None else None) if frame.signal_lane_detection else True
+    available = (selected >= frame.lane_detection_width_m if selected is not None else None) if frame.signal_lane_detection and frame.lane_detection_width_m > 0.0 else False
     scene = False if speed >= frame.signal_speed_mps else (not available if available is not None else None)
     return SignalLaneObservation(*(self._widths or (None, None)), selected, available, scene, stamp,
                                  "measured" if selected is not None else "awaiting_width")

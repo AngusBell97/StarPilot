@@ -111,6 +111,13 @@ _services: dict[str, tuple] = {
   "wideRoadEncodeData": (False, 20., None, QueueSize.BIG),
   "qNarrowRoadEncodeData": (False, 20., None, QueueSize.BIG),
 
+  # SP-016: bounded asynchronous geometry and recorded controller diagnostics.
+  "laneCenteringState": (True, 20., 1),
+  "laneCenteringControl": (True, 100., 10),
+  "starpilotCarControl": (True, 100., 10),
+  "laneCenteringGeometryRequest": (False, 20., None, QueueSize.MEDIUM),
+  "laneCenteringGeometryResult": (False, 20., None, QueueSize.MEDIUM),
+
   # debug
   "uiDebug": (True, 0., 1),
   "testJoystick": (True, 0.),

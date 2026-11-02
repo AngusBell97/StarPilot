@@ -207,7 +207,11 @@ def test_auto_selection_cannot_apply_an_old_wake_choice(setup):
   assert read_saved(params, 'RemoteStartBootsComma', 8)[0] == b'1'
 
 
-def test_cuatro_uses_stock_firmware_and_preserves_saved_intent(setup, monkeypatch):
+@pytest.mark.parametrize('choice,expected', [(FirmwareChoice(gm=True), 'panda_h7.bin.signed'),
+  (FirmwareChoice(hkg=True), 'panda_h7.bin.signed'), (FirmwareChoice(can_only=True), 'panda_h7.bin.signed'),
+  (FirmwareChoice(tesla=True, can_only=True), 'panda_h7.bin.signed'),
+  (FirmwareChoice(tesla=True), 'panda_h7_tesla_wake.bin.signed')])
+def test_cuatro_only_admits_tesla_wake_and_preserves_saved_intent(setup, monkeypatch, choice, expected):
   params, _, _, firmware = setup
   from openpilot.selfdrive.pandad import pandad
   from panda import Panda
@@ -215,6 +219,7 @@ def test_cuatro_uses_stock_firmware_and_preserves_saved_intent(setup, monkeypatc
   observed = []
 
   class FakePanda:
+    HW_TYPE_CUATRO = Panda.HW_TYPE_CUATRO
     HW_TYPE_DOS = Panda.HW_TYPE_DOS
     HW_TYPE_TRES = Panda.HW_TYPE_TRES
     HW_TYPE_RED_PANDA = Panda.HW_TYPE_RED_PANDA
@@ -253,8 +258,8 @@ def test_cuatro_uses_stock_firmware_and_preserves_saved_intent(setup, monkeypatc
 
   monkeypatch.setattr(pandad, 'Panda', FakePanda)
   monkeypatch.setattr(pandad, 'FW_PATH', firmware)
-  assert pandad.flash_panda('fixture', FirmwareChoice(gm=True)) == 'panda_h7.bin.signed'
-  assert observed == ['panda_h7.bin.signed']
+  assert pandad.flash_panda('fixture', choice) == expected
+  assert observed == [expected]
   assert read_saved(params, 'RemoteStartBootsComma', 8)[0] == b'1'
 
 
@@ -268,3 +273,21 @@ def test_gm_requires_system_long_and_preserves_saved_intent(setup):
   assert not owner.panda_wake.rows(True)
   assert resolve(state.cp, snapshot(params)) == FirmwareChoice()
   assert read_saved(params, 'RemoteStartBootsComma', 8) == (b'1', True)
+
+
+@pytest.mark.parametrize('device,allowed', [('mici', True), ('tizi', True), ('tici', True), ('pc', False), ('unknown', False)])
+def test_tesla_wake_hardware_choice_and_commit(setup, device, allowed):
+  params, state, owner, _ = setup
+  state.cp = vehicle('tesla')
+  params.put('VehicleSelection', json.loads(encode(state.cp.carFingerprint)), block=True)
+  owner.panda_wake.device_type = lambda: device
+  rows = owner.panda_wake.rows(True)
+  assert bool(rows) is allowed
+  if allowed:
+    assert len(rows) == 1 and rows[0].key == 'TeslaWakeOnCAN' and rows[0].available
+    request = replace(row_request(rows[0], 'On'), confirmation=True, vehicle_fingerprint=state.cp.carFingerprint)
+    assert owner.apply(request)
+    assert params.get_bool('TeslaWakeOnCAN')
+    state.parked = False
+    assert not owner.apply(replace(row_request(owner.panda_wake.rows(True)[0], 'Off'), confirmation=True,
+                                   vehicle_fingerprint=state.cp.carFingerprint))

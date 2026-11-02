@@ -10,7 +10,7 @@ from openpilot.starpilot.conditional_mode.stop import (
 )
 from openpilot.starpilot.lead_tracking import LeadDetector
 from openpilot.starpilot.longitudinal.force_stop import ForceStop, StopFrame, StopPlan, vehicle_tune
-from openpilot.starpilot.model_geometry import road_curvature, standstill_clear_horizon, standstill_release_speed
+from openpilot.starpilot.model_geometry import road_curvature, standstill_clear_horizon, standstill_release_speed, tesla_stationary_zero
 from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.longitudinal.stop_resume import StopResume
 
@@ -20,9 +20,10 @@ OFFSET_KEY = 'ForceStopDistanceOffset'
 SOURCE_AGE_NS = 150_000_000
 
 
-def standstill_takeoff_light(model, car) -> bool | None:
+def standstill_takeoff_light(model, car, cp=None) -> bool | None:
   """Fresh takeoff metadata only; Force Stop keeps its strict spatial policy."""
-  if not standstill_release_speed(car.standstill, car.vEgo, car.vEgoRaw):
+  tesla_stopped = tesla_stationary_zero(car, cp)
+  if not tesla_stopped and not standstill_release_speed(car.standstill, car.vEgo, car.vEgoRaw):
     return None
   should_stop = model.action.shouldStop
   if type(should_stop) is not bool:
@@ -30,7 +31,12 @@ def standstill_takeoff_light(model, car) -> bool | None:
   horizon = standstill_clear_horizon(model)
   if horizon is None:
     return None
-  return should_stop or horizon < FROZEN_RAW_STOP_DISTANCE_M + STOP_MODEL_RELEASE_MARGIN_M
+  # The coarse stationary 54m extent is not a light-color observation. On a
+  # stopped Tesla it otherwise vetoes the very slow-lead departure this metadata
+  # serves. Native takeoff still qualifies the lead, MPC and model; ForceStops
+  # keeps its separate policy and forcing/should_stop veto unchanged.
+  return should_stop or horizon < (STOP_MODEL_RELEASE_MARGIN_M if tesla_stopped else
+                                  FROZEN_RAW_STOP_DISTANCE_M + STOP_MODEL_RELEASE_MARGIN_M)
 
 
 class ForceStopRuntime:
@@ -146,8 +152,8 @@ class ForceStopRuntime:
         self.light.reset()
         self.lead.reset()
       takeoff_observed, takeoff_light = perception_available, bool(light_context)
-      if takeoff_enabled and not perception_available:
-        fallback = standstill_takeoff_light(model, car)
+      if takeoff_enabled and (tesla_stationary_zero(car, cp) or not perception_available):
+        fallback = standstill_takeoff_light(model, car, cp)
         if fallback is not None:
           takeoff_observed, takeoff_light = True, fallback
       if takeoff_enabled and not self.enabled:

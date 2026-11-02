@@ -67,9 +67,10 @@ class FeaturePage(StrEnum):
 TORQUE_CONFIRM_ACTIONS = frozenset(("torque_adopt", "torque_reset", "torque_reset_profile", "torque_rebase", "torque_prepare_firestar", "torque_gain_rebase"))
 SLC_CONFIRM_ACTIONS = frozenset(("slc_adopt", "slc_reset"))
 LANE_CHANGE_CONFIRM_ACTIONS = frozenset(("lane_change:reset",))
-CURVE_CONFIRM_ACTIONS = frozenset(("curve_reset",))
+CURVE_CONFIRM_ACTIONS = frozenset(("curve_reset", "map_memory:refresh", "map_memory:undo", "map_memory:clear", "map_memory:forget"))
 CONDITIONAL_CONFIRM_ACTIONS = frozenset(("conditional:reset", "conditional:manual_reset"))
-FEATURE_CONFIRM_ACTIONS = (TORQUE_CONFIRM_ACTIONS | SLC_CONFIRM_ACTIONS | LANE_CHANGE_CONFIRM_ACTIONS |
+PORT_CONFIRM_ACTIONS = frozenset('map_memory:forget:'+str(i) for i in range(64))
+FEATURE_CONFIRM_ACTIONS = (PORT_CONFIRM_ACTIONS | TORQUE_CONFIRM_ACTIONS | SLC_CONFIRM_ACTIONS | LANE_CHANGE_CONFIRM_ACTIONS |
                            CURVE_CONFIRM_ACTIONS | CONDITIONAL_CONFIRM_ACTIONS | {"reset_profiles", "pip:reset", "sentry:reset"})
 
 
@@ -266,6 +267,8 @@ def feature_footer_target(x: float, y: float, state: FeatureSettingsState) -> in
 def feature_parent_page(page: str) -> str | None:
   if page == FeaturePage.HUB:
     return None
+  if page.startswith("lane/"):
+    return page.rsplit("/", 1)[0]
   if "/" in page:
     return page.split("/", maxsplit=1)[0]
   if page in (FeaturePage.AGGRESSIVE, FeaturePage.STANDARD, FeaturePage.RELAXED, FeaturePage.TRAFFIC):
@@ -275,8 +278,11 @@ def feature_parent_page(page: str) -> str | None:
 
 def feature_parent_title(page: str) -> str:
   parent = feature_parent_page(page)
+  if parent and parent.startswith("lane/"):
+    from openpilot.starpilot.ui.lane_v4_menu import SECTIONS
+    return SECTIONS[parent][0]
   return {None: "StarPilot", FeaturePage.HUB: "Driving Controls", FeaturePage.PROFILES: "Long Planner",
-          FeaturePage.CONDITIONAL: "Conditional Driving Modes"}.get(parent, (parent or "").replace("_", " ").title())
+          FeaturePage.LANE: "Lane Centering", FeaturePage.CONDITIONAL: "Conditional Driving Modes", FeaturePage.SLC: "Speed Limit Controller"}.get(parent, (parent or "").replace("_", " ").title())
 
 
 def boolean_value(row: FeatureRow) -> bool | None:
@@ -285,8 +291,6 @@ def boolean_value(row: FeatureRow) -> bool | None:
     return None
   if row.value in ("Off", "On"):
     return row.value == "On"
-  if row.key == "SLCFallback" and row.value == "Off (saved mode 0 or 1)":
-    return False
   return None
 
 
@@ -538,12 +542,9 @@ def row_change(row: FeatureRow, direction: int = 1) -> FeatureSettingsRequest | 
   if row.repair_value:
     value = row.repair_value
   elif row.choices and not (row.choices == ("Auto",) and row.step and row.value != "Auto"):
-    if row.key == "SLCFallback":
-      value = "Off" if row.value == "On" else "On"
-    else:
-      if row.value not in row.choices:
-        return None
-      value = row.choices[(row.choices.index(row.value) + direction) % len(row.choices)]
+    if row.value not in row.choices:
+      return None
+    value = row.choices[(row.choices.index(row.value) + direction) % len(row.choices)]
   elif row.step:
     try:
       current = float(row.value)

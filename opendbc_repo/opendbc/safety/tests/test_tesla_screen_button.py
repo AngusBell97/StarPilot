@@ -33,7 +33,7 @@ class TestTeslaScreenButton(unittest.TestCase):
       ('DAS_steeringControl', 2, {'DAS_steeringControlType': stock_type}),
       ('DI_speed', 0, {'DI_vehicleSpeed': 0}),
       ('ESP_B', 0, {'ESP_vehicleSpeed': 0, 'ESP_wheelSpeedsQF': 1, 'ESP_vehicleStandstillSts': 1}),
-      ('EPAS3S_sysStatus', 0, {'EPAS3S_internalSAS': 0, 'EPAS3S_eacStatus': eps, 'EPAS3S_handsOnLevel': hands}),
+      ('EPAS3S_sysStatus', 0, {'EPAS3S_internalSAS': 0, 'EPAS3S_eacStatus': eps, 'EPAS3S_handsOnLevel': hands, 'EPAS3S_torsionBarTorque': 0}),
       ('DI_systemStatus', 0, {'DI_gear': gear, 'DI_accelPedalPos': 0}),
       ('ESP_status', 0, {'ESP_driverBrakeApply': 2 if brake else 1}),
       ('UI_warning', 0, {'anyDoorOpen': int(door), 'buckleStatus': int(belt)}),
@@ -200,7 +200,7 @@ class TestTeslaScreenButton(unittest.TestCase):
     self.assertFalse(self.lib.safety_tx_hook(steering))
 
   def test_screen_namespace_excludes_hw1_neighbors_and_unknown_flags(self):
-    for word in (16 | 512, 1024, 514, 1538, 512 | 256, 0xFFFF):
+    for word in (16 | 512, 1024, 514, 1538, 512 | 2048, 16 | 256, 0xFFFF):
       self.assertEqual(self.lib.set_safety_hooks(10, word), -1, hex(word))
 
   def test_exact_long_words_debug_authority_and_release_rejection(self):

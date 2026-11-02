@@ -104,3 +104,30 @@ func TestGpsUncertainClockPairInvalidatesHeldEvidence(t *testing.T) {
 		t.Fatalf("post-fence fix failed to recover: %+v %v", sample, ok)
 	}
 }
+
+func TestInterruptedClockPairRetriesWithoutLosingFreshGps(t *testing.T) {
+	mono := uint64(10_000_000_000)
+	internal, _ := wireQueue(GpsLocationReader)
+	external, eq := wireQueue(GpsLocationExternalReader)
+	s := GpsSub{gpsLocation: internal, gpsLocationExternal: external, clock: func() clockSample { return clockSample{mono, mono, mono} }}
+	s.ReadSample()
+	mono += 100_000_000
+	*eq = append(*eq, gpsWire(t, GpsSourceExternal, mono, true, true, 3, 4, 5))
+	first, ok := s.ReadSample()
+	if !ok {
+		t.Fatal("initial fix missing")
+	}
+	mono += 100_000_000
+	reads := 0
+	s.clock = func() clockSample {
+		reads++
+		if reads == 1 {
+			return clockSample{mono - 2_000_000, mono, mono}
+		}
+		return clockSample{mono, mono, mono}
+	}
+	got, ok := s.ReadSample()
+	if !ok || reads != 2 || got.SourceGeneration != first.SourceGeneration || got.FixMonoTime != first.FixMonoTime || got.NewFix {
+		t.Fatalf("interrupted clock sample reset fresh evidence: %+v reads=%d", got, reads)
+	}
+}

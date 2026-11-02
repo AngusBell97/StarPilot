@@ -1836,3 +1836,14 @@ progress { max-width: 100%; accent-color: var(--primary); }
 }
 .gx-starport-checks .gx-starport-check--active { padding: var(--sp-3); border-radius: var(--radius-sm); color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); font-weight: var(--fw-bold); }
 .gx-starport-checks .gx-starport-check--active::before { border-right-color: var(--secondary, var(--primary)); }
+
+/* SP-043: all-process descriptions and adjacent category column. */
+.gx-monitor__description { margin: 5px 0 8px; color: var(--text-muted); line-height: 1.45; }
+.gx-monitor__category { min-width: 120px; max-width: 170px; white-space: normal !important; }
+.gx-monitor__coverage { display: block; color: var(--text-muted); font-size: 11px; margin-top: 5px; }
+.gx-monitor__raw { padding-top: 8px; overflow-wrap: anywhere; }
+.gx-monitor__table td { vertical-align: top; }
+.gx-monitor__table details summary { cursor: pointer; color: var(--primary); }
+.gx-monitor__table { overflow-anchor: none; }
+
+@media(max-width:600px) { .gx-monitor table { table-layout: fixed; min-width: 640px; } .gx-monitor th:first-child, .gx-monitor td:first-child { width: 180px; min-width: 180px; max-width: 180px; } .gx-monitor th:nth-child(2), .gx-monitor td:nth-child(2) { width: 130px; } }

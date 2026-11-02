@@ -2662,6 +2662,13 @@ struct Event {
     mapdIn @144 :Custom.MapdIn;
     mapdOut @145 :Custom.MapdOut;
 
+    # SP-016: append-only services; old Dom ordinals conflict with 7.0 SLC.
+    laneCenteringState @154 :Custom.LaneCenteringState;
+    laneCenteringGeometryRequest @155 :Custom.LaneCenteringGeometryRequest;
+    laneCenteringGeometryResult @156 :Custom.LaneCenteringGeometryResult;
+    laneCenteringControl @157 :Custom.LaneCenteringControl;
+    starpilotCarControl @158 :Custom.StarPilotCarControl;
+
     # *********** legacy + deprecated ***********
     model @9 :Deprecated.ModelData; # TODO: rename modelV2 and mark this as deprecated
     audioFeedbackDEPRECATED @149 :Deprecated.AudioFeedbackDEPRECATED;

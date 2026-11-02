@@ -17,6 +17,11 @@ V_CRUISE_UNSET = 255
 V_CRUISE_INITIAL = 40
 IMPERIAL_INCREMENT = round(CV.MPH_TO_KPH, 1)  # round here to avoid rounding errors incrementing set speed
 
+def slc_target_kph(target_mps: float, is_metric: bool) -> float:
+  target_kph = round(target_mps * CV.MS_TO_KPH) if is_metric else round(target_mps * CV.MS_TO_MPH) * CV.MPH_TO_KPH
+  return float(np.clip(round(target_kph, 1), V_CRUISE_MIN, V_CRUISE_MAX))
+
+
 ButtonEvent = car.CarState.ButtonEvent
 ButtonType = car.CarState.ButtonEvent.Type
 CRUISE_LONG_PRESS = 50
@@ -74,6 +79,7 @@ class VCruiseHelper:
     self.slc_released_owner: dict[ButtonType, SlcPendingConfirmation] = {}
     self.slc_released_suppressed = False
     self.slc_pcm = False
+    self.tesla_controls_pcm = False
     from openpilot.starpilot.speed_limits.toyota import eligible, ToyotaCruise
     self.toyota = ToyotaCruise() if eligible(CP) else None
 
@@ -81,12 +87,13 @@ class VCruiseHelper:
   def v_cruise_initialized(self):
     return self.v_cruise_kph != V_CRUISE_UNSET
 
-  def update_v_cruise(self, CS, enabled, is_metric, slc_pending: SlcPendingConfirmation | None = None, *, slc_enabled: bool = False,
-                      slc_approved=None):
+  def update_v_cruise(self, CS, enabled, is_metric, slc_pending: SlcPendingConfirmation | None = None, *, slc_enabled: bool = False, tesla_controls: bool = False, slc_approved=None):
     self.slc_pcm = bool(slc_enabled and self.CP.pcmCruise and self.CP.openpilotLongitudinalControl)
+    self.tesla_controls_pcm = bool(tesla_controls and self.slc_pcm and
+                                   self.CP.carFingerprint in ('TESLA_MODEL_3', 'TESLA_MODEL_Y'))
     from opendbc.car.subaru.software_cruise import selected as subaru_software_selected
     subaru_software = subaru_software_selected(self.CP)
-    software_cruise = not self.CP.pcmCruise or self.slc_pcm or subaru_software
+    software_cruise = not self.CP.pcmCruise or self.slc_pcm or self.tesla_controls_pcm or subaru_software
     self.slc_cruise_change = None
     self.slc_consumed_button = None
     self.slc_released_suppressed = False
@@ -111,7 +118,7 @@ class VCruiseHelper:
 
     if CS.cruiseState.available:
       if software_cruise:
-        if self.toyota is None and (self.slc_pcm or subaru_software) and (not enabled or not self.v_cruise_initialized):
+        if self.toyota is None and (self.slc_pcm or self.tesla_controls_pcm or subaru_software) and (not enabled or not self.v_cruise_initialized):
           # PCM still owns engagement; SLC owns the software set speed while system long is selected.
           stock_kph = CS.cruiseState.speed * CV.MS_TO_KPH
           self.v_cruise_kph = stock_kph if 0 < stock_kph < V_CRUISE_UNSET else V_CRUISE_UNSET
@@ -237,7 +244,7 @@ class VCruiseHelper:
     """Apply the normal software cruise step without synthesizing button events."""
     from opendbc.car.subaru.software_cruise import selected as subaru_software_selected
     subaru_software = subaru_software_selected(self.CP)
-    if ((self.CP.pcmCruise and not self.slc_pcm and not subaru_software) or button_type not in (ButtonType.accelCruise, ButtonType.decelCruise) or
+    if ((self.CP.pcmCruise and not self.slc_pcm and not self.tesla_controls_pcm and not subaru_software) or button_type not in (ButtonType.accelCruise, ButtonType.decelCruise) or
         not 0 < self.v_cruise_kph < V_CRUISE_UNSET or
         (button_type == ButtonType.accelCruise and CS.cruiseState.standstill)):
       return False
@@ -292,7 +299,7 @@ class VCruiseHelper:
 
   def apply_slc_target(self, target_mps: float, is_metric: bool) -> None:
     """Apply a qualified planner command to the card-owned software set speed."""
-    # Match ordinary button precision so stepping away and back restores this target.
+    # Shared with mapped timing; ordinary button precision is unchanged.
     self.v_cruise_kph = slc_target_kph(target_mps, is_metric)
     self.v_cruise_cluster_kph = self.v_cruise_kph
     if self.toyota is not None:

@@ -95,7 +95,7 @@ class TestConditionalHost(unittest.TestCase):
       self.assertIsNone(denied.override_experimental)
 
   def test_long_only_can_propose_but_lateral_only_and_stock_acc_cannot(self):
-    selection = selection_for_drive(ModeChoice.CEM, ModeSettings(cem_speed_mps=20.0), MONO)
+    selection = selection_for_drive(ModeChoice.CEM, ModeSettings(cem_speed_with_lead_mps=20.0), MONO)
     manual = manual_for_drive(ManualIntent.NONE, MONO, MONO + 1_000_000)
     self.rearm(selection, manual)
     long_only = self.sample(selection=selection, manual=manual)

@@ -2,7 +2,7 @@ import { GxDialog } from "./dialog.js"
 import { GxState } from "./state.js"
 import { connectionError } from "./polling.js"
 import { reactive, nextTick } from "../vendor/vue/vue.esm-browser.js"
-import { GalaxySettingRow, settingControl } from "./galaxy-setting-row.js"
+import { GalaxySettingRow, GalaxyRangeSettingRow, pairedSettingRows, settingControl } from "./galaxy-setting-row.js"
 import { OnroadLayoutPage } from "./onroad-layout.js"
 import { FavoritesPage } from "./favorites.js"
 import { SoundPacks } from "./sound-packs.js"
@@ -38,6 +38,14 @@ const SECTION_LINKS = {
 }
 
 const activeSettings = new Set()
+
+// Page IDs encode nested settings; personalities are the existing flat-ID exception.
+export function settingsTrailPages(page) {
+  if (!page || page === "hub") return []
+  const parts = page.split("/")
+  const pages = parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+  return ["aggressive", "standard", "relaxed"].includes(parts[0]) ? ["profiles", ...pages] : pages
+}
 
 export const settingsBusy = state => ["updating", "saving"].includes(state.status) || !!state.pending || !!state.reviewing
 
@@ -255,25 +263,64 @@ export class SettingsFeed {
   }
 }
 
+const SETTINGS_PAGE_INTRO = `
+  <p class="gx-page-description">{{ pageDescription }}</p>
+  <a v-if="state.data?.page === 'slc'" class="gx-btn gx-btn--tonal" href="https://wiki.firestar.link/exclusive/speed-limit-controller/#vision-speed-limits" target="_blank" rel="noopener noreferrer"><i class="bi bi-book" aria-hidden="true"></i> Vision speed limits guide</a>
+`
+
 export const SettingsPage = {
   emits: ["nested"],
-  components: { GxDialog, GxState, GalaxySettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, GxNotice },
+  components: { GxDialog, GxState, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, GxNotice },
   props: {
     mode: { type: String, required: true }, unauthorized: { type: Function, required: true },
     initialPage: { type: String, default: "hub" }, title: { type: String, default: "Toggles" },
-    initialSection: { type: String, default: null }, returnTo: { type: Function, default: null }
+    initialSection: { type: String, default: null }, returnTo: { type: Function, default: null },
+    navigationPath: { type: Boolean, default: false },
   },
   setup(props) {
     const navigation = route.view
     const navigationKey = `${props.initialPage}:${props.initialSection || ""}`
     const saved = navigation.settings?.key === navigationKey ? navigation.settings : null
-    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, parents: [], developerOpen: props.initialSection === "developer", panelDirection: 1 })
+    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, parents: [], pageTitles: {}, developerOpen: props.initialSection === "developer", panelDirection: 1 })
     if (saved) Object.assign(state, { section: saved.section, query: saved.query, searchOpen: saved.searchOpen, parents: saved.parents.slice(), developerOpen: saved.developerOpen })
     const feed = new SettingsFeed({ publish: (update) => Object.assign(state, update), unauthorized: props.unauthorized })
     return { state, feed, sections: SETTINGS_SECTIONS, navigation, navigationKey, restoredPage: saved?.page }
   },
   computed: {
     busy() { return settingsBusy(this.state) },
+    pageTitle() { return this.state.data?.page && this.state.data.page !== "hub" ? this.state.data.title : this.title },
+    pageDescription() {
+      const page = this.state.data?.page || this.initialPage
+      if (this.state.developerOpen || page === "developer") return "Choose developer driving options and cloud services."
+      if (page === "conditional" || page.startsWith("conditional/")) return "Choose when to switch between Chill and Experimental. Applies on supported vehicles when StarPilot controls acceleration and braking."
+      if (["aggressive", "standard", "relaxed"].includes(page)) return "Adjust acceleration, braking and following for this driving style."
+      if (page === "sentry") return this.state.data?.subtitle || "Checking motion monitor…"
+      return {
+        pip: "Choose when to show the camera and adjust its saved crop. Use the crop editor for a live preview.",
+        sounds: "Adjust alert and chime volumes. Immediate warnings keep their safety volume ramp.",
+        display: "Adjust brightness and screen timing when custom display settings are on.",
+        lane_change: "Configure lane-change assistance, signal timing, steering pace and following gap.",
+        profiles: "Adjust acceleration, braking and following for each driving personality.",
+        traffic: "Tune low-speed following and jerk, blending toward Relaxed at higher speeds.",
+        aol: "Keep steering assistance active independently of cruise control.",
+        torque: "Tune how StarPilot applies steering torque.",
+        lane: "Lane centering uses detected lane lines and road edges to calculate a target position, then compares it with the driving model’s predicted path. It adds a limited, smoothed steering correction to the model’s request to bring the path closer to that target.\n\nWith two suitable boundaries, it aims for the centre between them. With only one, it can add correction away from that boundary when the model path comes too close. The model remains the basis for steering, while model preference controls how much it can reduce the added lane-centering correction.",
+        curve: "Set how the vehicle slows for curves ahead.",
+        slc: "Control how speed limits change your set speed.",
+        wheel: "Assign what the steering-wheel controls do.",
+        data: "Choose what uploads when the vehicle uses mobile data.",
+      }[page] || ""
+    },
+    navigationItems() {
+      if (!this.navigationPath || !this.state.data) return []
+      const page = this.state.data.page
+      const pages = settingsTrailPages(page)
+      const section = this.activeSection
+      const items = []
+      if (page === "hub" || section.pages.length > 1) items.push({ id: "section", label: section.label })
+      return [...items, ...pages.map(id => ({ id, label: id === page ? this.state.data.title :
+        this.state.pageTitles[id] || id.split("/").at(-1).replaceAll("_", " ") }))]
+    },
     activeSection() {
       if (this.state.developerOpen) return this.sections.at(-1)
       const page = (this.state.data?.page || "hub").split("/")[0]
@@ -287,7 +334,7 @@ export const SettingsPage = {
     visibleRows() {
       const needle = this.state.query.trim().toLocaleLowerCase()
       const rows = this.state.data?.rows || []
-      const inHub = this.initialPage === "hub" && this.state.data?.page === "hub"
+      const inHub = (this.navigationPath || this.initialPage === "hub") && this.state.data?.page === "hub"
       const section = this.activeSection
       const entries = inHub && SECTION_LINKS[section.id]
         ? SECTION_LINKS[section.id].map((row, index) => ({ row: { ...row, available: true, action: false, value: row.value || "Customize " + row.label.toLocaleLowerCase() }, index }))
@@ -295,7 +342,7 @@ export const SettingsPage = {
       if (inHub && section.id === "longitudinal") {
         entries.sort((a, b) => section.pages.indexOf(a.row.page) - section.pages.indexOf(b.row.page))
       }
-      return entries.filter(({ row }) => !isPipCropRow(row)).filter(({ row, index }) => {
+      return pairedSettingRows(entries).filter(({ row }) => !isPipCropRow(row)).filter(({ row, index }) => {
         const previous = rows[index - 1]
         return !(["sounds", "display"].includes(this.state.data?.page) && row.repairValue === "Auto" &&
           previous?.choices?.includes("Auto") && settingControl(previous) === "slider" && row.label === `Use Auto ${previous.label}`)
@@ -304,6 +351,11 @@ export const SettingsPage = {
     },
   },
   watch: {
+    "state.data"(data) {
+      if (!this.navigationPath || !data) return
+      this.rememberPathPage(data)
+      this.loadPathTitles()
+    },
     "state.pending"() { this.flushSoundChoices() },
     "state.status"(status, previous) {
       if (previous === "saving" && status === "ready") this.state.soundChoicesDirty = false
@@ -322,9 +374,52 @@ export const SettingsPage = {
       key: this.navigationKey, page: data?.page || this.restoredPage || this.initialPage, section, query, searchOpen, parents: parents.slice(), developerOpen,
     }
     this.navigation.searchPage = this.initialPage === "hub" ? "" : this.initialPage
-    this.feed.stop()
+    this.pathRequest?.abort(); this.feed.stop()
   },
   methods: {
+    rememberPathPage(data) {
+      if (typeof data?.page !== "string" || typeof data.title !== "string") return
+      this.state.pageTitles[data.page] = data.title
+      for (const row of data.rows || []) {
+        if (row.page && typeof row.label === "string") this.state.pageTitles[row.page] = row.label
+      }
+    },
+    async loadPathTitles() {
+      if (this.pathRequest || !this.feed.active || !this.state.data) return
+      const missing = settingsTrailPages(this.state.data.page).slice(0, -1).filter(page => !this.state.pageTitles[page])
+      if (!missing.length) return
+      // Search can open a deep page directly. Read only missing ancestor labels;
+      // never replace the settings view or interrupt its save/poll request.
+      const controller = new AbortController()
+      this.pathRequest = controller
+      const timer = setTimeout(() => controller.abort(), 4000)
+      try {
+        await Promise.all(missing.map(async page => {
+          try {
+            const response = await fetch(`./api/settings/pages/${encodeURIComponent(page)}`, {
+              credentials: "same-origin", cache: "no-store", signal: controller.signal,
+            })
+            if (controller.signal.aborted) return
+            if (response.status === 401) { controller.abort(); this.feed.stop(); this.unauthorized(); return }
+            if (!response.ok) return
+            const data = await response.json()
+            if (!controller.signal.aborted && data?.page === page && Array.isArray(data.rows)) this.rememberPathPage(data)
+          } catch { /* The main settings feed owns connection feedback and retry. */ }
+        }))
+      } finally {
+        clearTimeout(timer)
+        if (this.pathRequest === controller) this.pathRequest = null
+      }
+    },
+    jumpToPage(page) {
+      if (this.busy || this.state.status === "loading" || !this.navigationItems.some(item => item.id === page)) return
+      if (page === this.state.data?.page) return
+      this.state.panelDirection = -1
+      this.state.query = ""
+      if (page === "hub" || page === "section") { this.selectSection(this.activeSection); return }
+      this.state.parents = ["hub", ...settingsTrailPages(page).slice(0, -1)]
+      this.feed.load(page)
+    },
     open(page) {
       if (this.busy) return
       this.$emit?.("nested")
@@ -352,6 +447,18 @@ export const SettingsPage = {
     rowKey(row, index) { return `${this.state.data.page}:${row.key || row.page || index}` },
     closeLayout() { this.state.layoutOpen = false; this.state.section = "visual"; this.feed.start(this.initialPage) },
     closeFavorites() { this.state.favoritesOpen = false; this.state.section = "visual"; this.feed.start("hub") },
+    selectCategory(section) {
+      // Categories remain available inside editors; use their existing leave
+      // handling so changing categories cannot discard unsaved work.
+      this.requestRouteLeave(() => {
+        if (this.busy) return
+        this.state.layoutOpen = false
+        this.state.favoritesOpen = false
+        this.state.query = ""
+        this.state.searchOpen = false
+        this.selectSection(section)
+      })
+    },
     selectSection(section) {
       if (this.busy) return
       if (this.sections) {
@@ -378,13 +485,18 @@ export const SettingsPage = {
       if (this.state.layoutOpen) { this.$refs.layoutEditor.requestLeave("back"); return true }
       if (this.state.favoritesOpen) { if (!this.$refs.favoritesEditor?.busy) this.closeFavorites(); return true }
       if (this.state.developerOpen) return false
-      const nested = this.initialPage === "hub" ? !this.atSectionRoot : this.state.data?.page !== this.initialPage
+      const nested = this.navigationPath || this.initialPage === "hub" ? !this.atSectionRoot : this.state.data?.page !== this.initialPage
       if (!nested) return false
       this.back()
       return true
     },
     back() {
       if (this.state.developerOpen) return
+      if (this.navigationPath) {
+        const pages = settingsTrailPages(this.state.data?.page)
+        this.jumpToPage(pages.length > 1 ? pages.at(-2) : "section")
+        return
+      }
       this.state.panelDirection = -1
       const page = this.state.data?.page || this.initialPage
       this.state.section = this.activeSection?.id || this.state.section
@@ -407,31 +519,21 @@ export const SettingsPage = {
     },
   },
   template: `
+    <div class="gx-settings-shell" :class="{ 'gx-settings-shell--path': navigationPath }">
+      <template v-if="navigationPath">
+        <div v-if="!state.layoutOpen && !state.favoritesOpen" class="gx-settings__header gx-page-header"><h2>{{ pageTitle }}</h2></div>
+        <div v-if="mode === 'local'" class="gx-settings-tabs" aria-label="Settings sections">
+          <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :disabled="busy" :aria-pressed="section.id === activeSection.id" @click="selectCategory(section)">{{ section.label }}</button>
+        </div>
+      </template>
     <OnroadLayoutPage ref="layoutEditor" v-if="state.layoutOpen" :mode="mode" :unauthorized="unauthorized" :initial-panel="state.layoutPanel" @target="openLayoutTarget" @close="closeLayout" />
     <FavoritesPage ref="favoritesEditor" v-else-if="state.favoritesOpen" :mode="mode" :unauthorized="unauthorized" @close="closeFavorites" />
-    <section v-else class="gx-settings" :aria-label="title" :inert="busy" :aria-busy="busy || undefined">
-      <div v-if="title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
-        <div v-if="mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs" aria-label="Settings sections">
+    <section v-else class="gx-settings" :class="{ 'gx-settings--path': navigationPath }" :aria-label="title" :inert="busy" :aria-busy="busy || undefined">
+      <div v-if="!navigationPath && title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
+        <div v-if="!navigationPath && mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs" aria-label="Settings sections">
           <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :aria-pressed="section.id === activeSection.id" @click="selectSection(section)">{{ section.label }}</button>
         </div>
-      <p class="gx-page-description" v-if="state.developerOpen">Choose developer driving options and cloud services.</p>
-      <p class="gx-page-description" v-else-if="initialPage === 'pip'">Choose when to show the camera and adjust its saved crop. Use the crop editor for a live preview.</p>
-      <p class="gx-page-description" v-else-if="(state.data?.page || initialPage) === 'sounds'">Adjust alert and chime volumes. Immediate warnings keep their safety volume ramp.</p>
-      <p class="gx-page-description" v-else-if="(state.data?.page || initialPage) === 'display'">Adjust brightness and screen timing when custom display settings are on.</p>
-      <p class="gx-page-description" v-else-if="initialPage === 'lane_change'">Configure lane-change assistance, signal timing, steering pace and following gap.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'conditional' || state.data?.page.startsWith('conditional/')">Choose when to switch between Chill and Experimental. Applies on supported vehicles when StarPilot controls acceleration and braking.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'profiles'">Adjust acceleration, braking and following for each driving personality.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'traffic'">Tune low-speed following and jerk, blending toward Relaxed at higher speeds.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'aol'">Keep steering assistance active independently of cruise control.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'torque'">Tune how StarPilot applies steering torque.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'lane'">Choose lane-centering behavior and alerts.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'curve'">Set how the vehicle slows for curves ahead.</p>
-      <div v-else-if="state.data?.page === 'slc'"><p class="gx-page-description">Control how speed limits change your set speed.</p>
-        <a class="gx-btn gx-btn--tonal" href="https://wiki.firestar.link/exclusive/speed-limit-controller/#vision-speed-limits" target="_blank" rel="noopener noreferrer"><i class="bi bi-book" aria-hidden="true"></i> Vision speed limits guide</a></div>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'wheel'">Assign what the steering-wheel controls do.</p>
-      <p class="gx-page-description" v-else-if="state.data?.page === 'data'">Choose what uploads when the vehicle uses mobile data.</p>
-      <p class="gx-page-description" v-else-if="['aggressive','standard','relaxed'].includes(state.data?.page)">Adjust acceleration, braking and following for this driving style.</p>
-      <p class="gx-page-description" v-else-if="initialPage === 'sentry'">{{ state.data?.subtitle || "Checking motion monitor…" }}</p>
+      <div v-if="!navigationPath && pageDescription" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
       <GxState v-if="mode !== 'local'">Local settings are unavailable in preview.</GxState>
       <template v-else>
         <GxNotice v-if="state.data && state.data.vehicleIdentified === false" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
@@ -447,11 +549,20 @@ export const SettingsPage = {
               <button type="button" class="gx-btn gx-btn--tonal" @click="openCropEditor"><i class="bi bi-crop" aria-hidden="true"></i> Crop editor</button>
             </div>
             <section class="gx-card gx-settings__section">
-              <div class="gx-section__header"><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span>
-                <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
+              <div class="gx-section__header">
+                <nav v-if="navigationPath" class="gx-settings-path" aria-label="Toggle hierarchy"><ol>
+                  <li v-for="(item, index) in navigationItems" :key="item.id">
+                    <span v-if="index" class="gx-settings-path__separator" aria-hidden="true">›</span>
+                    <span v-if="index === navigationItems.length - 1" class="gx-settings-path__current" aria-current="page">{{ item.label }}</span>
+                    <button v-else type="button" class="gx-settings-path__parent" :disabled="busy" @click="jumpToPage(item.id)">{{ item.label }}</button>
+                  </li>
+                </ol></nav>
+                <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
+                <button v-if="!navigationPath && state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
-              <div v-if="state.searchOpen" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
-              <GalaxySettingRow v-for="{ row, index } in visibleRows" :key="rowKey(row, index)" :row="row" :index="index"
+              <div v-if="navigationPath && pageDescription" class="gx-settings__intro" aria-label="Page information">${SETTINGS_PAGE_INTRO}</div>
+              <div v-if="!navigationPath && state.searchOpen" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
+              <component :is="row.paired ? 'GalaxyRangeSettingRow' : 'GalaxySettingRow'" v-for="{ row, index } in visibleRows" :key="rowKey(row, index)" :row="row" :index="index"
                 :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)"
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
               <div v-if="!visibleRows.length" class="gx-empty">No matching settings.</div>
@@ -464,5 +575,6 @@ export const SettingsPage = {
             <div class="gx-settings__controls gx-actions"><button type="button" class="gx-btn gx-btn--tonal" @click="feed.cancel()">Cancel</button>
               <button type="button" class="gx-btn" @click="feed.confirm()">Save</button></div></GxDialog>
       </template>
-    </section>`,
+    </section>
+    </div>`,
 }

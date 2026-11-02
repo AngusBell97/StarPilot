@@ -71,7 +71,7 @@ def command_applicable(command, state, observation, producer_session: str, now_n
                        selected_mps: float, *, long_active: bool, button_event: bool) -> bool:
   if state is None or button_event or not long_active or not state.hasAccepted:
     return False
-  if (str(command.kind) != 'adoptAcceptedLimit' or not str(command.sessionId) or
+  if (str(command.kind) not in ('adoptAcceptedLimit', 'reengageZone', 'previewRollback') or not str(command.sessionId) or
       str(command.sessionId) != str(state.sessionId) or int(command.commandId) <= 0 or
       int(command.actionId) < 0 or int(command.presentationId) <= 0 or
       int(command.commandId) != int(state.commandId) or
@@ -87,9 +87,17 @@ def command_applicable(command, state, observation, producer_session: str, now_n
   if not (0 < issued <= now_ns <= expires and expires - issued <= COMMAND_MAX_AGE_NS):
     return False
   expected, target = float(command.expectedSelectedMps), float(command.targetMps)
+  resumed = str(command.kind) == 'reengageZone'
+  if resumed and (not state.hasReengageTarget or state.hasPending):
+    return False
+  rollback = str(command.kind) == 'previewRollback'
+  if rollback and (not state.hasRollbackTarget or state.hasPending or str(state.source) != 'map'):
+    return False
+  bound_target = (float(state.rollbackTarget) if rollback else float(state.reengageTarget) if resumed
+                  else float(state.acceptedSpeedLimit) + float(state.offset))
   # Float32 transport can round a legal boundary just outside its double-precision value.
   return (finite_speed(expected) and finite_speed(target) and finite_speed(selected_mps) and
           abs(expected - selected_mps) <= 0.1 and
           abs(float(state.acceptedSpeedLimit) - float(state.speedLimit)) <= 0.02 and
-          abs(target - (float(state.acceptedSpeedLimit) + float(state.offset))) <= 0.1 and
+          abs(target - bound_target) <= 0.1 and
           V_CRUISE_MIN / 3.6 - 1e-5 <= target <= V_CRUISE_MAX / 3.6 + 1e-5)

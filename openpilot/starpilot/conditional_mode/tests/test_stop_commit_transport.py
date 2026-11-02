@@ -162,7 +162,6 @@ class TestStopCommitTransport(unittest.TestCase):
       stop_sign_confirmed=ObservedBool(stop_sign, now-2_000_000),
       forcing_stop=ObservedBool(forcing, now-2_000_000),
       dashboard_stop_sign=ObservedBool(False, now-2_000_000),
-      slc_experimental=ObservedBool(False, now-2_000_000),
       previous_experimental=ObservedBool(False, now-2_000_000),
       red_light=ObservedBool(False, now-2_000_000),
       plan_forcing_stop=ObservedBool(forcing, now-2_000_000),
@@ -404,6 +403,14 @@ def test_recorded_ford_stopped_geometry_does_not_release_native_stop(request):
   from openpilot.starpilot.conditional_mode.tests.test_projection import owner_context
   from openpilot.starpilot.longitudinal.tests.test_lead_approach_planner import Frame, DRIVE_NS
 
+  class NativeFrame(Frame):
+    """Keep recorded fixture health checks when calling the current planner."""
+    def all_checks(self, services=None):
+      return all(name in self and self.alive.get(name, False) and self.valid.get(name, False)
+                 and 0 <= self.now_ns - self.logMonoTime.get(name, 0) <= 100_000_000
+                 for name in (self if services is None else services))
+
+
   recorded = json.loads(gzip.decompress((Path(__file__).parent / 'testdata/ford_stationary_stop.json.gz').read_bytes()))['frames']
   fingerprint = gen_empty_fingerprint()
   fingerprint[0][0x5A] = 8
@@ -458,7 +465,7 @@ def test_recorded_ford_stopped_geometry_does_not_release_native_stop(request):
       continue
     decision = policy.step((stamp+1_000_000)/1e9, ModeChoice.CEM, ManualIntent.NONE,
                            projected.authority, projected.scene)
-    native = Frame(index, approach=False)
+    native = NativeFrame(index, approach=False)
     native['carState'].vEgo = max(sample['vEgo'], 0.)
     native['carState'].standstill = sample['standstill']
     native['carState'].cruiseState.available = native['carState'].cruiseState.enabled = True

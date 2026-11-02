@@ -460,6 +460,8 @@ def main(demo=False):
   long_delay = CP.longitudinalActuatorDelay + LONG_SMOOTH_SECONDS
   prev_action = log.ModelDataV2.Action()
 
+  from openpilot.starpilot.lateral.chubbs_selector import ModelLanePolicy
+  chubbs = ModelLanePolicy(params)
   lane_preferences = LiveLaneChangePolicy(params, now_ns=time.monotonic_ns())
   saved_lane_policy = lane_preferences.applied
   auto_vehicle_capable = steering_capable(CP)
@@ -602,6 +604,10 @@ def main(demo=False):
       posenet_send = messaging.new_message('cameraOdometry')
 
       action = model.get_action_from_model(model_output, prev_action, lat_action_t, long_action_t, v_ego)
+      chubbs.apply(model_output, action, v_ego, now_ns=time.monotonic_ns(),
+                   active=bool(sm['carControl'].latActive and sm.all_checks(['carState', 'carControl']) and
+                               sm['carState'].canValid and not sm['carState'].canTimeout and not sm['carState'].steeringPressed),
+                   desire=desire, lane_change=DH.lane_change_state)
       filter_action(action, prev_action, v_ego, subaru_tau)
       prev_action = action
       fill_model_msg(modelv2_send, model_output, action,

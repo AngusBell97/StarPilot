@@ -43,6 +43,7 @@ class Frame(dict):
       lead.modelProb = .984
       lead.radar = False
     if lane_change:
+      self['carState'].leftBlinker = True
       self['modelV2'].meta.laneChangeState = 'laneChangeStarting'
       self['modelV2'].meta.laneChangeDirection = 'left'
 
@@ -122,8 +123,8 @@ class NativeLeadApproachTests(unittest.TestCase):
         self.assertIsNone(planner.lane_change_gap.ramped_follow)
     first_base = follows.index(1.45)
     self.assertGreater(first_base, 8)
-    self.assertAlmostEqual(follows[first_base + 1], 1.42)
-    self.assertLess(follows[-1], 1.45)
+    self.assertTrue(all(value == 1.45 for value in follows[first_base:]))
+    self.assertIsNone(planner.lane_change_gap.ramped_follow)
 
   def test_custom_profile_and_curve_use_same_selected_follow_time(self):
     profile = ProfileTuning('standard', 1.8, 1., 1., 1., 1., 1.)

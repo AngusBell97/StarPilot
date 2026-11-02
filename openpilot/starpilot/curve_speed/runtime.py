@@ -16,6 +16,10 @@ PERSIST_INTERVAL_NS = 30_000_000_000
 CRUISING_SPEED = 5.0
 ACTIVE_ON_DELTA = 0.5
 ACTIVE_OFF_DELTA = 0.25
+CAP_RELEASE_NS = 350_000_000
+RECOVERY_ANCHOR_NS = 1_000_000_000
+RECOVERY_RAW_RISE_MPS = 1.0
+RECOVERY_DISTANCE_MARGIN_M = 15.0
 IN_CURVE_ACCEL = 1.3
 NUDGE = 0.15
 
@@ -61,6 +65,7 @@ class Result:
   progress: float
   dirty_revision: int | None
   learning_reason: str = ''
+  apex_speed_mps: float | None = None
 
 
 class Runtime:
@@ -69,11 +74,20 @@ class Runtime:
   def __init__(self, document: object = None, *, enabled: bool = False, no_lead: bool = False):
     loaded = LearnedCurve.load(document)
     self.curve: LearnedCurve = loaded.curve
+    self.steering_load_enabled = False
     self.document_valid = loaded.valid
     self.document_reason = loaded.reason
     self.enabled = enabled
     self.no_lead = no_lead
     self.filter = TargetFilter()
+    self.cap_latched = False
+    self.cap_release_since_ns = 0
+    self.eligibility = 'uninitialised'
+    self.anchor_pending = False
+    self.last_envelope = None
+    self.last_envelope_ego = 0.0
+    self.continuity_counts = {}
+    self.following_lead = None
     self.last_ns = 0
     self.last_model_ns = 0
     self.last_valid_ns = 0
@@ -107,9 +121,36 @@ class Runtime:
     self.retired_sessions: set[str] = set()
     self.event_exhausted = False
 
+  def _reset_filter(self) -> None:
+    self.filter.reset()
+    self.cap_latched = False
+    self.cap_release_since_ns = 0
+    self.anchor_pending = False
+    self.last_envelope = None
+
+  def _count(self, name):
+    self.continuity_counts[name] = min(self.continuity_counts.get(name, 0) + 1, 1_000_000)
+
+  def _ceiling(self, target: float | None, cruise: float, now_ns: int) -> float | None:
+    if target is None:
+      self.cap_latched = False
+      self.cap_release_since_ns = 0
+    elif not self.cap_latched:
+      self.cap_latched = target < cruise - ACTIVE_ON_DELTA
+      self.cap_release_since_ns = 0
+    elif target >= cruise - ACTIVE_OFF_DELTA:
+      if not self.cap_release_since_ns:
+        self.cap_release_since_ns = now_ns
+      elif now_ns - self.cap_release_since_ns >= CAP_RELEASE_NS:
+        self.cap_latched = False
+        self.cap_release_since_ns = 0
+    else:
+      self.cap_release_since_ns = 0
+    return target if self.cap_latched else None
+
   def reset(self, *, drive_id: int = 0) -> None:
     self.event_floor_ns = max(self.event_floor_ns, self.last_ns, self.last_event_ns)
-    self.filter.reset()
+    self._reset_filter()
     self.last_ns = 0
     self.last_model_ns = 0
     self.last_valid_ns = 0
@@ -218,8 +259,10 @@ class Runtime:
       self.curve.nudge(self.watch_curvature, max(self.watch_peak, self.curve.comfort(self.watch_curvature) + NUDGE))
     self.watch_until_ns = 0
 
-  def step(self, frame: Frame, *, event: DriverEvent | None = None) -> Result:
+  def step(self, frame: Frame, *, event: DriverEvent | None = None, before_learning=None) -> Result:
     now = frame.now_ns
+    self.following_lead = frame.following_lead
+    self.eligibility = 'invalid_evidence'
     previous_target = self.pending_target
     if type(now) is not int or now <= 0:
       self.reset()
@@ -243,16 +286,37 @@ class Runtime:
                      frame.profile.observed_ns == frame.model_ns and
                      frame.model_ns > self.last_model_ns)
     if not valid_profile:
+      self.filter.clear_opening()
+      # Authenticated driver events may inhibit control even if geometry is
+      # unusable. They must never teach a comfort preference in this branch.
+      if self._event(event, frame) and (self.was_controlling or self.anchor_pending and self.cap_latched):
+        self.override = True
       self.watch_until_ns = 0
       self.last_training_ns = 0
-      self.pending_hold = (self.filter.target is not None and
-                           now - self.last_valid_ns <= int(MAX_STEP_SECONDS * 1e9))
+      self.pending_hold = (self.filter.target is not None and self.enabled and self.document_valid and
+                           frame.system_longitudinal and frame.enabled and frame.long_active and
+                           not frame.gas_pressed and not frame.brake_pressed and not frame.force_decel and
+                           not self.override and now - self.last_valid_ns <= RECOVERY_ANCHOR_NS)
       if self.pending_hold:
+        if not self.anchor_pending:
+          self._count('anchor_started')
+        self.anchor_pending = True
         self.pending_target = self.filter.target
+        if now - self.last_valid_ns > int(MAX_STEP_SECONDS * 1e9):
+          self.was_controlling = False
+        # Invalid time is not evidence that the curve has eased. Freeze the
+        # release timer rather than restarting it or counting the missing time.
+        if self.cap_release_since_ns:
+          self.cap_release_since_ns += int(dt * 1e9)
       else:
-        self.filter.reset()
+        if self.anchor_pending:
+          self._count('anchor_expired')
+        # A gas takeover must not be forgotten just because another input is
+        # stale. This is only an inhibition, never learning from stale evidence.
+        self.override = self.override or bool((self.was_controlling or self.anchor_pending and self.cap_latched) and frame.gas_pressed and
+          previous_target is not None and finite_number(frame.ego_mps) and previous_target < frame.ego_mps - 0.5)
+        self._reset_filter()
         self.nudged = False
-        self.override = False
         self.was_controlling = False
         self.glow = False
         self.was_long_active = frame.long_active
@@ -260,12 +324,14 @@ class Runtime:
         self.was_brake = frame.brake_pressed
       return self._result(None, None, 0.0, 'stale_or_invalid_evidence', False, now)
     self.last_model_ns = frame.model_ns
+    previous_valid_ns = self.last_valid_ns
+    recovery_age = (now - previous_valid_ns) / 1e9
     self.last_valid_ns = now
     if (not finite_number(frame.cruise_mps) or frame.cruise_mps <= 0 or
         not finite_number(frame.ego_mps) or frame.ego_mps < 0 or
         frame.ego_mps > 100.0 or not finite_number(frame.measured_curvature) or
         abs(frame.measured_curvature) > 0.1):
-      self.filter.reset()
+      self._reset_filter()
       self.watch_until_ns = 0
       self.last_training_ns = 0
       self.override = False
@@ -276,7 +342,7 @@ class Runtime:
     try:
       envelope = evaluate(frame.profile, self.curve, frame.cruise_mps)
     except (ValueError, OverflowError):
-      self.filter.reset()
+      self._reset_filter()
       self.watch_until_ns = 0
       self.last_training_ns = 0
       self.override = False
@@ -297,28 +363,93 @@ class Runtime:
       self.watch_until_ns = 0
       self.override = False
       self.nudged = False
-    if self.was_controlling and feedback_allowed and (accel_press or gas_override):
+    if (self.was_controlling or self.anchor_pending and self.cap_latched) and feedback_allowed and (accel_press or gas_override):
       self.override = True
     if self.override and not in_curve and candidate >= frame.cruise_mps - ACTIVE_OFF_DELTA:
       self.override = False
-    allowed = (self.enabled and self.document_valid and frame.system_longitudinal and frame.enabled and
-               frame.long_active and not frame.force_decel and frame.ego_mps > CRUISING_SPEED and
-               not frame.gas_pressed and not frame.brake_pressed and not self.override and
-               (not self.no_lead or frame.following_lead is False) and not (frame.blinker and not in_curve))
+    gates = ((self.enabled, 'disabled'), (self.document_valid, 'invalid_document'),
+             (frame.system_longitudinal, 'stock_longitudinal'), (frame.enabled, 'disengaged'),
+             (frame.long_active, 'long_inactive'), (not frame.force_decel, 'force_decel'),
+             (frame.ego_mps > CRUISING_SPEED, 'low_speed'), (not frame.gas_pressed, 'gas'),
+             (not frame.brake_pressed, 'brake'), (not self.override, 'driver_override'),
+             (not self.no_lead or frame.following_lead is False,
+              'following_unknown' if frame.following_lead is None else 'following_lead'),
+             (not (frame.blinker and not in_curve), 'indicator'))
+    self.eligibility = next((reason for passed, reason in gates if not passed), 'eligible')
+    allowed = self.eligibility == 'eligible'
+    if (self.anchor_pending and self.filter.target is not None and
+        self.eligibility == 'following_unknown' and
+        all(passed or reason == 'following_unknown' for passed, reason in gates) and
+        0 < now - previous_valid_ns <= RECOVERY_ANCHOR_NS):
+      # A fresh lead tracker can need one requalification frame after an input
+      # interruption. Keep only the bounded target memory through that frame;
+      # unknown following never grants a cap or renews the recovery deadline.
+      self.last_valid_ns = previous_valid_ns
+      self.pending_hold = True
+      self.pending_target = self.filter.target
+      self.was_controlling = False
+      self.watch_until_ns = 0
+      self.last_training_ns = 0
+      self.last_lead_ns = now
+      if self.cap_release_since_ns:
+        self.cap_release_since_ns += int(dt * 1e9)
+      self.filter.clear_opening()
+      self._count('anchor_following_unknown')
+      # This is fresh geometry: preserve the map owner's existing per-frame
+      # bookkeeping/exclusion callback, still with no visual cap or learning.
+      excluded = bool(before_learning(frame, None)) if before_learning is not None else False
+      return self._result(candidate, None, envelope.binding_distance_m,
+                          'following_unknown', False, now,
+                          'map_corner_exclusion' if excluded else 'learning_lead_unknown')
     if not allowed:
-      self.filter.reset()
+      self._reset_filter()
       if not self.enabled or not self.document_valid or not frame.system_longitudinal:
         self.watch_until_ns = 0
+    if allowed and self.anchor_pending:
+      old = self.last_envelope
+      held = self.filter.target
+      # Resume only on newly qualified evidence of the same approaching bend.
+      # A straightened path or a different, farther binding point starts fresh.
+      continuous = (recovery_age <= MAX_STEP_SECONDS or
+                    old is not None and held is not None and candidate < held and
+                    candidate <= old.speed_mps + RECOVERY_RAW_RISE_MPS and
+                    envelope.binding_distance_m <= old.binding_distance_m + RECOVERY_DISTANCE_MARGIN_M +
+                    max(frame.ego_mps, self.last_envelope_ego) * recovery_age)
+      if continuous:
+        self.filter.target = min(held, frame.cruise_mps)
+        self._count('anchor_resumed')
+      else:
+        self._reset_filter()
+        self._count('reseed_fresh')
+      self.anchor_pending = False
+    # Without an existing curve cap or a binding envelope, there is no curve
+    # trajectory to release. Tracking a higher selected cruise through the
+    # filter would invent a temporary curve cap from the old selected speed.
+    # A genuinely latched curve retains its filtered release and hysteresis.
+    if allowed and not self.cap_latched and candidate >= frame.cruise_mps:
+      self.filter.reset()
     try:
       target = self.filter.step(envelope, ego_mps=frame.ego_mps, cruise_mps=frame.cruise_mps, dt=dt) if allowed else None
     except ValueError:
+      self._reset_filter()
+      self.eligibility = 'invalid_target'
       target = None
-    ceiling = target if target is not None and target < frame.cruise_mps - ACTIVE_ON_DELTA else None
+    if allowed and target is not None:
+      self.last_envelope = envelope
+      self.last_envelope_ego = frame.ego_mps
+    was_latched = self.cap_latched
+    ceiling = self._ceiling(target, frame.cruise_mps, now)
+    if self.cap_latched != was_latched:
+      self._count('latch_on' if self.cap_latched else 'latch_off')
     controlling = ceiling is not None
     self.pending_target = target
     self.pending_cap = ceiling is not None
     self.pending_cruise = frame.cruise_mps
     self.pending_ego = frame.ego_mps
+    map_exclusion = bool(before_learning(frame, ceiling)) if before_learning is not None else False
+    if map_exclusion:
+      feedback_allowed = False
+      self.watch_until_ns = 0
     if feedback_allowed:
       self._finish_watch(frame, measured_accel)
     if self.was_controlling and not self.nudged and feedback_allowed:
@@ -353,7 +484,8 @@ class Runtime:
         learned = True
     else:
       self.last_training_ns = 0
-    learning_reason = ('learning_disabled' if not self.enabled else
+    learning_reason = ('map_corner_exclusion' if map_exclusion else
+                       'learning_disabled' if not self.enabled else
                        'invalid_learning_document' if not self.document_valid else
                        'learning_requires_system_longitudinal' if not frame.system_longitudinal else
                        'learning_requires_driver_speed' if not manual else
@@ -371,10 +503,10 @@ class Runtime:
     self.was_brake = frame.brake_pressed
     reason = ('available' if controlling else 'not_binding' if allowed else
               'invalid_learning_document' if not self.document_valid else 'not_eligible')
-    return self._result(candidate, ceiling, envelope.binding_distance_m, reason, learned, now, learning_reason)
+    return self._result(candidate, ceiling, envelope.binding_distance_m, reason, learned, now, learning_reason, envelope.apex_speed_mps)
 
   def _result(self, candidate: float | None, ceiling: float | None, distance: float,
-              reason: str, training: bool, now_ns: int, learning_reason: str | None = None) -> Result:
+              reason: str, training: bool, now_ns: int, learning_reason: str | None = None, apex_speed_mps: float | None = None) -> Result:
     revision = (self.curve.revision if self.document_valid and self.curve.dirty and
                 (not training or now_ns - self.last_persist_ns >= PERSIST_INTERVAL_NS) else None)
-    return Result(candidate, ceiling, distance, reason, training, self.curve.progress, revision, learning_reason or reason)
+    return Result(candidate, ceiling, distance, reason, training, self.curve.progress, revision, learning_reason or reason, apex_speed_mps)

@@ -37,7 +37,7 @@ def packet(**changes):
 
 class SM:
   def __init__(self, event):
-    self.data = {'mapdOut': event.mapdOut, 'carState': NS(canTimeout=False),
+    self.data = {'mapdOut': event.mapdOut, 'carState': NS(canTimeout=False, canValid=True, vEgo=20., vEgoCluster=20., aEgo=0.),
       'slcDashboardObservation': NS(status='valid', observedMonoTime=MONO,
         validUntilMonoTime=MONO+1_000_000_000, episode=1, producerSessionId='card',
         speedMps=20., carStateLogMonoTime=MONO)}
@@ -83,7 +83,7 @@ def test_expired_map_falls_through_to_current_dashboard_without_renewal():
   assert values[sel.Source.MAP].candidate is None
 
 
-def test_map_loss_no_metadata_and_lookahead_retain_only_previously_accepted_limit():
+def test_map_loss_no_metadata_and_lookahead_keep_history_without_control_target():
   authority = acc.Authority(acc.Mode.COMBINED, acc.LongitudinalOwner.SYSTEM, True, True, False, False)
   prior = acc.AcceptedLimit(acc.Candidate('map', acc.ObservationIdentity(acc.IdentityKind.GEOGRAPHIC, value='previous-way'), 20.), 'drive', 0)
   frame = ms.decode_event(packet().to_bytes())
@@ -96,12 +96,10 @@ def test_map_loss_no_metadata_and_lookahead_retain_only_previously_accepted_limi
       transport_alive=True, drive_session='drive', car_fingerprint='vehicle')
     assert observation.candidate is None
     assert observation.kind is not acc.ObservationKind.ABSENT
-    for fallback in (False, True):
-      decision = acc.step(acc.new_session('drive', prior), observation, authority,
-        acc.Policy(fallback_previous=fallback), now_ns=MONO)
-      assert decision.control_target_mps == (20. if fallback else None)
-      assert decision.state.accepted == prior
-      assert decision.history_write is None
+    decision = acc.step(acc.new_session('drive', prior), observation, authority, acc.Policy(), now_ns=MONO)
+    assert decision.control_target_mps is None
+    assert decision.state.accepted == prior
+    assert decision.history_write is None
 
 
 def test_map_identity_order_restart_and_transport_loss_are_fail_closed():
@@ -161,7 +159,7 @@ def test_shared_settings_owner_maps_labels_both_slots_defaults_and_ready_change_
     owner = FeatureSettingsOwner(params, lambda group: True, vehicle_fingerprint=lambda: 'vehicle',
       vision_development=lambda: True, maps_available=lambda: ready)
     def row(key):
-      state = owner.snapshot('slc', parked=True, system_long=False, lateral_context=False, metric=False)
+      state = owner.snapshot('slc/sources', parked=True, system_long=False, lateral_context=False, metric=False)
       return next(r for r in state.rows if r.key == key)
     assert row('SLCPriority1').value == 'Vision'
     assert row('SLCPriority2').value == 'Dashboard'

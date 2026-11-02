@@ -23,15 +23,15 @@ def test_real_gateway_units_and_wheel_side_without_a_vehicle(tmp_path):
   def preview(index, value):
     page = gateway.page("localization", token, generation)
     assert page["title"] == "Localization" and not page["vehicleIdentified"]
-    assert [row["label"] for row in page["rows"]] == ["Use Kilometers (km/h)", "Right-Hand Drive"]
+    assert [row["label"] for row in page["rows"]] == ["Galaxy speed sliders", "Galaxy road-distance sliders", "Galaxy small-measurement sliders", "Right-Hand Drive"]
     return gateway.preview(page["view"], index, 0, token, generation, value=value)["intent"]
 
-  assert gateway.confirm(preview(0, "On"), token, generation)
-  assert params.get_bool("IsMetric")
+  assert gateway.confirm(preview(0, "km/h"), token, generation)
+  assert params.get("GalaxySpeedUnits") == 1 and not params.get_bool("IsMetric")
   assert not Path(params.get_param_path(DOCUMENT_KEY)).exists()
-  assert gateway.confirm(preview(1, "On"), token, generation)
+  assert gateway.confirm(preview(3, "On"), token, generation)
   assert params.get_bool("IsRhdDetected") and params.get_bool("OnroadCycleRequested")
-  pending = preview(1, "Off")
+  pending = preview(3, "Off")
   context.value = replace(context.value, parked=False)
   with pytest.raises(SettingsChanged):
     gateway.confirm(pending, token, generation)
@@ -70,7 +70,7 @@ def test_settings_session_rechecked_before_localization_commit(tmp_path):
   context = SimpleNamespace(sample=lambda: AuthorityContext(True, None, None))
   gateway = SettingsGateway(params, cast(ContextSource, context))
   page = gateway.page("localization", "session", b"generation")
-  pending = gateway.preview(page["view"], 1, 0, "session", b"generation", value="On")["intent"]
+  pending = gateway.preview(page["view"], 3, 0, "session", b"generation", value="On")["intent"]
   with pytest.raises(SettingsChanged):
     gateway.confirm(pending, "session", b"generation", session_valid=lambda: False)
   assert not params.get_bool("IsRhdDetected")
@@ -80,17 +80,18 @@ def test_units_without_offsets_work_onroad_but_wheel_side_waits(tmp_path):
   params = Params(str(tmp_path))
   owner = LocalizationSettingsOwner(params, lambda: True, lambda: False)
   rows = owner.snapshot().rows
-  assert rows[0].available and not rows[1].available
+  assert rows[0].available and not rows[3].available
   assert owner.apply(FeatureSettingsRequest("IsMetric", None, "On"))
   assert params.get_bool("IsMetric")
   assert not Path(params.get_param_path(DOCUMENT_KEY)).exists()
 
 
-def test_legacy_offsets_explain_the_one_time_park_requirement(tmp_path):
+def test_galaxy_units_do_not_require_legacy_offset_migration(tmp_path):
   params = Params(str(tmp_path))
   params.put("Offset1", 5.0, block=True)
   owner = LocalizationSettingsOwner(params, lambda: True, lambda: False)
   row = owner.snapshot().rows[0]
-  assert not row.available and "Park once" in row.reason
+  assert row.available and row.key == "GalaxySpeedUnits"
+  assert owner.apply(FeatureSettingsRequest("GalaxySpeedUnits", None, "km/h"))
   assert not owner.apply(FeatureSettingsRequest("IsMetric", None, "On"))
   assert not params.get_bool("IsMetric")

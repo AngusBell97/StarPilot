@@ -1,11 +1,13 @@
 import copy
+from opendbc.car.dashboard_speed_limit import Tracker as LimitTracker
+from opendbc.car.tesla.speed_limit import update_dashboard_limit
 from opendbc.can import CANDefine, CANParser
 from opendbc.car import Bus, create_button_events, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.tesla.preap.stock import PreAPStockCarState, get_stock_parsers
 from opendbc.car.tesla.hw1 import HW1CarState, get_hw1_can_parsers
-from opendbc.car.tesla.values import CAR, DBC, CANBUS, GEAR_MAP, STEER_THRESHOLD, TeslaFlags
+from opendbc.car.tesla.values import CAR, DBC, CANBUS, GEAR_MAP, STEER_THRESHOLD, STEER_DISENGAGE_THRESHOLD, TeslaFlags, TeslaSafetyFlags
 
 class TeslaScreenCANParser(CANParser):
   def __init__(self):
@@ -31,6 +33,12 @@ class CarState(CarStateBase):
       self.hands_on_level = 0
       self.das_control = {}
       return
+    self.dashboard_limit = LimitTracker()
+    self.pedal_handover_observed_ns = 0
+    self.pedal_handover_override = False
+    self.pedal_handover_native_ok = False
+    self.cooperative_steering = CP.carFingerprint == CAR.TESLA_MODEL_3 and any(
+      config.safetyParam & TeslaSafetyFlags.COOP_STEERING.value for config in CP.safetyConfigs)
     self.can_define = CANDefine(DBC[CP.carFingerprint][Bus.party])
     self.shifter_values = self.can_define.dv["DI_systemStatus"]["DI_gear"]
 
@@ -101,8 +109,9 @@ class CarState(CarStateBase):
 
     # FSD disengages using union of handsOnLevel (slow overrides) and high angle rate faults (fast overrides, high speed)
     eac_error_code = self.can_define.dv["EPAS3S_sysStatus"]["EPAS3S_eacErrorCode"].get(int(epas_status["EPAS3S_eacErrorCode"]), None)
-    ret.steeringDisengage = self.hands_on_level >= 3 or (eac_status == "EAC_INHIBITED" and
-                                                         eac_error_code == "EAC_ERROR_HIGH_ANGLE_RATE_SAFETY")
+    ret.steeringDisengage = (self.hands_on_level >= 3 or
+                            (self.cooperative_steering and abs(ret.steeringTorque) > STEER_DISENGAGE_THRESHOLD) or
+                            (eac_status == "EAC_INHIBITED" and eac_error_code == "EAC_ERROR_HIGH_ANGLE_RATE_SAFETY"))
 
     # Cruise state
     cruise_state = self.can_define.dv["DI_state"]["DI_cruiseState"].get(int(cp_party.vl["DI_state"]["DI_cruiseState"]), None)
@@ -143,6 +152,19 @@ class CarState(CarStateBase):
     # AEB
     ret.stockAeb = cp_ap_party.vl["DAS_control"]["DAS_aebEvent"] == 1
 
+    # SP-011: retain actual observation stamps, never refresh cached data by polling.
+    self.pedal_handover_override = cruise_state == "OVERRIDE"
+    self.pedal_handover_native_ok = cruise_state in ("STANDBY", "ENABLED", "OVERRIDE") and speed_units in ("KPH", "MPH") and not self.autopark
+    self.pedal_handover_observed_ns = min(
+      cp_party.ts_nanos["DI_state"]["DI_cruiseState"],
+      cp_party.ts_nanos["DI_systemStatus"]["DI_accelPedalPos"],
+      cp_party.ts_nanos["DI_speed"]["DI_vehicleSpeed"],
+      cp_party.ts_nanos["ESP_status"]["ESP_driverBrakeApply"],
+      cp_ap_party.ts_nanos["DAS_control"]["DAS_aebEvent"],
+    )
+
+
+
     # LKAS
     ret.stockLkas = cp_ap_party.vl["DAS_steeringControl"]["DAS_steeringControlType"] == 2  # LANE_KEEP_ASSIST
 
@@ -155,6 +177,9 @@ class CarState(CarStateBase):
       ret.buttonEvents = self.update_screen_button(can_parsers[Bus.adas])
 
     # Buttons # ToDo: add Gap adjust button
+
+    if self.CP.carFingerprint in (CAR.TESLA_MODEL_3, CAR.TESLA_MODEL_Y):
+      update_dashboard_limit(self.dashboard_limit, cp_party, cp_ap_party, speed_units)
 
     # Messages needed by carcontroller
     self.das_control = copy.copy(cp_ap_party.vl["DAS_control"])

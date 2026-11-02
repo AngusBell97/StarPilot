@@ -16,7 +16,7 @@ from openpilot.starpilot.ui.onroad import axis_status_color, driving_mode_descri
 from openpilot.starpilot.ui.onroad_cem_gauge import gauge_data
 from openpilot.starpilot.ui.onroad_customization import PROFILES, default_document
 from openpilot.starpilot.ui.onroad_dm import monitor_visible
-from openpilot.starpilot.ui.onroad_state import compact_sign_obscured_by_actions, slc_controls
+from openpilot.starpilot.ui.onroad_state import slc_controls
 from openpilot.starpilot.ui.presentation import Profile
 from openpilot.starpilot.ui.unified_speed_presentation import resolve_unified_speed
 
@@ -63,13 +63,14 @@ def test_every_scene_matches_native_border_mode_and_widget_visibility(target):
       if scene['id'] != 'general':
         expected['stopped_timer'] = state.stopped_duration_s is None
         expected['torque_bar'] = not state.lateral_active
-        expected['speed_limit_actions'] = scene['id'] in ('slc_pending', 'slc_notice') or not slc_controls(profile, state)
+        expected['lane_centering_bar'] = not state.lateral_active
+        expected['speed_limit_actions'] = not slc_controls(profile, state)
         if profile == Profile.LARGE:
           expected['cem_gauge'] = gauge_data(state) is None
         else:
           expected['steering_wheel'] = not state.lateral_active
           expected['max_speed'] = not state.cruise_active
-          expected['speed_limit'] = str(state.speed_limit.kind) != 'valid' or compact_sign_obscured_by_actions(state)
+          expected['speed_limit'] = str(state.speed_limit.kind) != 'valid'
           expected['driver_monitor'] = not monitor_visible(profile, state, fresh=True, onroad=True,
                                                          top_icons=state.cruise_active and layout['max_speed']['enabled'])
       assert scene['hidden'] == expected, (target, scene['id'], move)

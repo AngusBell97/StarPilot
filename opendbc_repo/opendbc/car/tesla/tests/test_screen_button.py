@@ -52,7 +52,7 @@ def test_no_harness_old_encoding_malformed_cp_or_reused_flags():
     before = cp.to_bytes()
     apply_screen_button(cp, True, True)
     assert cp.to_bytes() == before
-  for word in (2, 3, 16, 256, 1024, 514, 1538):
+  for word in (2, 3, 16, 1024, 514, 1538):
     cp = screen_params()
     cp.safetyConfigs[0].safetyParam = word
     assert not screen_tap_supported(cp)
@@ -61,6 +61,19 @@ def test_no_harness_old_encoding_malformed_cp_or_reused_flags():
   fingerprint[CANBUS.party][0x054] = 8
   rebuilt = CarInterface._get_params(cp, CAR.TESLA_MODEL_3, fingerprint, [], False, False, False)
   assert not rebuilt.flags & TeslaFlags.HAS_VEHICLE_BUS
+
+
+@pytest.mark.parametrize('candidate', (CAR.TESLA_MODEL_3, CAR.TESLA_MODEL_Y))
+def test_cooperative_only_screen_capability_is_model3_specific(candidate):
+  # 256 has long been a valid no-longitudinal Model 3 cooperative profile.
+  cp = screen_params(candidate)
+  cp.safetyConfigs[0].safetyParam = 256
+  assert screen_tap_supported(cp) == (candidate == CAR.TESLA_MODEL_3)
+  apply_screen_button(cp, True, False)
+  assert cp.safetyConfigs[0].safetyParam == (768 if candidate == CAR.TESLA_MODEL_3 else 256)
+  assert screen_qualified(cp) == (candidate == CAR.TESLA_MODEL_3)
+  apply_screen_button(cp, False, False)
+  assert cp.safetyConfigs[0].safetyParam == 256
 
 
 def test_literal_optional_screen_frames_baseline_edge_and_exact_dlc():

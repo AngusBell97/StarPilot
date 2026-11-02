@@ -1,5 +1,7 @@
 """Authenticated local projection of the shared saved-feature owner."""
+from openpilot.starpilot.galaxy import slider_units
 
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v9_menu
 from openpilot.starpilot.ui.lane_change_feature import confirm_question as lane_change_question
 
 from collections.abc import Callable
@@ -14,6 +16,8 @@ import time
 from typing import Protocol, cast
 
 from openpilot.starpilot.ui.feature_settings_owner import FeatureSettingsOwner
+from openpilot.starpilot.ui.slc_menu import SLC_PAGES
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu
 from openpilot.starpilot.galaxy.setting_descriptions import description
 from openpilot.starpilot.galaxy.localization_settings import LocalizationSettingsOwner
 from openpilot.starpilot.ui.controller_feature import SETUP_ACTION, SETUP_QUESTION
@@ -38,8 +42,7 @@ from openpilot.starpilot.ui.sentry_owner import RESET as SENTRY_RESET, SentryOwn
 from openpilot.starpilot.ui.vasm_owner import ANNOTATION as VASM_ANNOTATION, RESET as VASM_RESET, VASMOwner, validated_annotation
 
 
-PAGES = frozenset(("hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities",
-                   "traffic", "aggressive", "standard", "relaxed",
+PAGES = frozenset((*lane_v4_menu.PAGES, *lane_v9_menu.PAGES, *SLC_PAGES, "hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities", "traffic", "aggressive", "standard", "relaxed",
                    "curve", "torque", "aol", "wheel", "appearance", "display", "data", "sounds", "pip", "sentry", "vasm",
                    "conditional", "conditional/cem", "conditional/ccm",
                    *(f"{name}/{category}" for name in ("traffic", "aggressive", "standard", "relaxed")
@@ -141,7 +144,7 @@ def _onroad_preference(page: str, key: str) -> bool:
   return bool(page != "developer" and key and key != SETUP_ACTION and key not in (
     "IsRhdDetected", "AlphaLongitudinalEnabled", "reset_profiles", "curve_reset", "slc_adopt", "slc_reset",
     "conditional:reset", "conditional:manual_reset",
-  ) and not is_long_confirm_action(key) and not key.startswith("torque_repair:"))
+  ) and not is_long_confirm_action(key) and not key.startswith(("torque_repair:", "map_memory:")))
 
 
 class LiveContextSource:
@@ -375,20 +378,23 @@ def _session_key(token: str) -> bytes:
   return hashlib.sha256(token.encode("ascii")).digest()
 
 
-def _projection(row: FeatureRow) -> dict:
+def _projection(row: FeatureRow, page: str) -> dict:
   return {"label": row.label, "value": row.value, "choices": list(row.choices), "step": row.step,
           "minimum": row.minimum, "maximum": row.maximum, "unit": row.unit,
-          "available": row.available, "reason": description(row),
+          "available": row.available, "reason": slider_units.help_text(description(row), row.unit) if any(
+            key in slider_units.SPECS for key, _ in row.dependencies) else description(row),
           "page": row.page if row.page in PAGES else "", "action": bool(row.key and row.available and not row.page),
           "confirm": bool(row.key in CONFIRM_ACTIONS or is_long_confirm_action(row.key) or
                           row.key in (PIP_RESET, PIP_EDITOR, VASM_RESET, VASM_ANNOTATION) or row.key.startswith(PIP_FORMAT_PREFIX)),
           "repairValue": row.repair_value, "defaultValue": row.default_value, "resetAvailable": row_default(row) is not None,
-          "displayScale": "lane-strength" if row.key == "LaneCenteringStrength" else None}
+          "unitPrecision": 3 if any(key in slider_units.SPECS for key, _ in row.dependencies) else None,
+          "displayScale": "lane-strength" if row.key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength") else None,
+          "rangePair": lane_versions_menu.range_descriptor(row) if page.startswith("lane") else None}
 
 
 def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
   key = request.key
-  if key == "LaneCenteringStrength":
+  if key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength"):
     raw = float(request.value)
     level = (1 + (raw - row.minimum) * 4 / (100 - row.minimum) if raw <= 100 else
              5 + (raw - 100) * 5 / (row.maximum - 100))
@@ -436,6 +442,8 @@ def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
     return "Keep these saved offsets and speed ranges when units change? Prior saved values remain but become inactive."
   if key == "slc_reset":
     return f"Reset speed-limit offsets to zero? {row.value}. Saved control may resume if its switch is on."
+  if key.startswith('map_memory:'):
+    return row.label + '? This changes the saved local data.'
   if key == "curve_reset":
     return "Erase learned curve data? Curve Speed Controller keeps its current On or Off choice."
   if key.startswith("conditional:"):
@@ -488,7 +496,7 @@ class SettingsGateway:
     with self.lock:
       ctx = self.context.sample()
       sections = []
-      for page in ("torque", "lane", "lane_change", "aol", "conditional", "profiles", "slc", "curve"):
+      for page in ("torque", "lane", *lane_v4_menu.PAGES, *lane_v9_menu.PAGES, "lane_change", "aol", "conditional", "profiles", "slc", *SLC_PAGES, "curve"):
         state = self._state(page, ctx)
         sections.append({"title": state.title,
                          "rows": [{"label": row.label, "value": row.value} for row in state.rows[:64]]})
@@ -599,6 +607,21 @@ class SettingsGateway:
     return LocalizationSettingsOwner(self.params, authorized, parked)
 
   def _state(self, page: str, ctx: AuthorityContext):
+    state = self._base_state(page, ctx)
+    owner = self._owner(ctx) if page.startswith("lane") else None
+    return replace(state, rows=tuple(slider_units.project(self.params, row, owner) for row in state.rows))
+
+  def _native_request(self, page, ctx, request):
+    if not any(key in slider_units.SPECS for key, _ in request.dependencies): return request
+    rows = self._base_state(page, ctx).rows
+    row = next((row for row in rows if row.key == request.key), None)
+    if row is None: raise SettingsChanged("Setting no longer exists")
+    try:
+      return slider_units.restore(self.params, row, request, self._owner(ctx) if page.startswith("lane") else None)
+    except (ValueError, TypeError, OverflowError) as error:
+      raise SettingsChanged(str(error)) from error
+
+  def _base_state(self, page: str, ctx: AuthorityContext):
     if page == "localization":
       return self._localization_owner(ctx).snapshot()
     if page == "developer":
@@ -617,13 +640,13 @@ class SettingsGateway:
       return self._vasm_owner(ctx).snapshot()
     state = self._owner(ctx).snapshot(page, parked=ctx.parked,
                                       system_long=_qualified(ctx, "long"),
-                                      lateral_context=_qualified(ctx, "lane") or (page == "lane" and _qualified(ctx, "lane_live")),
-                                      metric=ctx.metric, configure_while_driving=True)
+                                      lateral_context=_qualified(ctx, "lane") or ((page == "lane" or page in (*lane_v4_menu.PAGES, *lane_v9_menu.PAGES)) and _qualified(ctx, "lane_live")),
+                                      metric=ctx.metric, configure_while_driving=True, lane_v4=True)
     if ctx.editing_saved_vehicle:
       from opendbc.car.values import PLATFORMS
       platform = PLATFORMS[ctx.cp.carFingerprint]
       label = platform.config.car_docs[0].name if platform.config.car_docs else str(ctx.cp.carFingerprint).replace("_", " ").title()
-      return replace(state, subtitle=f"{label} · Saved vehicle settings. {state.subtitle}")
+      return replace(state, subtitle=f"{label} Â· Saved vehicle settings. {state.subtitle}")
     return state
 
   def _clean(self) -> None:
@@ -656,7 +679,7 @@ class SettingsGateway:
     scope = hashlib.sha256(_session_key(token) + generation + (ctx.cp_raw or b"")).digest()
     result = {"page": page, "title": state.title, "subtitle": state.subtitle, "parked": state.parked,
               "vehicleIdentified": bool(ctx.cp is not None and getattr(ctx.cp, "carFingerprint", None)),
-              "rows": [{**_projection(row), "revision": hashlib.sha256(scope + repr(row).encode()).hexdigest()}
+              "rows": [{**_projection(row, page), "revision": hashlib.sha256(scope + repr(row).encode()).hexdigest()}
                        for row in state.rows], "view": view_id}
     if page == "hub" or any(row.page for row in state.rows):
       rows_by_page = {page: state}
@@ -787,6 +810,19 @@ class SettingsGateway:
       if request is None:
         raise SettingsChanged("Unavailable choice")
       request = replace(request, confirmation=True)
+    native_request = self._native_request(view.page, ctx, request)
+    if native_request.key in lane_v9_menu.KEYS:
+      error = lane_v9_menu.error(self._owner(ctx), native_request)
+      if error:
+        raise SettingsChanged(error)
+    if native_request.key in lane_versions_menu.REVERSE or native_request.key in lane_versions_menu.V51_RECOVERY or native_request.key in (lane_versions_menu.VERSION, lane_versions_menu.PREVIEW, lane_versions_menu.V6_PREVIEW, lane_versions_menu.V51_PREVIEW):
+      error = lane_versions_menu.error(self._owner(ctx), native_request)
+      if error:
+        raise SettingsChanged(error)
+    if native_request.key in lane_v4_menu.CHECK_KEYS:
+      error = lane_v4_menu.edit_error(self._owner(ctx), native_request)
+      if error:
+        raise SettingsChanged(error)
     with self.lock:
       self._clean()
       if len(self.intents) >= MAX_INTENTS:
@@ -814,6 +850,14 @@ class SettingsGateway:
       fresh_rows = self._state(intent.page, ctx).rows
       if intent.reset_row not in fresh_rows or row_default(intent.reset_row, allow_inactive=intent.recovery_default) != intent.request:
         raise SettingsChanged("Default or saved settings changed")
+    unit_dependencies = intent.request.dependencies
+    valid_session = session_valid
+    session_valid = lambda: valid_session() and slider_units.unchanged(self.params, unit_dependencies)
+    if not slider_units.unchanged(self.params, unit_dependencies): raise SettingsChanged("Galaxy slider units changed")
+    try:
+      intent = replace(intent, request=self._native_request(intent.page, ctx, intent.request))
+    except SettingsChanged:
+      return False  # Preserve the owner API for stale values and peer settings.
     if intent.page == "pip":
       return self._pip_owner(ctx, live=True, session_valid=session_valid).apply(intent.request)
     if intent.page == "appearance":

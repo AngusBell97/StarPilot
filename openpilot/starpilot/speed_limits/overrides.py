@@ -189,7 +189,7 @@ def _acceptance_valid(decision: object, authority: object, policy: object, sessi
   if (accepted is None or not _token(accepted.session_id) or not _speed(accepted.candidate.speed_mps) or
       decision.control_target_mps != accepted.candidate.speed_mps):
     return False
-  return decision.state.observation.kind is acc.ObservationKind.VALID or acc.previous_limit_is_qualified(decision)
+  return decision.state.observation.kind is acc.ObservationKind.VALID
 
 
 def step(state: State, acceptance: acc.Decision, authority: acc.Authority, policy: acc.Policy,
@@ -258,7 +258,17 @@ def step(state: State, acceptance: acc.Decision, authority: acc.Authority, polic
       effective_target = c.effective_cluster_mps
   mode_changed = old.mode is not None and (old.mode != authority.mode or old.owner != authority.owner)
   if acceptance.history_write is not None:
-    state = replace(state, persistent_selected_mps=None, applied_selected_mps=None)
+    changed_limit = (old.accepted_mps is None or accepted_speed is None or
+                     abs(accepted_speed - old.accepted_mps) >= .1)
+    if changed_limit:
+      # Old SLC keeps a higher manual target through an increasing limit until
+      # the adjusted limit catches it. A real lower limit always resets it.
+      keep_manual = (old.accepted_mps is not None and accepted_speed is not None and
+                     accepted_speed > old.accepted_mps and state.persistent_selected_mps is not None and
+                     effective_target is not None and
+                     state.persistent_selected_mps + selected_delta > effective_target + .1)
+      state = replace(state, persistent_selected_mps=state.persistent_selected_mps if keep_manual else None,
+                      applied_selected_mps=None)
   comparison_target = state.applied_selected_mps + selected_delta if state.applied_selected_mps is not None else effective_target
   if (not domain_unavailable and state.persistent_selected_mps is not None and effective_target is not None and
       selected.speed_mps is not None and math.isclose(cast(float, comparison_target), selected.speed_mps + selected_delta, abs_tol=0.001, rel_tol=0)):
