@@ -560,6 +560,129 @@ def test_lost_track_snaps_to_the_observation():
   assert abs(tr.centre_at(0.0)) < 0.05, "an observation a metre or more from the track re-acquires it in one frame"
 
 
+# --------------------------------------------------------------------------- after the fourth drive (changes 27-30)
+
+def _one_line_obs(t, i, path_y, speed=18.0, y_left=-1.75, k_model=0.0):
+  x = STATIONS
+  left = Boundary(0, "line", x, np.broadcast_to(np.asarray(y_left, dtype=float), (len(x),)).copy(), 0.05, 0.95)
+  return LaneLedObservation(t=t, speed=speed, measured_curvature=0.0, model_curvature=k_model, delay=0.33, boundaries=(left,),
+                            model_sample_id=1 + i // 5, model_path_x=x, model_path_y=path_y, model_path_ystd=np.full(len(x), 0.1))
+
+
+def test_one_line_veto_is_about_shape_not_lane_width():
+  """Fourth drive: with one line the tracked curve is the guard boundary, so the old absolute divergence test vetoed
+  every lane wider than two guard distances plus the threshold, with the car exactly on target (22 s model-led on a
+  slip road). A model path parallel to the line, however far from it, is not a divergence; one pulling away from the
+  line's direction over the next second (a turn-off) is; one well inside the guard (an obstacle) still is."""
+  def last(path_y):
+    ctrl = LaneLedController(); t = 0.0; r = None
+    for i in range(300):
+      r = ctrl.update(_one_line_obs(t, i, path_y)); t += 0.01
+    return r
+  x = STATIONS
+  wide = last(np.full(len(x), 1.5))                      # a 6.5 m lane: the model sits 3.25 m from the only line
+  assert wide.reason == "ok" and wide.state == "lane_led" and wide.mode == "one_left", (wide.reason, wide.state, wide.mode)
+  turn = last(0.004 * x * x)                             # pulling away from the line: 1.3 m further out at 18 m
+  assert turn.reason == "model_divergence" and turn.state == "model_led"
+  obstacle = last(np.full(len(x), -0.7))                 # 0.4 m inside the guard: the model is steering round something
+  assert obstacle.reason == "model_divergence"
+
+
+def test_bias_learns_near_the_target_only():
+  """Fourth drive: the bias integrated through every sustained offset (a junction glitch moving the target, the tail of a
+  recovery) up to its limit, 3e-3 at 10 m/s, and then held the car 25 cm off centre for ten seconds. Change 27: it
+  learns only within _BIAS_LEARN_EY of the target. Ten seconds 30 cm off teach it nothing; ten seconds 10 cm off do."""
+  def bias_after(shift):
+    ctrl = LaneLedController(); t = 0.0; r = None
+    for i in range(1000):
+      r = ctrl.update(LaneLedObservation(t=t, speed=10.0, measured_curvature=0.0, model_curvature=0.0, delay=0.33,
+                                         boundaries=lines(-1.75 + shift, 1.75 + shift), model_sample_id=1 + i // 5))
+      t += 0.01
+    assert r.state == "lane_led"
+    return r.bias
+  assert abs(bias_after(0.3)) < 1e-6
+  assert bias_after(0.1) > 5e-4, "the 0.1 m/s^2 limit at 10 m/s is 1e-3"
+  assert bias_after(0.1) <= 0.1 / 100.0 + 1e-9
+
+
+def test_bias_ignores_a_step_recovery():
+  res = run(LaneLedController(), Scenario(STRAIGHT, speed=12.0, initial_offset=STEP, duration=20.0))
+  assert abs(res["e_y_true"][-1]) < 0.03
+  assert np.abs(res["bias"]).max() < 1.5e-4, np.abs(res["bias"]).max()
+
+
+def test_feedforward_is_bounded_to_the_model_curvature():
+  """Fourth drive: on a lane changing width the quartic through converging lines reported a 100 m bend (10e-3) where the
+  model saw a straight (0.5e-3); the request was 8.6e-3 and the car swerved. Change 28: the feedforward may differ
+  from the model's curvature by 1.5e-3, 30 % or 0.3 m/s^2, whichever is larger. A real bend the model also sees passes."""
+  x = STATIONS
+  def ff_after(k_lines, k_model, speed=20.0):
+    ctrl = LaneLedController(); t = 0.0; r = None
+    for i in range(300):
+      yl = -1.75 + 0.5 * k_lines * x * x; yr = 1.75 + 0.5 * k_lines * x * x
+      r = ctrl.update(LaneLedObservation(t=t, speed=speed, measured_curvature=k_model, model_curvature=k_model, delay=0.33,
+                                         boundaries=(Boundary(0, "line", x, yl, 0.05, 0.95), Boundary(1, "line", x, yr, 0.05, 0.95)),
+                                         model_sample_id=1 + i // 5, yaw_rate=0.0))
+      t += 0.01
+    return r
+  r = ff_after(0.008, 0.0)
+  assert r.mode == "two" and r.kappa_road <= 1.5e-3 + 1e-9 and r.diagnostics["ff_clamped"], (r.kappa_road, r.mode)
+  r = ff_after(0.008, 0.0, speed=10.0)
+  assert 1.5e-3 < r.kappa_road <= 3e-3 + 1e-9, "at 10 m/s the margin is 0.3 m/s^2, i.e. 3e-3"
+  r = ff_after(0.008, 0.008)
+  assert abs(r.kappa_road - 0.008) < 0.001 and not r.diagnostics["ff_clamped"], r.kappa_road
+  r = ff_after(0.0, 0.0)
+  assert abs(r.kappa_road) < 1e-6
+
+
+def test_one_line_heading_from_the_model_path_is_quieter():
+  """Fourth drive: one line gives a heading reference twice as noisy as two, and the heading term is the strong one at
+  town speeds, so one-line requests were twice as large and mostly clipped, flapping at junctions. Change 29: the
+  reference is the model path's heading (less the tracked curve's own bend) blended with the line's. With the same
+  single line jittering in heading frame to frame (4 mrad, the road's one-line level) the request moves less; in a
+  steady bend the blend introduces no lean, because the bend's heading change out to the target point is removed.
+  The mechanism is tested at share 0.5; the shipped default is 1.0 (off) because the closed-loop replay of recorded
+  drives showed it adding one-line request jerk."""
+  from openpilot.starpilot.lateral import lane_led as ll
+  x = STATIONS
+  saved = ll._ONE_LINE_HEADING_SHARE
+
+  def movement(share):
+    ll._ONE_LINE_HEADING_SHARE = share
+    rng = np.random.default_rng(5); ctrl = LaneLedController(); t = 0.0; cand = []; slope = 0.0
+    for i in range(2000):
+      if i % 5 == 0:
+        slope = rng.normal(0.0, 0.004)
+      r = ctrl.update(_one_line_obs(t, i, np.zeros(len(x)), speed=12.0, y_left=-1.75 + slope * x))
+      cand.append(r.candidate_curvature); t += 0.01
+    assert r.state == "lane_led" and r.mode == "one_left", (r.state, r.mode, r.reason)
+    cand = np.array(cand[500:])
+    return float(np.abs(np.diff(cand)).sum()), float(np.abs(cand).mean())
+
+  try:
+    move_old, size_old = movement(1.0)
+    move_new, size_new = movement(0.5)
+    assert move_new < 0.7 * move_old and size_new < 0.7 * size_old, (move_new, move_old, size_new, size_old)
+    ll._ONE_LINE_HEADING_SHARE = 0.5
+    bend = run(LaneLedController(), Scenario(R300, speed=18.0, one_line_from=0.0, duration=22.0))
+    steady = (bend["t"] > 10.0) & (bend["t"] < 19.0)
+    assert (bend["mode"][steady] == "one_left").all() and (bend["state"][steady] == "lane_led").all()
+    assert abs(np.mean(bend["e_y_true"][steady])) < 0.08, np.mean(bend["e_y_true"][steady])
+    assert max_step_ratio(bend) <= 1.0 + 1e-6
+  finally:
+    ll._ONE_LINE_HEADING_SHARE = saved
+
+
+def test_lever_floor_stops_the_speed_term_running_away():
+  """Fourth drive: L2 learned on country roads at 12-20 m/s took the lever in use at motorway speed to 0.1-0.6 m, an
+  extrapolation past any data. Change 30: the lever never falls below half of L0."""
+  a = LeverLearner()
+  a._theta, a._prior = np.array([0.0, 1.6, -0.006]), 1.5
+  assert abs(a.lever(18.0, 1.5) - 1.6) < 1e-9
+  assert abs(a.lever(32.0, 1.5) - 0.8) < 1e-9, a.lever(32.0, 1.5)
+  assert abs(a.lever(12.0, 1.5) - (1.6 - 0.006 * (144.0 - 324.0))) < 1e-9
+
+
 # --------------------------------------------------------------------------- compute
 
 def test_update_is_cheap_on_pc():

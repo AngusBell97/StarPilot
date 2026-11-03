@@ -166,8 +166,9 @@ class OnroadAppearance:
   show_lead_indicator: bool = False
   lead_info_mode: LeadInfoMode = LeadInfoMode.OFF
   lead_info_metric: bool | None = False
-  # Galaxy's road-distance slider units for the lead distance widget: True metres, False feet, None follows the driving units.
-  lead_distance_metric: bool | None = None
+  # Galaxy's slider distance units for the lead distance widget: True metres, False feet, None follows the driving units.
+  # Galaxy's default when nothing is saved is metres, so absent params match this default.
+  lead_distance_metric: bool | None = True
   camera_view: CameraViewChoice = CameraViewChoice.STANDARD
   driver_camera_on_reverse: bool = False
   hide_personality_alerts: bool = False

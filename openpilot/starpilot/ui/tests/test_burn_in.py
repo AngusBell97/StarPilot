@@ -141,6 +141,35 @@ def test_native_line_colour_helper():
   assert _alpha(out) == round(255 * DIM_LEVEL)
 
 
+def test_personality_widget_dims_and_restores_on_change():
+  """Dom's shared personality artwork only uses wrapped draw calls, so the compact rail scope dims it."""
+  from openpilot.starpilot.ui.onroad_personality import PersonalityWidget
+  seen = []
+  clock = Clock()
+  dimmer = StaticDimmer(clock)
+  dimmer.set_enabled(True)
+  widget = PersonalityWidget(None)
+  art = lambda w, h: (NS(width=10, height=10), w, h)
+  widget._lead_car = (art(35, 27), art(50, 42))
+  widget._distance = [(art(32, 7), art(60, 35)), (art(40, 9), art(68, 37)), (art(48, 11), art(76, 39))]
+  rect = rl.Rectangle(476, 60, 60, 120)
+  def frame(personality):
+    clock.now += 0.05
+    seen.clear()
+    with dimmer.scope('following_distance'):
+      widget.draw(rect, personality=personality, has_lead=True, longitudinal_active=True)
+    return [_alpha(c) for c in seen]
+  with patch.object(rl, 'draw_texture_pro', lambda *a: seen.append(a[-1]), create=True), \
+       patch.object(rl, 'get_time', lambda: clock.now, create=True):
+    for _ in range(100):
+      full = frame(1)
+    for _ in range(int((DIM_AFTER_S + DIM_FADE_S + 1) / 0.05)):
+      dim = frame(1)
+    assert len(dim) == len(full) and all(abs(d - round(f * DIM_LEVEL)) <= 1 for d, f in zip(dim, full, strict=True))
+    frame(2)
+    assert max(frame(2)) == 255
+
+
 @pytest.mark.parametrize('profile', [Profile.LARGE, Profile.COMPACT])
 def test_burn_in_rows_save_without_custom_display(tmp_path, profile):
   params = Params(str(tmp_path))

@@ -48,7 +48,8 @@ class LaneLedSettings:
   # Bias learning
   bias_enabled: bool = True
   bias_time: float = 8.0
-  bias_limit_accel: float = 0.3    # m/s^2 of lateral acceleration the bias may hold (change 26: a curvature limit starved it on slow cambered roads)
+  bias_limit_accel: float = 0.1    # m/s^2 of lateral acceleration the bias may hold (change 26: a curvature limit starved it on slow cambered
+                                   # roads; change 27: 0.3 let transients wind it up to 3e-3 on the fourth drive, 0.1 is twice the old cap at 11 m/s)
   bias_persist: bool = False
   # Readout
   readout: bool = True

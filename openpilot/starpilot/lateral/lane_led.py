@@ -335,7 +335,7 @@ class CentreTracker:
     if not fresh:
       # Real model lines wobble in heading frame to frame far more than in offset; the heading term is the
       # damping and the dominant source of request jerk, so its innovation is taken more slowly (reference side).
-      dc[1] *= s.heading_innovation
+      dc[1] *= s.heading_innovation * (1.0 if mode == "two" else _ONE_LINE_INNOVATION)
       d0 = abs(dc[0])
       d1 = abs(math.atan(c_new[1] / self.H) - math.atan(self.c[1] / self.H))
       scale = min(1.0, s.innovation_limit_m / d0 if d0 > 0 else 1.0,
@@ -390,6 +390,10 @@ class CentreTracker:
 
   def centre_at(self, x: float) -> float:
     return float(np.polyval(self.c[::-1], x / self.H))
+
+  def slope_at(self, x: float) -> float:
+    u = x / self.H; c = self.c
+    return float((c[1] + 2.0 * c[2] * u + 3.0 * c[3] * u * u + 4.0 * c[4] * u ** 3) / self.H)
 
   def curvature_at(self, x: float) -> float:
     u = x / self.H
@@ -485,6 +489,17 @@ _LEVER_RATE_S = 1.0                                        # s of tracked-offset
 _LEVER_MAX_DRIFT = 0.3                                     # m/s: faster across the lane than this is a lane change or a snap, not a sample
 _LEVER_MAX_EY = 0.5
 _GUARD_YIELD = 0.3                                         # m: a model path this much closer to the only line than the guard allows is an obstacle, not a hug
+_BIAS_LEARN_EY = 0.15                                      # m: the bias integrates only this close to the target (change 27)
+_FF_MODEL_MARGIN = 1.5e-3                                  # 1/m: the feedforward may differ from the model's curvature by this, or
+_FF_MODEL_MARGIN_REL = 0.3                                 # by this fraction of it, whichever is larger (change 28)
+_ONE_LINE_HEADING_SHARE = 1.0                              # the line's share of the one-line heading reference at full confidence (change 29).
+                                                           # 1.0 = OFF: the closed-loop replay of routes 25 and 28 showed the model path's heading
+                                                           # adding one-line request jerk (p95 1.43 -> 1.60) however the bend was removed; kept for the road
+_PSI_MODEL_TAU = 0.15                                      # s: filter on the model path's heading (one-line reference)
+_ONE_LINE_BEND = "model"                                   # the bend removed from the model path's heading: the model's own curvature, or the tracked curve's
+_SHARE_RATE = 4.0                                          # 1/s: the heading reference's line share slews at this rate across mode switches
+_ONE_LINE_INNOVATION = 1.0                                 # extra factor on the tracked heading's innovation with one line (1: none)
+_FF_MODEL_MARGIN_ACCEL = 0.3                               # m/s^2: the feedforward clamp's margin is at least this much lateral acceleration
 
 
 class LeverLearner:
@@ -518,6 +533,8 @@ class LeverLearner:
   L0_RANGE = (0.0, 3.0)
   L2_RANGE = (-0.006, 0.001)
   LEVER_RANGE = (0.0, 3.0)
+  L_FLOOR = 0.5                        # the speed term may take the lever down to this fraction of L0 (change 30): on the fourth
+                                       # drive L2 learned on country roads took the motorway lever to 0.1 m, an extrapolation
 
   def __init__(self):
     self.A = np.zeros((3, 3))
@@ -557,7 +574,8 @@ class LeverLearner:
 
   def lever(self, speed: float, prior: float) -> float:
     th = self.theta(prior)
-    return float(np.clip(th[1] + th[2] * (speed * speed - self.V_REF ** 2), *self.LEVER_RANGE))
+    lo = max(self.LEVER_RANGE[0], self.L_FLOOR * float(th[1]))
+    return float(np.clip(th[1] + th[2] * (speed * speed - self.V_REF ** 2), lo, self.LEVER_RANGE[1]))
 
   def state(self) -> dict:
     return {"v": 1, "A": self.A.tolist(), "b": self.b.tolist(), "n": self.n, "accepted": self.accepted}
@@ -739,6 +757,10 @@ class LaneLedController:
     self._ey_hist = deque()         # (t, e_y) over the last second or so: the learner needs the car's drift rate across the lane
     self._guard_l = math.nan        # clearance guards in the car frame (change 25): the car's y must stay >= _guard_l and <= _guard_r
     self._guard_r = math.nan
+    self._psi_m = math.nan          # one-line heading reference from the model path (change 29), filtered
+    self._psi_m_pending = 0.0; self._psi_m_pending_s = 0.0
+    self._share_f = 1.0             # the line's share of the heading reference, slewed
+    self._kappa_model_f = math.nan  # the model's curvature, filtered like the measured one (clamp reference, model bend)
     self._last_t = math.nan
     self._last_sample = None
     self._last_frame_t = math.nan
@@ -755,6 +777,7 @@ class LaneLedController:
     self._last_t = math.nan; self._last_sample = None; self._last_frame_t = math.nan; self._gap_s = 0.0
     self._trust_f = 0.0; self._kappa_meas_f = math.nan; self._led_s = 0.0; self._ey_hist.clear()
     self._guard_l = math.nan; self._guard_r = math.nan
+    self._psi_m = math.nan; self._psi_m_pending = 0.0; self._psi_m_pending_s = 0.0; self._share_f = 1.0; self._kappa_model_f = math.nan
     # The lever learner is a property of the car, not of this engagement: it survives resets like a persisted bias.
 
   def set_settings(self, settings: LaneLedSettings):
@@ -784,14 +807,20 @@ class LaneLedController:
         return ""
       threshold = s.model_divergence_m if obs.speed >= 8.0 else min(s.model_divergence_m, 0.4)
       dev = my - self.tracker.centre_at(x1)
-      # With one line the tracked curve is the guard boundary. A model path a little inside it is hugging, which the
-      # guard refuses; one well inside it (_GUARD_YIELD) is the model steering round something on that side, a parked
-      # car, a cone, a cyclist, which the model sees and the lines do not: the model wins. Away from the line the
-      # ordinary divergence rule applies with a little slack for the boundary sitting inside the lane centre.
-      if self.tracker.mode == "one_left":
-        away, toward = max(0.0, dev), max(0.0, -dev); threshold += 0.3
-      elif self.tracker.mode == "one_right":
-        away, toward = max(0.0, -dev), max(0.0, dev); threshold += 0.3
+      # With one line the tracked curve is the guard boundary, not a centre, and the lateral target follows the model's
+      # path anyway (change 25), so the model's distance from it says nothing: on the fourth drive every lane wider than
+      # two guard distances plus the threshold was vetoed with the car on target. What matters is the SHAPE: a model
+      # path pulling away from the line's direction over the next second is a turn the line does not make. Toward the
+      # line the absolute rule stays: a model path a little inside the guard is hugging, which the guard refuses; one
+      # well inside it (_GUARD_YIELD) is the model steering round something on that side, a parked car, a cone, a
+      # cyclist, which the model sees and the lines do not: the model wins.
+      if self.tracker.mode in ("one_left", "one_right"):
+        try:
+          dev0 = float(np.interp(0.0, obs.model_path_x, obs.model_path_y)) - self.tracker.centre_at(0.0)
+        except (TypeError, ValueError):
+          return ""
+        sign = 1.0 if self.tracker.mode == "one_left" else -1.0
+        away, toward = max(0.0, sign * (dev - dev0)), max(0.0, -sign * dev)
       else:
         away, toward = abs(dev), 0.0
       if (away > threshold or toward > _GUARD_YIELD) and ystd < 0.3:
@@ -807,6 +836,8 @@ class LaneLedController:
     self._last_t = obs.t
     s = self.slew.update(self.saved, dt)
     kappa_model = obs.model_curvature if math.isfinite(obs.model_curvature) else 0.0
+    if not math.isfinite(self._kappa_model_f):
+      self._kappa_model_f = kappa_model
     speed = max(obs.speed, 0.0) if math.isfinite(obs.speed) else 0.0
     kappa_raw = obs.measured_curvature if math.isfinite(obs.measured_curvature) else 0.0
     # The steering-angle curvature is quantised (a tenth of a degree is a step of about 5e-5 1/m); through the predictor's
@@ -816,6 +847,8 @@ class LaneLedController:
       self._kappa_meas_f = kappa_raw
     self._kappa_meas_f += (kappa_raw - self._kappa_meas_f) * (1.0 - math.exp(-dt / _MEAS_TAU))
     kappa_meas = self._kappa_meas_f
+    self._kappa_model_f += (kappa_model - self._kappa_model_f) * (1.0 - math.exp(-dt / _MEAS_TAU))
+    kappa_model_f = self._kappa_model_f
     self.delay_state.seed(obs.t, kappa_meas)
 
     # Ego-motion propagation every tick, so the tracked centre stays in the current vehicle frame.
@@ -898,14 +931,26 @@ class LaneLedController:
     else:
       e_y = float(np.clip(e_y_ref, lo, hi))
     guard_active = e_y != e_y_ref
-    e_psi = self.tracker.heading()
+    # The feedforward and the predictor's road curvature are the tracked curve's, bounded to the model's desired curvature
+    # plus a margin (change 28): on a lane changing width (junctions, merges) the fit through converging lines reported a
+    # 100 m bend the model did not see (fourth drive, 10e-3 against 0.5e-3) and the car swerved. In a real bend the two
+    # agree within the margin, so nothing changes there. The reference is the filtered model curvature (the bound must not
+    # carry the model's 20 Hz steps) and the margin is also at least _FF_MODEL_MARGIN_ACCEL of lateral acceleration, so
+    # at town speed the model's own small corrections never bite.
+    k_margin = max(_FF_MODEL_MARGIN, _FF_MODEL_MARGIN_REL * abs(kappa_model_f), _FF_MODEL_MARGIN_ACCEL / max(speed, 1.0) ** 2)
+    k_lo, k_hi = kappa_model_f - k_margin, kappa_model_f + k_margin
+    curvature_at = self.tracker.curvature_at
+
+    def kappa_road(x: float) -> float:
+      return min(max(curvature_at(x), k_lo), k_hi)
+
+    e_psi_line = self.tracker.heading()
     if discontinuity:
-      self._ey_hist.clear()
+      self._ey_hist.clear(); self._psi_m = math.nan
+    e_psi = self._heading_reference(e_psi_line, obs, speed, observed, yaw_rate, kappa_road(0.0), kappa_model_f, dt, s)
     self._ey_hist.append((obs.t, e_y))
     while self._ey_hist and obs.t - self._ey_hist[0][0] > _LEVER_RATE_S + 0.05:
       self._ey_hist.popleft()
-    kappa_road = self.tracker.curvature_at
-
     if not obs.lateral_active:
       self._led_s = 0.0
       self.controller.follow(kappa_model)
@@ -926,7 +971,10 @@ class LaneLedController:
     veto_reason = self._veto(obs, s)
     veto = bool(veto_reason)
     driving = self.arbiter.weight > 0.8 and not veto
-    learn_bias = (driving and self.tracker.mode == "two" and trust > 0.8 and abs(e_y) < 0.4 and
+    # The bias is for camber and a camera offset, a few 1e-4 of curvature. Learning it from every transient (a glitch
+    # moving the target, the tail of a recovery) wound it up to its limit on the fourth drive and then held the car off
+    # centre for ten seconds. Change 27: only near the target, and never while a limiter is shaping the request.
+    learn_bias = (driving and self.tracker.mode == "two" and trust > 0.8 and abs(e_y) < _BIAS_LEARN_EY and
                   not any(self.controller.flags.values()))
     self._led_s = self._led_s + dt if driving else 0.0
     if observed and s.lever_learn:
@@ -960,11 +1008,56 @@ class LaneLedController:
                          {"e_y_hat": e_y_hat, "e_psi_hat": e_psi_hat, "gap_s": self._gap_s, "residual": self.tracker.residual,
                           "innovation_limited": self.tracker.innovation_limited, "conf": self.tracker.conf,
                           "guard_l": self._guard_l, "guard_r": self._guard_r, "guard_active": guard_active, "discontinuity": discontinuity,
+                          "e_psi_line": e_psi_line, "ff_clamped": kappa_ff != curvature_at(x_p),
                           "boundary_confidence": self.tracker.boundary_confidence,
                           "omega": LaneController.omega(s), "bandwidth_scale": self.controller.sigma, "ff_step": self.controller.ff_step,
                           "lever": lever, "lever_theta": self.lever_learner.theta(s.axle_to_camera_m) if s.lever_learn else None,
                           "lever_n": self.lever_learner.n,
                           "flags": dict(self.controller.flags)})
+
+  def _heading_reference(self, e_psi_line: float, obs: LaneLedObservation, speed: float, observed: bool, yaw_rate: float,
+                         kappa_road0: float, kappa_model_f: float, dt: float, s: LaneLedSettings) -> float:
+    """The heading reference. With two lines it is the tracked centre's heading. With one line that heading is twice as
+    noisy (one line instead of the mean of two) and the heading term is the strong one at town speeds, so on the fourth
+    drive one-line requests were twice as large and mostly clipped by the host. The model's path, which the lateral
+    target already follows (change 25), is smooth. Change 29: with one line the reference is the model path's heading at
+    the lateral target point, less the model's own bend out to that point (so a bend is not read as a heading error),
+    blended with the line's heading, the line's share falling with its confidence and slewing at mode switches. The model heading is
+    read once per frame, spread over the frame period and filtered, like the tracked curve, and carried between frames
+    by the car's yaw relative to the road (the road turns too). It starts from the line's heading when one-line mode
+    begins, so the switch has no step."""
+    mode = self.tracker.mode
+    one = mode in ("one_left", "one_right")
+    have_path = obs.model_path_x is not None and obs.model_path_y is not None
+    f_conf = float(np.clip((self.tracker.boundary_confidence - s.drop_confidence) / max(_CONFIDENCE_FULL - s.drop_confidence, 1e-6), 0.0, 1.0))
+    target = _ONE_LINE_HEADING_SHARE * f_conf if (one and have_path and math.isfinite(self._psi_m)) else 1.0
+    step = _SHARE_RATE * dt
+    self._share_f = float(np.clip(target, self._share_f - step, self._share_f + step))   # no step at a mode switch
+    if not have_path:
+      self._psi_m = math.nan; self._psi_m_pending = 0.0; self._psi_m_pending_s = 0.0
+      return e_psi_line
+    # The model heading runs in every mode (it is cheap), so it is settled when a one-line stretch begins.
+    if not math.isfinite(self._psi_m):
+      self._psi_m = e_psi_line; self._psi_m_pending = 0.0; self._psi_m_pending_s = 0.0
+    self._psi_m += (speed * kappa_road0 - yaw_rate) * dt
+    if observed:
+      xm = max(3.0, speed * 0.5)
+      try:
+        ya, yb = (float(v) for v in np.interp([xm - 1.0, xm + 1.0], obs.model_path_x, obs.model_path_y))
+      except (TypeError, ValueError):
+        ya = yb = math.nan
+      if math.isfinite(ya) and math.isfinite(yb):
+        # The path's heading at xm less the bend out to xm. The bend is the model's own (its filtered curvature times
+        # the distance): the tracked curve's bend from a single line is as noisy as the heading this replaces.
+        bend = kappa_model_f * xm if _ONE_LINE_BEND == "model" else (math.atan(self.tracker.slope_at(xm)) - e_psi_line)
+        psi_model = math.atan(0.5 * (yb - ya)) - bend
+        self._psi_m_pending = (psi_model - self._psi_m) * (1.0 - math.exp(-0.05 / _PSI_MODEL_TAU))
+        self._psi_m_pending_s = 0.05
+    if self._psi_m_pending_s > 0.0:
+      f = min(1.0, dt / self._psi_m_pending_s)
+      self._psi_m += self._psi_m_pending * f; self._psi_m_pending *= (1.0 - f); self._psi_m_pending_s -= dt
+    share = self._share_f
+    return share * e_psi_line + (1.0 - share) * self._psi_m
 
   def _guard_distance(self, b: Boundary, s: LaneLedSettings, obs: LaneLedObservation) -> float:
     """How far from boundary b the car's centre is held: car half width plus the line or edge clearance, CAPPED so the
