@@ -15,7 +15,7 @@ class TestAuthorityRefresh(unittest.TestCase):
   def setUp(self):
     self.now = MONO + 200_000_000
     self.sm = FakeSubMaster(serialized_scene(stamp=BOOT + 190_000_000), self.now - 10_000_000)
-    self.sm.sock = {service: service for service in ('carControl', 'selfdriveState')}
+    self.sm.sock = {service: service for service in ('carControl', 'selfdriveState', 'carState')}
     self.sm.logMonoTime['carControl'] = self.now - 55_000_000
     self.sm.recv_time['carControl'] = (self.now - 54_000_000) / 1e9
     self.events = {}
@@ -48,12 +48,39 @@ class TestAuthorityRefresh(unittest.TestCase):
     self.event('carControl')
     view = self.refresh()
     self.assertTrue(self.project(view).authority.long_active)
-    self.assertEqual(self.calls, ['carControl', 'selfdriveState'])
+    self.assertEqual(self.calls, ['carControl', 'selfdriveState', 'carState'])
     self.assertEqual(self.sm.logMonoTime['carControl'], self.now - 55_000_000)
     for service in ('modelV2', 'carState', 'radarState', 'longitudinalPlan'):
       self.assertIs(view[service], self.sm[service])
       self.assertEqual(view.logMonoTime[service], self.sm.logMonoTime[service])
       self.assertEqual(view.recv_time[service], self.sm.recv_time[service])
+
+  def test_stale_native_car_state_recovers_from_real_new_event(self):
+    # 2 Nov drive: planner work before the conditional sample let carState age past 50 ms, so the
+    # projection lost speed and authority for one cycle. A real newer carState restores it; the
+    # native frame and its timestamps are left untouched, and no freshness bound is extended.
+    self.event('carControl')
+    self.sm.logMonoTime['carState'] = self.now - 55_000_000
+    self.sm.recv_time['carState'] = (self.now - 54_000_000) / 1e9
+    self.assertIsNone(self.project(self.refresh()).authority)
+    native_car = self.sm['carState']
+    self.events.clear()  # carControl stays cached from its one real delivery
+    self.event('carState')
+    view = self.refresh()
+    self.assertTrue(self.project(view).authority.long_active)
+    self.assertIs(self.sm['carState'], native_car)
+    self.assertEqual(self.sm.logMonoTime['carState'], self.now - 55_000_000)
+    self.assertEqual(view.logMonoTime['carState'], self.now - 2_000_000)
+
+  def test_stale_or_invalid_refreshed_car_state_fails_closed(self):
+    self.event('carControl')
+    self.sm.logMonoTime['carState'] = self.now - 55_000_000
+    self.sm.recv_time['carState'] = (self.now - 54_000_000) / 1e9
+    for kwargs in ({'age': 50_000_001}, {'valid': False}, {'age': -1}):
+      with self.subTest(kwargs=kwargs):
+        self.refresher.reset()
+        self.event('carState', **kwargs)
+        self.assertIsNone(self.project(self.refresh()).authority)
 
   def test_no_event_does_not_renew_receipt_or_authority(self):
     view = self.refresh()

@@ -25,7 +25,9 @@ LEGACY_SCENE_OWNERS = frozenset((
 ))
 
 
-AUTHORITY_SERVICES = ('carControl', 'selfdriveState')
+# carState is re-read too: the projection needs it <= 50 ms old at the evaluation clock, and planner
+# work before this sample can exceed 40 ms (2 Nov drive: ~3% of cycles -> 40 ms CEM fallback blips).
+AUTHORITY_SERVICES = ('carControl', 'selfdriveState', 'carState')
 
 
 class AuthoritySnapshot:
