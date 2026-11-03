@@ -35,7 +35,9 @@ def update_frame(preview=None, controllers=None, star=None, game_mode=None, arab
 
 def main():
   camera_core_ui = COMMA_HARDWARE and HARDWARE.get_device_type() in ("mici", "tici", "tizi")
-  cores = {6} if camera_core_ui else {5}
+  # Core 6 is shared with controlsd and camerad and runs saturated onroad. Core 4 (card, FIFO) has idle time
+  # the ordinary-priority UI can take without delaying card.
+  cores = {4, 6} if camera_core_ui else {5}
   main_thread_configured = False
   config_realtime_process(0, Priority.UI)
 

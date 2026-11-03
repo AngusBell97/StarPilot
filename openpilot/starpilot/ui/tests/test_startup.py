@@ -90,7 +90,7 @@ class TestStartup(unittest.TestCase):
           nice.assert_not_called()
         self.assertEqual(affinity.call_count, 2 if hardware else 0)
         if hardware:
-          self.assertTrue(all(call.args == ([6],) for call in affinity.call_args_list))
+          self.assertTrue(all(call.args == ([4, 6],) for call in affinity.call_args_list))
 
   def test_slc_publisher_gate_is_independent_of_ui_selection(self):
     self.assertTrue(startup.slc_action_transport_enabled({"STARPILOT_UI_DEV": "1"}))
