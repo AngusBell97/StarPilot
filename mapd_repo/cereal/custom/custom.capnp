@@ -291,11 +291,6 @@ struct MapdOut @0xa4f1eb3323f5f582 {
   computedMonoTime @31 :UInt64; # Computation boot-time nanoseconds, not send time.
   sourceGeneration @32 :UInt64;
   producerSession @33 :UInt64;  # Random nonzero process session.
-  # Data-only preview from the same qualified GPS fix; no controller smoothing.
-  previewSpeedLimit @38 :Float32;
-  previewDistance @39 :Float32;
-  previewBoundaryId @40 :Text;
-  previewWayId @41 :Int64;
 
   # SP-011: second confirmed boundary on the unique connected continuation.
   # Zero means unavailable. Distances are from the current position in metres.
