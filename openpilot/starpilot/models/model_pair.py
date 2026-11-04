@@ -27,6 +27,9 @@ from openpilot.starpilot.models.laboratory_outputs import compose_model_outputs,
 
 MODES = ("shadow", "drive")
 STATUS_PATH = Path(os.getenv("STARPILOT_MODEL_PAIR_STATUS", "/dev/shm/starpilot_model_pair.json"))
+# the last run's summary survives the comma powering down after a drive
+LAST_RUN_PATH = Path(os.getenv("STARPILOT_MODEL_PAIR_LAST_RUN", "/data/models/v26/laboratory_last_run.json"))
+PERSIST_PERIOD_S = 30.0
 STATUS_SCHEMA = 1
 
 # Guard: the frame is 50 ms and lightspeed alone takes 41-43 ms (p99) on the road, with ~7 ms spare.
@@ -139,6 +142,8 @@ class ModelPair:
     self._frames = 0
     self._last_status = 0.0
     self._last_log = 0.0
+    self._last_persist = 0.0
+    self.last_run_path = LAST_RUN_PATH if status_path is None else status_path.with_name("last_run.json")
 
   # modeld reads these from the driving model
   vision_input_names = ("img", "big_img")
@@ -261,10 +266,14 @@ class ModelPair:
       return
     self._last_status = now
     state = ("driving" if self.driving else "testing") if self.partner_active else "stopped"
-    write_status({"state": state, "mode": self.plan.mode, "lateralModel": self.plan.lateral_id,
-                  "longitudinalModel": self.plan.longitudinal_id, "primary": self.primary.model_id,
-                  "partner": self.plan.partner_id, "partnerDevice": self.partner_device, "sharedWarp": self.share_warp,
-                  "reason": self.stop_reason, **self.summary()}, self.status_path)
+    status = {"state": state, "mode": self.plan.mode, "lateralModel": self.plan.lateral_id,
+              "longitudinalModel": self.plan.longitudinal_id, "primary": self.primary.model_id,
+              "partner": self.plan.partner_id, "partnerDevice": self.partner_device, "sharedWarp": self.share_warp,
+              "reason": self.stop_reason, **self.summary()}
+    write_status(status, self.status_path)
+    if force or now - self._last_persist >= PERSIST_PERIOD_S:
+      self._last_persist = now
+      write_status(status, self.last_run_path)
     if self.report is not None and now - self._last_log >= LOG_PERIOD_S:
       self._last_log = now
       self.report("modelPair", {"state": state, **self.summary()})
@@ -282,10 +291,16 @@ def write_status(status: dict, path: Path | None = None) -> None:
 
 
 def read_status(path: Path | None = None, *, max_age_s: float = 5.0) -> dict | None:
-  """The running pair's status, or None when modeld has not written one recently."""
-  try:
-    status = json.loads((STATUS_PATH if path is None else path).read_text())
-  except (OSError, ValueError):
+  """The pair's status: the live one, else the last drive's saved summary (fresh False); None when neither exists."""
+  candidates = [path] if path is not None else [STATUS_PATH, LAST_RUN_PATH]
+  status = None
+  for candidate in candidates:
+    try:
+      status = json.loads(candidate.read_text())
+      break
+    except (OSError, ValueError):
+      continue
+  if status is None:
     return None
   if not isinstance(status, dict) or status.get("schemaVersion") != STATUS_SCHEMA:
     return None

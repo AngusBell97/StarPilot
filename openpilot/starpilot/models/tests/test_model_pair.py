@@ -181,3 +181,28 @@ def test_setup_pair_reuses_the_loaded_small_model_and_never_fails_the_drive(tmp_
 
   model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "enabled": False})
   assert model is primary and reason == "off"
+
+
+def test_called_exactly_as_modeld_calls_the_driving_model(tmp_path):
+  # modeld: sets lat_delay/frame_drop_ratio, reads npy['desire'] and vision_input_names, passes after_enqueue positionally
+  pair, primary, partner, events, _ = make_pair(tmp_path, mode="drive")
+  sent = []
+  pair.lat_delay, pair.frame_drop_ratio = 0.2, 0.0
+  assert pair.npy.get("desire") is primary.npy["desire"] and pair.vision_input_names == ("img", "big_img")
+  bufs = {name: object() for name in pair.vision_input_names}
+  out = pair.run(bufs, {}, {"desire_pulse": np.zeros(8)}, lambda: sent.append("chestnut state"))
+  assert sent == ["chestnut state"] and events.index("rdf43:start") > events.index("lightspeed:start")
+  action = pair.get_action_from_model(out, log.ModelDataV2.Action(), 0.3, 0.5, 20.0)
+  assert (action.desiredCurvature, action.desiredAcceleration) == (1.0, 20.0) and pair.chestnut is True and pair.model_id == "lightspeed"
+  assert getattr(pair, "primary", pair) is primary and partner.lat_delay == 0.2
+
+
+def test_last_run_summary_survives_power_off(tmp_path, monkeypatch):
+  pair, *_ = make_pair(tmp_path)
+  step(pair)
+  pair.write_status(force=True)
+  (tmp_path / "pair.json").unlink()        # /dev/shm is wiped when the comma powers down
+  monkeypatch.setattr(model_pair, "STATUS_PATH", tmp_path / "pair.json")
+  monkeypatch.setattr(model_pair, "LAST_RUN_PATH", tmp_path / "last_run.json")
+  saved = read_status()
+  assert saved["state"] == "testing" and saved["frames"] == 1 and saved["fresh"] is True
