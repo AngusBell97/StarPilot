@@ -44,8 +44,13 @@ class SleepEyesView:
     # Only the capture frames draw the normal UI (to grab it); otherwise its offscreen work is skipped.
     return self.phase in ('capture_in', 'capture_out')
 
-  def enter(self) -> None:
-    if self.phase in ('off', 'done'):
+  def enter(self, boot: bool = False) -> None:
+    if boot and self.phase in ('off', 'done'):
+      # Start-up: the screen is black already, so no capture; the eyes power on from black.
+      self.engine.exit_done = False
+      self.engine.play('boot', _now_ms(), force=True)
+      self.phase = 'eyes'
+    elif self.phase in ('off', 'done'):
       self.engine.exit_done = False
       self.phase = 'capture_in'
     elif self.phase in ('capture_out', 'morph_out', 'pix_out'):

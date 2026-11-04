@@ -30,6 +30,9 @@ BACKLIGHT_OFFROAD = 65 if HARDWARE.get_device_type() == "mici" else 50
 PARAM_UPDATE_TIME = 1 / 5.0
 
 
+_UI_START = time.monotonic()  # Sleep Eyes: a first look soon after this means the comma just booted
+
+
 class UIStatus(Enum):
   DISENGAGED = "disengaged"
   ENGAGED = "engaged"
@@ -716,8 +719,8 @@ class Device:
         self._sleep_eyes = None
       return False
     if getattr(self, "_sleep_eyes", None) is None:
-      from openpilot.starpilot.ui.sleep_eyes.controller import SleepEyesController
-      self._sleep_eyes = SleepEyesController()
+      from openpilot.starpilot.ui.sleep_eyes.controller import BOOT_WINDOW_S, SleepEyesController
+      self._sleep_eyes = SleepEyesController(booting=time.monotonic() - _UI_START < BOOT_WINDOW_S)
     eyes = self._sleep_eyes
     wake_alert = eyes.wake_alert(ui_state.sm, ui_state.started)
     if wake_alert:

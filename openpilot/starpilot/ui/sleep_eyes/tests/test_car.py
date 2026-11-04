@@ -66,3 +66,23 @@ def test_driving_triggers():
   watcher.update(engine, 6100, sm('drive', enabled=False), True)
   watcher.update(engine, 6150, sm('drive', enabled=True, standstill=True), True)
   assert engine.stopped
+
+
+def test_boot_wakes_then_dozes_off_in_park_or_stays_awake_in_drive():
+  for gear, asleep in (('park', True), ('drive', False)):
+    engine, watcher = Engine(random.Random(4)), CarWatcher()
+    engine.auto = False  # no random events in the way
+    engine.play('boot', 0, force=True)
+    now = 0
+    while engine.current == 'boot':  # the boot animation runs to the end whatever the gear says
+      now += 50
+      watcher.update(engine, now, sm(gear), True)
+      engine.step(now)
+    assert now > 5900
+    watcher.update(engine, now + 50, sm(gear), True)
+    if asleep:
+      assert engine.current == 'ignOff'
+      finish(engine, now + 50)
+      assert engine.parked
+    else:
+      assert engine.current is None and not engine.parked

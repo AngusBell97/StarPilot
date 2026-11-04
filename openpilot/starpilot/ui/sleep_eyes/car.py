@@ -62,9 +62,11 @@ class CarWatcher:
   """Sleep and wake follow the Park gear: the comma loses power the moment the car switches off, so going
   offroad is never seen. Shifting into Park dozes the eyes off; shifting out of Park wakes them up."""
 
+  SLEEP_WAKE = ('boot', 'ignOn', 'ignOff', 'morphIn')
+
   def __init__(self):
     self.started: bool | None = None
-    self.in_park: bool | None = None
+    self.first = True
     self.engaged: bool | None = None
     self.lane_change = 'off'
     self.accel_since: float | None = None
@@ -74,28 +76,25 @@ class CarWatcher:
     self.lat_active = False
 
   def update(self, engine: Engine, now: float, sm, started: bool) -> None:
-    if self.started is None:
+    cs = sm['carState'] if started else None
+    asleep = not started or str(cs.gearShifter) == 'park'
+    # Doze off or wake up whenever the wanted state differs, unless a sleep/wake animation is already playing
+    # (the boot animation then settles: into Park it goes to sleep). The very first look sets it silently.
+    if engine.current not in self.SLEEP_WAKE and engine.parked != asleep:
+      if self.first and engine.current is None:
+        engine.parked = asleep
+      else:
+        engine.play('ignOff' if asleep else 'ignOn', now, force=True)
+    self.first = False
+    if started != self.started:
       self.started = started
-      engine.parked = not started
-    elif started != self.started:
-      self.started = started
-      self.in_park = None  # the gear decides asleep or awake at the start of each drive
       if not started:
-        # Only seen if the comma stays powered after the car switches off.
-        engine.play('ignOff', now, force=True)
         engine.ctx.update(blinker=0, alert=None, lat_hold=False)
         self.engaged = None
-        return
     if not started:
       return
 
-    ss, cs = sm['selfdriveState'], sm['carState']
-    in_park = str(cs.gearShifter) == 'park'
-    if self.in_park is None:
-      engine.parked = in_park
-    elif in_park != self.in_park:
-      engine.play('ignOff' if in_park else 'ignOn', now, force=True)
-    self.in_park = in_park
+    ss = sm['selfdriveState']
     engaged = bool(ss.enabled)
     if self.engaged is None:
       engine.engaged = engaged

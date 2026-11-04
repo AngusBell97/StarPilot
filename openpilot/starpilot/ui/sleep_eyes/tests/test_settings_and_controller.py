@@ -93,6 +93,7 @@ def ctl(monkeypatch):
   c = controller_module.SleepEyesController.__new__(controller_module.SleepEyesController)
   c.view = FakeView()
   c.sticky, c.parked_since, c.limit_hit, c._started_prev = False, None, False, None
+  c.boot_pending, c._touched = False, False
   return c, clock
 
 
@@ -119,3 +120,14 @@ def test_parked_eyes_stop_after_ten_minutes(ctl):
   clock[0] += controller_module.PARKED_LIMIT_S + 1
   assert not c.decide(started=False, timed_out=True, blocked=False, touched=False, wake_alert=False)
   assert c.limit_hit
+
+
+def test_boot_shows_the_eyes_until_a_tap_even_through_the_drive_starting(ctl):
+  c, _ = ctl
+  c.boot_pending = True
+  assert c.decide(started=False, timed_out=False, blocked=False, touched=False, wake_alert=False)
+  c.boot_pending = False  # update() clears it once the eyes are entered
+  c.view.visible = True
+  assert c.decide(started=True, timed_out=False, blocked=False, touched=False, wake_alert=False)
+  assert not c.decide(started=True, timed_out=False, blocked=False, touched=True, wake_alert=False)
+  assert not c.decide(started=True, timed_out=False, blocked=False, touched=False, wake_alert=False)

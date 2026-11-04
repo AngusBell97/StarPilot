@@ -7,6 +7,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.starpilot.ui.sleep_eyes.car import CarWatcher, wakes_screen
 from openpilot.starpilot.ui.sleep_eyes.engine import Engine
 
+BOOT_WINDOW_S = 30        # Sleep Eyes switched on within this long of the UI starting means the comma just booted
 PARKED_LIMIT_S = 600       # parked eyes doze for up to 10 minutes, then the screen switches off as before
 BRIGHTNESS_DRIVING = 50    # caps while the eyes show (percent)
 BRIGHTNESS_PARKED = 25
@@ -14,7 +15,7 @@ EYES_FPS = 20              # the whole UI loop runs at this rate while the eyes 
 
 
 class SleepEyesController:
-  def __init__(self):
+  def __init__(self, booting: bool = False):
     from openpilot.starpilot.ui.sleep_eyes.view import SleepEyesView
     self.engine = Engine()
     self.watcher = CarWatcher()
@@ -26,6 +27,7 @@ class SleepEyesController:
     self._logged_want: bool | None = None
     self._slow = False
     self._touched = False
+    self.boot_pending = booting
 
   @property
   def visible(self) -> bool:
@@ -48,9 +50,10 @@ class SleepEyesController:
     now = time.monotonic()
     self.limit_hit = False
     self._touched = touched
-    if self._started_prev is not None and started != self._started_prev:
-      # Ignition off while the eyes show: keep them (they doze off). Ignition on: back to the normal timing.
-      self.sticky = self.visible and not started
+    if self.boot_pending:
+      self.sticky = True  # boot straight into the eyes; they stay until a tap
+    if self._started_prev is not None and started != self._started_prev and not started and self.visible:
+      self.sticky = True  # offroad while the eyes show: keep them (only seen if the comma stays powered)
     self._started_prev = started
     if touched or wake_alert or blocked:
       self.sticky = False
@@ -79,7 +82,8 @@ class SleepEyesController:
     if want:
       if not view.visible or view.phase in ('capture_out', 'morph_out', 'pix_out'):
         engine.reset_timers(time.monotonic() * 1000)
-        view.enter()
+        view.enter(boot=self.boot_pending)
+        self.boot_pending = False
       gui_app.set_screen_override(view)
     elif view.visible:
       # Let a wake-up finish before switching to the driving view, unless it was a tap.

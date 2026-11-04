@@ -336,6 +336,36 @@ def r_ign_on(a, e, u, t, o, now, E0):
     T['gx'] = -0.6 if t < 4350 else 0.6
 
 
+BOOT_LIGHT_MS = 1300
+
+
+def r_boot(a, e, u, t, o, now, E0):
+  """Comma start-up: black, one pixel blooms into a line, the line splits into two closed eyes, then they wake."""
+  if t < BOOT_LIGHT_MS:
+    o.hide = True
+    o.T.update(gx=0, gy=0)
+    if t < 450:
+      k = lin(t, 100, 450)
+      o.l(20, 9, '#ffffff', k, 0.35 * k, 'f')
+    elif t < 900:
+      w = eo(lin(t, 450, 900)) * 14
+      x = 20 - w
+      while x <= 20 + w:
+        o.l(x, 9, mix('#ffffff', ENGAGED, abs(x - 20) / 14), 1 - 0.4 * abs(x - 20) / 14, 0, 'f')
+        x += 0.5
+    else:
+      k = eio(lin(t, 900, BOOT_LIGHT_MS))
+      for s in (-1, 1):
+        cx, half = 20 + s * 7.6 * k, 14 - 11 * k
+        x = cx - half
+        while x <= cx + half:
+          o.l(x, 9 + 5.8 * k, mix('#ffffff', ENGAGED, k), 1, 0, 'f')  # lands on the closed eyelids
+          x += 0.5
+    return
+  lids(o.T, 0.88)
+  r_ign_on(a, e, u, t - BOOT_LIGHT_MS, o, now, E0)
+
+
 def r_engaged(a, e, u, t, o, now, E0):
   if t < 1500:
     c = '#ffe08a' if int(t / 150) % 2 else '#f5b400'
@@ -1251,6 +1281,7 @@ _lat_right = lateral(-1)
 # Priorities: 9 transitions, 7 ignition, 6 orange alerts, 5 lateral g / lane change, 4 brake / accel / engage,
 # 2 signals, 0 idle and events.
 SPECS: dict[str, Spec] = {
+  'boot': Spec('Comma start-up', BOOT_LIGHT_MS + 4700, r_boot, start=s_ign_on, prio=9, no_blink=True, no_z=True),
   'ignOn': Spec('Waking up (out of Park)', 4700, r_ign_on, start=s_ign_on, prio=7, no_blink=True),
   'eng': Spec('Engaged', 2800, r_engaged, start=s_engaged, prio=4),
   'sigL': Spec('Signal left', 3100, signal(-1), prio=2, loop='blinker', loop_value=-1),
