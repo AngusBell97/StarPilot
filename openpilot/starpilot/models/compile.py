@@ -712,6 +712,16 @@ def main():
     run_policy_jit, make_random_model_inputs, policy_input_keys, make_policy_queues,
     validation_runs=5 if output['metadata'].get('model', {}).get('state_pairs') else 1,
   )
+  # A Chestnut policy fed by a comma-GPU warp also gets an entry fed by an image already on the Chestnut: a Model
+  # Laboratory partner reads the image its primary uploaded this frame, skipping its own host-memory copy.
+  if (args.image_history_pipeline == IMAGE_HISTORY_IN_POLICY and WARP_DEV and str(WARP_DEV) != str(Device.DEFAULT)
+      and not output['metadata'].get('model', {}).get('state_pairs')):
+    print("policy on an image already on the policy device")
+    output["run_policy_device_image"] = compile_jit(
+      TinyJit(run_policy, prune=True),
+      partial(make_random_images, keys=["warped"], shape=(2, 6, *image_shapes[road_key][2:]), device=Device.DEFAULT),
+      policy_input_keys, make_policy_queues,
+    )
 
   model_w, model_h = args.model_size
   for cam_w, cam_h in args.camera_resolutions:

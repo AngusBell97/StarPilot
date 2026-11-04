@@ -252,3 +252,27 @@ def test_a_chestnut_build_made_on_this_comma_is_used_only_when_its_digest_matche
   amd.write_bytes(b"chestnut build")
   (tmp_path / "local_variants.json").write_text(json.dumps({"polaris": {"amd": {**entry, "behavior_version": "v16"}}}))
   assert partner_artifact("polaris", root=tmp_path)[3] is False
+
+
+def test_a_chestnut_partner_reads_the_image_the_primary_uploaded(tmp_path):
+  pair, primary, partner, events, _ = make_pair(tmp_path, partner_chestnut=True)
+  image = object()
+  primary.input_queues = {"mapped_gpu_image": image}
+  seen = []
+  partner.accepts_device_image = lambda img: img is image
+  partner.run_on_device_image = lambda img, inputs: (seen.append(img), outputs(2.0))[1]
+  step(pair)
+  assert seen == [image] and pair.partner_image == "primary's Chestnut upload"
+  assert "rdf43:start" not in events                      # the partner's own warp and run never happened
+  assert json.loads((tmp_path / "pair.json").read_text())["partnerImage"] == "primary's Chestnut upload"
+  # an image the partner cannot take (other shape, device or build) falls back to the shared warp
+  partner.accepts_device_image = lambda img: False
+  step(pair)
+  assert pair.partner_image == "shared warp" and "rdf43:start" in events
+  # a comma-GPU partner never reads Chestnut memory
+  other, p2, s2, *_ = make_pair(tmp_path)
+  p2.input_queues = {"mapped_gpu_image": image}
+  s2.accepts_device_image = lambda img: True
+  s2.run_on_device_image = lambda img, inputs: pytest.fail("must not read Chestnut memory")
+  step(other)
+  assert other.partner_image == "own warp"

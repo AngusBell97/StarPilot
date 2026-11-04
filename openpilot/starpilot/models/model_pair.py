@@ -186,6 +186,7 @@ class ModelPair:
     self.partner_active = True
     self.stop_reason = ""
     self.partner_device = "chestnut" if partner.chestnut else "comma"
+    self.partner_image = ""
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
     self.lat_delay = 0.0
@@ -237,12 +238,25 @@ class ModelPair:
       self.report("modelPairStopped", {"reason": reason, **self.summary()})
     self.write_status(force=True)
 
+  def _primary_image(self):
+    """The camera image the primary uploaded to the Chestnut this frame, when the partner can read it directly."""
+    if not (self.share_warp and self.partner.chestnut and self.primary.chestnut):
+      return None
+    image = getattr(self.primary, "input_queues", {}).get("mapped_gpu_image")
+    accepts = getattr(self.partner, "accepts_device_image", None)
+    return image if accepts is not None and accepts(image) else None
+
   def _run_partner(self, bufs, transforms, inputs) -> None:
     t = self.now()
     try:
-      if self.share_warp:
+      if (image := self._primary_image()) is not None:
+        self.partner_image = "primary's Chestnut upload"
+        self._outputs["partner"] = self.partner.run_on_device_image(image, inputs)
+      elif self.share_warp:
+        self.partner_image = "shared warp"
         self._outputs["partner"] = self.partner.run(bufs, transforms, inputs, shared_warp=self.primary.last_warp)
       else:
+        self.partner_image = "own warp"
         self._outputs["partner"] = self.partner.run(bufs, transforms, inputs)
     except Exception as error:  # noqa: BLE001 - any partner failure stops the partner, never the drive
       self._stop_partner(f"partner failed: {type(error).__name__}: {error}"[:300])
@@ -325,6 +339,7 @@ class ModelPair:
     status = {"state": state, "mode": self.plan.mode, "lateralModel": self.plan.lateral_id,
               "longitudinalModel": self.plan.longitudinal_id, "primary": self.primary.model_id,
               "partner": self.plan.partner_id, "partnerDevice": self.partner_device, "sharedWarp": self.share_warp,
+              "partnerImage": self.partner_image,
               "reason": self.stop_reason, **self.summary()}
     write_status(status, self.status_path)
     if force or now - self._last_persist >= PERSIST_PERIOD_S:
