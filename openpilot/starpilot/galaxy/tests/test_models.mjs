@@ -459,3 +459,16 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
   assert.match(ModelsPage.template, /v-else id="gx-model-laboratory"/)
   console.log('Single model / Model pair toggle and big+small picker rules passed')
 }
+
+// the page names the model that carries on alone: the big one, or the lateral one of two small models
+{
+  const rows = [{ value: 'ls', small: false }, { value: 'pol', small: true }, { value: 'rdf', small: true }]
+  const fallback = (lateral, longitudinal) => ModelsPage.computed.labFallbackModel.call({
+    labPairRows: [lateral, longitudinal].map(id => rows.find(m => m.value === id)), labConfig: { lateralModel: lateral, longitudinalModel: longitudinal } })
+  assert.equal(fallback('pol', 'ls'), 'ls')
+  assert.equal(fallback('ls', 'pol'), 'ls')
+  assert.equal(fallback('pol', 'rdf'), 'pol')
+  assert.doesNotMatch(ModelsPage.template, /steers ·|the first model/)
+  assert.match(ModelsPage.template, /labModelLabel\(labFallbackModel\)/)
+  console.log('Pair fallback model is named')
+}

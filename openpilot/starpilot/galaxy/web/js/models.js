@@ -516,6 +516,8 @@ export const ModelsPage = {
         .map(m => ({ ...m, blocked: m.small === false && other?.small === false }))
     },
     labPairHasBig() { return this.labPairRows.some(m => m?.small === false) },
+    // the model that keeps driving when the pair stops: the big one, or the lateral one of two small models (modeld's running model)
+    labFallbackModel() { return this.labPairRows.find(m => m?.small === false)?.value || this.labConfig.lateralModel || "" },
     labPairSmall() { return this.labPairRows.find(m => m?.small === true)?.value || "" },
     labStats() { return this.lab?.runtime?.stats || {} },
     labShowsVariants() { return (this.lab?.summary?.published || 0) > 0 },
@@ -620,7 +622,7 @@ export const ModelsPage = {
     },
     async enablePair() {
       if (!await this.confirmAction({ title: "Drive with a model pair", confirmLabel: "Drive with the pair",
-        message: `From the next drive, ${this.labModelLabel(this.labConfig.lateralModel)} steers and ${this.labModelLabel(this.labConfig.longitudinalModel)} sets the speed. If the pair errors or runs too slowly, ${this.labModelLabel(this.labPairRows.find(m => m?.small === false)?.value || this.labConfig.lateralModel)} carries on alone. Watch the road closely on the first drive.` })) {
+        message: `From the next drive, ${this.labModelLabel(this.labConfig.lateralModel)} steers and ${this.labModelLabel(this.labConfig.longitudinalModel)} sets the speed. If the pair errors or runs too slowly, ${this.labModelLabel(this.labFallbackModel)} carries on alone. Watch the road closely on the first drive.` })) {
         this.pairView = null
         return null
       }
@@ -800,8 +802,7 @@ export const ModelsPage = {
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-cpu"></i>
             <span class="gx-section__title">Models</span>
-            <span v-if="lab?.configuration.enabled" class="gx-section__count">Pair: {{ labModelLabel(lab.configuration.lateralModel) }} steers · {{ labModelLabel(lab.configuration.longitudinalModel) }} paces</span>
-            <span v-else-if="currentLabel" class="gx-section__count">Selected: {{ currentLabel }}</span>
+            <span v-if="currentLabel && !lab?.configuration.enabled" class="gx-section__count">Selected: {{ currentLabel }}</span>
           </div>
           <GxSummary :items="[{label: 'Installed', value: summary.installed}, {label: 'Missing', value: summary.missing}, {label: 'Total', value: summary.total}, {label: 'Running model', value: runningModelLabel}]" />
         </section>
@@ -843,7 +844,7 @@ export const ModelsPage = {
             </template>
 
             <div v-else id="gx-model-laboratory" ref="laboratory" class="gx-stack gx-model-laboratory">
-              <small class="gx-model-mode__hint">Steering from one model, speed from the other: two small models, or one big and one small. If the pair errors or runs too slowly, the first model carries on alone.</small>
+              <small class="gx-model-mode__hint">Steering from one model, speed from the other: two small models, or one big and one small. If the pair errors or runs too slowly, <template v-if="labFallbackModel">{{ labModelLabel(labFallbackModel) }}</template><template v-else>the big model (or, with two small models, the lateral one)</template> carries on alone and drives by itself.</small>
               <div class="gx-actions gx-tags">
                 <span class="gx-chip">{{ lab ? (lab.chestnutReady ? 'Chestnut ready' : 'Chestnut not connected') : 'Waiting for device status' }}</span>
                 <span v-if="lab" class="gx-chip" :class="{'gx-chip--selected': lab.runtime.active}">{{ labRuntimeState }}</span>
@@ -866,19 +867,18 @@ export const ModelsPage = {
                     <option v-for="m in labLongitudinalOptions" :key="m.value" :value="m.value" :disabled="m.blocked">{{ m.label }} · {{ m.version }} · {{ placement(m) }}{{ m.blocked ? ' · not with another big model' : '' }}</option>
                   </GalaxySelect>
                 </div>
-                <p class="gx-row__desc">{{ labModelLabel(labConfig.lateralModel) }} steers · {{ labModelLabel(labConfig.longitudinalModel) }} paces</p>
                 <GxNotice v-if="labSelectionError" :tone="labChoiceProblem ? 'danger' : 'info'">{{ labSelectionError }}</GxNotice>
                 <GxNotice v-else-if="lab.configuration.enabled && labPairHasBig && !lab.chestnutReady" tone="warn">The Chestnut is not connected, so {{ labModelLabel(labPairSmall) }} drives alone until it is.</GxNotice>
                 <div class="gx-row gx-row--borderless">
                   <div class="gx-row__info">
                     <span class="gx-row__label">Last pair run</span>
-                    <span v-if="labStats.frames" class="gx-row__desc">{{ labModelLabel(labStats.lateralModel) }} steers · {{ labModelLabel(labStats.longitudinalModel) }} paces · second model on the {{ labStats.partnerDevice === 'chestnut' ? 'Chestnut' : 'comma GPU' }}{{ labStats.sharedWarp ? ' (shared camera image)' : '' }}</span>
-                    <span v-if="labStats.frames" class="gx-row__desc">Model time {{ labStats.runMsP50 }} ms typical, {{ labStats.runMsP95 }} ms at 95% (frame is 50 ms) · second model {{ labStats.partnerMsP50 ?? '–' }} ms · {{ labStats.frames }} frames</span>
+                    <span v-if="labStats.frames && labStats.partner" class="gx-row__desc">{{ labModelLabel(labStats.partner) }} ran on the {{ labStats.partnerDevice === 'chestnut' ? 'Chestnut' : 'comma GPU' }}{{ labStats.sharedWarp ? ' (shared camera image)' : '' }}</span>
+                    <span v-if="labStats.frames" class="gx-row__desc">Model time {{ labStats.runMsP50 }} ms typical, {{ labStats.runMsP95 }} ms at 95% (frame is 50 ms) · {{ labModelLabel(labStats.partner) }} {{ labStats.partnerMsP50 ?? '–' }} ms · {{ labStats.frames }} frames</span>
                     <span v-if="labStats.curvatureDiffP50 != null" class="gx-row__desc">Disagreement: steering {{ labStats.curvatureDiffP50 }} (95%: {{ labStats.curvatureDiffP95 }}) 1/m · speed {{ labStats.accelDiffP50 }} (95%: {{ labStats.accelDiffP95 }}) m/s²</span>
                     <span v-if="!labStats.frames" class="gx-row__desc">No pair has run yet. A pair starts when the driving model next starts.</span>
                   </div>
                 </div>
-                <GxNotice v-if="lab.runtime.error" :tone="lab.runtime.state === 'stopped' ? 'warn' : 'danger'">{{ lab.runtime.state === 'stopped' ? 'The pair stopped and the first model carried on alone: ' : 'The pair did not start: ' }}{{ lab.runtime.error }}</GxNotice>
+                <GxNotice v-if="lab.runtime.error" :tone="lab.runtime.state === 'stopped' ? 'warn' : 'danger'"><template v-if="lab.runtime.state === 'stopped'">The pair stopped and {{ labModelLabel(labStats.primary) }} carried on alone: </template><template v-else>The pair did not start: </template>{{ lab.runtime.error }}</GxNotice>
                 <div class="gx-row gx-row--borderless gx-row--wrap">
                   <div class="gx-row__info"><span class="gx-row__desc">{{ labPairable.length }} downloaded models can be paired. <template v-if="labShowsVariants">eGPU variants downloaded: {{ labReady.length }} of {{ lab.summary.published }} published; get them from the Small model cards.</template><template v-else>No eGPU variants of small models are published yet, so small models pair on the comma GPU.</template></span></div>
                   <button type="button" class="gx-btn gx-btn--tonal" @click="showPairable"><i aria-hidden="true" class="bi bi-funnel"></i> Show pairable models</button>
