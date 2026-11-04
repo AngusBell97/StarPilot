@@ -103,6 +103,7 @@ class LaneObstacleDetector:
     self.samples = {'submit': deque([6e-3], maxlen=20), 'read': deque([12e-3], maxlen=20)}   # s, host time of each phase
     self.waited = 0                # frames in a row the budget said no: the estimate relaxes so a spike cannot starve it
     self.lead_memory = None
+    self.tracker = GEO.ObstacleTracker()
     self.stats = {'frames': 0, 'submits': 0, 'reads': 0, 'wait_budget': 0, 'dropped': 0}
     self.stats_t = time.monotonic()
 
@@ -222,6 +223,14 @@ class LaneObstacleDetector:
         raise ValueError('lane obstacle detector output not finite')
       c = self.context
       a = GEO.assess(packet, c['xs'], c['lane_y'], c['lane_z'], c['probs'], c['v_ego'], lead=c['lead'], width_hint=self.width_hint)
+      # across frames: only an object seen repeatedly and closing like a static one blocks the lane (traffic ahead and
+      # oncoming traffic do not)
+      block = self.tracker.update(c['mono_ns'] / 1e9, c['v_ego'], a.objects if a.healthy else [])
+      a.blocked = block is not None
+      if block is not None:
+        a.distance, a.intrusion, a.side, a.cls, a.score = block.x_near, block.intrusion, block.side, block.det.cls, block.det.score
+      else:
+        a.distance, a.intrusion, a.side, a.cls, a.score = math.inf, 0.0, 0, -1, 0.0
       if min(c['probs'][1], c['probs'][2]) >= 0.5:
         w = float(c['lane_y'][2][0] - c['lane_y'][1][0])
         if 2.5 <= w <= 5.0:
@@ -233,7 +242,7 @@ class LaneObstacleDetector:
       self.stats['reads'] += 1
       wire = LaneObstacleWire(self.seq, c['frame_id'], c['mono_ns'], a.healthy, a.blocked, a.cls, a.side, a.distance,
                               a.intrusion, object_length(a.cls) if a.blocked else 0.0, a.score, c['submit_ms'] + read_s * 1e3,
-                              [WireObject(p.det.cls, (FLAG_BLOCKING if a.blocked and p.x_near == a.distance and not p.lead else 0) |
+                              [WireObject(p.det.cls, (FLAG_BLOCKING if p is block else 0) |
                                           (FLAG_LEAD if p.lead else 0), p.det.score, p.x_near, p.intrusion, p.y_min, p.y_max)
                                for p in objs])
       now = time.monotonic()
