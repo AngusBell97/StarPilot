@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from openpilot.starpilot.galaxy.access import GalaxyAccessOwner
 from openpilot.starpilot.galaxy.server import make_server
+from openpilot.starpilot.galaxy.hardware_feed import HardwareFeed
 from openpilot.starpilot.galaxy.system_monitor import SystemMonitor
 
 
@@ -107,6 +108,11 @@ class SystemMonitorRuntimeTest(unittest.TestCase):
       self.assertEqual(request('/api/system/monitor', headers={'Host': 'other.example'})[0], 403)
       self.assertEqual(request('/api/system/monitor', headers={'Origin': 'https://other.example'})[0], 403)
       self.assertEqual(request('/api/system/monitor', method='POST', headers={'Origin': origin})[0], 405)
+      reset = {'Origin': origin, 'Content-Type': 'application/json'}
+      self.assertEqual(request('/api/system/monitor/reset-peaks', method='POST', headers=reset, body='{"gpu":"chestnut"}')[0], 401)
+      # this test server has no background hardware feed, so there is nothing to clear
+      status, body, _ = request('/api/system/monitor/reset-peaks', method='POST', headers=reset | auth, body='{"gpu":"chestnut"}')
+      self.assertEqual((status, json.loads(body)['error']), (503, 'Temperature logging is unavailable'))
       (self.root / 'stat').unlink()
       status, body, _ = request('/api/system/monitor', headers=auth)
       self.assertEqual(status, 503)
@@ -167,21 +173,32 @@ class HardwareReadingsTest(unittest.TestCase):
       def __getitem__(self, key):
         return test.device
 
-    class ChestnutMessages(SimpleNamespace):
+    class Messages(SimpleNamespace):
       def update(self, timeout):
         pass
 
       def __getitem__(self, key):
-        return test.chestnut
+        return test.chestnut if key == 'chestnutState' else SimpleNamespace(processes=test.managed)
 
     self.snapshot = Snapshot(seen={'deviceState': True}, valid={'deviceState': True},
                              logMonoTime={'deviceState': 99_000_000_000}, recv_time={'deviceState': 99.})
-    self.chestnut_messages = ChestnutMessages(seen={'chestnutState': True}, valid={'chestnutState': True},
-                                              recv_time={'chestnutState': 99.5})
+    self.managed = [SimpleNamespace(name='controlsd', pid=42, running=True, shouldBeRunning=True, exitCode=0),
+                    SimpleNamespace(name='updated', pid=0, running=False, shouldBeRunning=True, exitCode=1),
+                    SimpleNamespace(name='loggerd', pid=0, running=False, shouldBeRunning=False, exitCode=0)]
+    self.chestnut_messages = Messages(seen={'chestnutState': True, 'managerState': True},
+                                      valid={'chestnutState': True, 'managerState': True},
+                                      recv_time={'chestnutState': 99.5, 'managerState': 99.5})
+    self.directory = tempfile.TemporaryDirectory()
+    self.addCleanup(self.directory.cleanup)
+    self.peaks_path = Path(self.directory.name) / 'peaks.json'
+    self.wall = 1_790_000_000.
+    self.feed = HardwareFeed(self.peaks_path, messages=self.chestnut_messages, jetlink_telemetry=None,
+                             clock=lambda: self.now, wall_clock=lambda: self.wall)
     self.params = {'ChestnutActive': True}
     self.monitor = SystemMonitor(messages=SimpleNamespace(snapshot=lambda: self.snapshot), clock=lambda: self.now,
                                  boot_clock=lambda: self.now, params=SimpleNamespace(get=lambda key: self.params.get(key)),
-                                 chestnut_messages=self.chestnut_messages, jetlink=lambda: None)
+                                 feed=self.feed, jetlink=lambda: None)
+    self.feed.poll()
 
   def test_comma_thermals(self):
     comma, _ = self.monitor._hardware()
@@ -204,6 +221,7 @@ class HardwareReadingsTest(unittest.TestCase):
 
   def test_chestnut_states(self):
     def status():
+      self.feed.poll()
       gpu = self.monitor._hardware()[1][0]
       return gpu['status'], gpu['statusText']
     self.chestnut.tempC = 101.
@@ -219,13 +237,16 @@ class HardwareReadingsTest(unittest.TestCase):
     self.chestnut.supplyVoltage = 0
     self.assertEqual(status()[0], 'idle')
     self.assertIn('12 V', status()[1])
-    self.chestnut_messages.recv_time['chestnutState'] = 90.
+    # the Chestnut's message stops arriving while the comma's own status keeps coming
+    self.now = 106.
+    self.snapshot.recv_time['deviceState'], self.snapshot.logMonoTime['deviceState'] = 105.5, 105_500_000_000
     self.assertEqual(status(), ('idle', 'Connected · no readings yet'))
 
   def test_chestnut_without_gpu_readings(self):
     # modeld leaves the GPU half at zero while the driving model is not on the Chestnut
     for field in ('tempC', 'memoryTempC', 'powerDrawW', 'gpuUsagePercent', 'gpuClockMhz', 'fanSpeedRpm'):
       setattr(self.chestnut, field, 0)
+    self.feed.poll()
     gpu = self.monitor._hardware()[1][0]
     self.assertIsNone(gpu['hotspotC'])
     self.assertIsNone(gpu['loadPercent'])
@@ -235,7 +256,7 @@ class HardwareReadingsTest(unittest.TestCase):
   def test_no_chestnut(self):
     self.device.chestnutPresent = False
     self.device.usbState.devices = []
-    self.chestnut_messages.seen['chestnutState'] = False
+    self.now = 106.
     self.assertEqual(self.monitor._hardware()[1], [])
     self.assertEqual(SystemMonitor(jetlink=lambda: None)._hardware(), (None, []))
 
@@ -250,6 +271,79 @@ class HardwareReadingsTest(unittest.TestCase):
     self.assertEqual(sample['commaThermals']['maxTempC'], 61.4)
     self.assertEqual(sample['externalGpus'][0]['kind'], 'chestnut')
     self.assertNotIn('vitals', sample)
+    self.assertEqual(sample['managed'], {'expected': 2, 'running': 1, 'stopped': [{'name': 'updated', 'exitCode': 1}]})
+
+  def test_process_tree_age_and_manager_names(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      (root / 'stat').write_text('cpu 1 0 0 1 0 0 0 0\n')
+      (root / 'meminfo').write_text('MemTotal: 4096000 kB\nMemAvailable: 1024000 kB\n')
+      (root / 'uptime').write_text('500 0\n')
+
+      def process(pid, ppid, start_ticks, cmdline, flags=0):
+        fields = ['0'] * 22
+        fields[0], fields[1], fields[6], fields[19], fields[21] = 'S', str(ppid), str(flags), str(start_ticks), '256'
+        (root / str(pid)).mkdir()
+        (root / str(pid) / 'stat').write_text(f'{pid} (x) {" ".join(fields)}')
+        (root / str(pid) / 'cmdline').write_bytes(cmdline)
+      process(10, 1, 1000, b'python3\0./manager.py\0')
+      process(42, 10, 30000, b'python\0-m\0openpilot.selfdrive.controls.controlsd\0')
+      process(43, 42, 40000, b'/data/openpilot/openpilot/system/loggerd/encoderd\0')
+      process(50, 1, 2000, b'/usr/sbin/sshd\0')
+      process(2, 0, 0, b'', flags=0x00200000)
+      self.monitor.root = root
+      self.monitor.clock_ticks = 100
+      rows = {row['pid']: row for row in self.monitor.sample()['processes']}
+    self.assertEqual({pid: row['openpilot'] for pid, row in rows.items()}, {2: False, 10: True, 42: True, 43: True, 50: False})
+    self.assertEqual((rows[10]['ageSeconds'], rows[42]['ageSeconds'], rows[43]['ageSeconds']), (490, 200, 100))
+    self.assertEqual(rows[42]['managedName'], 'controlsd')
+    self.assertNotIn('managedName', rows[43])
+
+  def test_gpu_peaks(self):
+    gpu = self.monitor._hardware()[1][0]
+    self.assertEqual(gpu['hotspotPeak'], {'value': 78.0, 'at': self.wall})
+    self.assertEqual(gpu['memoryPeak'], {'value': 88.0, 'at': self.wall})
+    self.assertTrue(gpu['peaksResettable'])
+    # hotter readings raise the peak, cooler ones and missing (zero) readings leave it
+    self.now, self.wall = 101., self.wall + 60
+    self.chestnut.tempC, self.chestnut.memoryTempC = 84.5, 80.0
+    self.feed.poll()
+    self.now, self.chestnut.tempC, self.chestnut.memoryTempC = 102., 0, 0
+    self.feed.poll()
+    gpu = self.monitor._hardware()[1][0]
+    self.assertEqual(gpu['hotspotPeak'], {'value': 84.5, 'at': self.wall})
+    self.assertEqual(gpu['memoryPeak']['value'], 88.0)
+    # kept across a Galaxy restart; a stale message is never logged
+    self.feed.close()
+    reloaded = HardwareFeed(self.peaks_path, messages=self.chestnut_messages, jetlink_telemetry=None,
+                            clock=lambda: self.now, wall_clock=lambda: self.wall)
+    self.assertEqual(reloaded.peaks('chestnut')['hotspotC']['value'], 84.5)
+    self.now, self.chestnut.tempC = 200., 99.
+    reloaded.poll()
+    self.assertEqual(reloaded.peaks('chestnut')['hotspotC']['value'], 84.5)
+    reloaded.reset('chestnut')
+    self.assertIsNone(reloaded.peaks('chestnut')['hotspotC'])
+    self.assertEqual(reloaded.peaks('chestnut')['since'], self.wall)
+    with self.assertRaises(ValueError):
+      reloaded.reset('other')
+    self.peaks_path.write_text('{not json')
+    self.assertIsNone(HardwareFeed(self.peaks_path, messages=self.chestnut_messages).peaks('chestnut')['hotspotC'])
+
+  def test_jetlink_peaks_and_save_throttle(self):
+    telemetry = {'temp_c': 70.0}
+    feed = HardwareFeed(self.peaks_path, messages=self.chestnut_messages, jetlink_telemetry=lambda: telemetry,
+                        clock=lambda: self.now, wall_clock=lambda: self.wall)
+    feed.poll()
+    self.assertEqual(feed.peaks('jetlink')['hotspotC']['value'], 70.0)
+    self.assertIsNone(feed.peaks('jetlink')['memoryTempC'])
+    saved = self.peaks_path.read_text()
+    telemetry['temp_c'] = 75.0
+    self.now = 110.
+    feed.poll()
+    self.assertEqual(self.peaks_path.read_text(), saved)  # within 30 s of the last write
+    self.now = 140.
+    feed.poll()
+    self.assertIn('75.0', self.peaks_path.read_text())
 
   def test_jetlink_host(self):
     from unittest.mock import patch

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { normalizeSnapshot, processFeature, processInfo, processRows, processState, displayNumber, heatLevel } from "../web/js/system-monitor-data.js"
+import { normalizeSnapshot, processFeature, processInfo, processRows, processState, displayNumber, heatLevel, managedTitle } from "../web/js/system-monitor-data.js"
 
 const fixture = JSON.parse(readFileSync(new URL("../web/data/system-monitor.sample.json", import.meta.url), "utf8"))
 const sample = normalizeSnapshot(fixture)
@@ -58,6 +58,24 @@ const impossible = normalizeSnapshot({ ...fixture,
 assert.equal(impossible.memory.usedMiB, null)
 assert.equal(impossible.memory.percent, null)
 assert.equal(impossible.storage.usedGiB, null)
+// openpilot's own processes, process ages, the process manager's view and the GPU peaks
+assert.deepEqual(processRows(sample, { scope: "openpilot" }).map(p => p.pid), [102, 101, 105, 104, 103])
+assert.deepEqual(processRows(sample, { scope: "all", sort: "ageSeconds" }).map(p => p.pid), [2, 105, 103, 102, 101, 104])
+assert.equal(sample.processes.find(p => p.pid === 101).managedName, "controlsd")
+assert.equal(sample.processes.find(p => p.pid === 2).openpilot, false)
+assert.deepEqual(sample.managed, { expected: 18, running: 18, stopped: [] })
+assert.deepEqual(normalizeSnapshot({ ...fixture, managed: { expected: 3, running: 2, stopped: [{ name: "updated", exitCode: 1 }, { exitCode: 2 }] } }).managed,
+  { expected: 3, running: 2, stopped: [{ name: "updated", exitCode: 1 }] })
+assert.equal(normalizeSnapshot({ ...fixture, managed: { expected: -1 } }).managed, null)
+assert.equal(managedTitle("controlsd"), "Steering and speed control")
+assert.equal(managedTitle("galaxy"), "Galaxy web interface")
+assert.equal(managedTitle("unknownd"), "unknownd")
+assert.deepEqual(sample.externalGpus[0].hotspotPeak, { value: 86, at: 1789991000 })
+assert.equal(sample.externalGpus[0].peaksResettable, true)
+const badPeaks = normalizeSnapshot({ ...fixture, externalGpus: [{ ...fixture.externalGpus[0], hotspotPeak: { value: 900, at: 1 }, memoryPeak: "hot" }] })
+assert.equal(badPeaks.externalGpus[0].hotspotPeak, null)
+assert.equal(badPeaks.externalGpus[0].memoryPeak, null)
+assert.equal(sample.batteryVoltage, 13.3)
 console.log("System Monitor data contract: pass")
 
 assert.equal(normalizeSnapshot({...fixture,batteryVoltage:12.64}).batteryVoltage,12.64)

@@ -42,7 +42,10 @@
       "kernel": false,
       "state": "R",
       "cpu": 8.3,
-      "memoryMiB": 222.6
+      "memoryMiB": 222.6,
+      "ageSeconds": 8130,
+      "openpilot": true,
+      "managedName": "controlsd"
     },
     {
       "pid": 102,
@@ -51,7 +54,10 @@
       "kernel": false,
       "state": "S",
       "cpu": 12.7,
-      "memoryMiB": 410.2
+      "memoryMiB": 410.2,
+      "ageSeconds": 8131,
+      "openpilot": true,
+      "managedName": "modeld"
     },
     {
       "pid": 103,
@@ -60,7 +66,10 @@
       "kernel": false,
       "state": "S",
       "cpu": null,
-      "memoryMiB": 91.1
+      "memoryMiB": 91.1,
+      "ageSeconds": 8133,
+      "openpilot": true,
+      "managedName": "hardwared"
     },
     {
       "pid": 104,
@@ -69,7 +78,10 @@
       "kernel": false,
       "state": "S",
       "cpu": 1.2,
-      "memoryMiB": 73.4
+      "memoryMiB": 73.4,
+      "ageSeconds": 120,
+      "openpilot": true,
+      "managedName": "uploader"
     },
     {
       "pid": 105,
@@ -78,7 +90,9 @@
       "kernel": false,
       "state": "R",
       "cpu": 2.4,
-      "memoryMiB": 54.5
+      "memoryMiB": 54.5,
+      "ageSeconds": 8140,
+      "openpilot": true
     },
     {
       "pid": 2,
@@ -87,7 +101,9 @@
       "kernel": true,
       "state": "S",
       "cpu": null,
-      "memoryMiB": 0
+      "memoryMiB": 0,
+      "ageSeconds": 98400,
+      "openpilot": false
     }
   ],
   "commaThermals": {
@@ -123,7 +139,23 @@
       "frameMs": null,
       "link": "GPU link up",
       "usbSpeedMbps": 10000,
-      "usbLinkErrors": 0
+      "usbLinkErrors": 0,
+      "hotspotPeak": {
+        "value": 86.0,
+        "at": 1789991000
+      },
+      "memoryPeak": {
+        "value": 91.0,
+        "at": 1789990400
+      },
+      "peaksSince": 1789900000,
+      "peaksResettable": true
     }
-  ]
+  ],
+  "batteryVoltage": 13.3,
+  "managed": {
+    "expected": 18,
+    "running": 18,
+    "stopped": []
+  }
 }

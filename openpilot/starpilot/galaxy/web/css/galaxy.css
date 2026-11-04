@@ -954,7 +954,7 @@ background: var(--glass-bg-hover);
 @media (max-width: 600px) { .gx-crash-row, .gx-crash-preview__head { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 600px) { .gx-starport-log { flex-direction: row; align-items: center; } }
 .gx-monitor__toolbar, .gx-monitor__filters { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; }
-.gx-monitor__summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.gx-monitor__summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .gx-monitor__metric { padding: 16px; margin: 0; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
 .gx-monitor__metric > span, .gx-monitor__metric small { color: var(--text-muted); }
 .gx-monitor__metric strong { font-size: 26px; overflow-wrap: anywhere; }
@@ -1744,10 +1744,32 @@ progress { max-width: 100%; accent-color: var(--primary); }
 .gx-monitor__stats dt { color: var(--text-muted); font-size: var(--fs-xs); }
 .gx-monitor__stats dd { margin: 2px 0 0; font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
 .gx-monitor__cores > .gx-monitor__stats { padding-top: 12px; }
+.gx-monitor__peak { color: var(--text-muted); }
+.gx-monitor__peak b { color: var(--on-surface); font-weight: var(--fw-medium); }
+.gx-monitor__peak[data-heat="warm"] b { color: var(--warning); }
+.gx-monitor__peak[data-heat="hot"] b { color: var(--error); }
+.gx-monitor__gpu-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); border-top: 1px solid var(--outline); padding-top: var(--sp-3); }
+.gx-monitor__gpu-footer small { color: var(--text-muted); }
+.gx-monitor__link { background: transparent; border: 1px solid var(--outline); color: var(--primary); border-radius: var(--radius-full); padding: 6px 14px; font: inherit; font-size: var(--fs-sm); cursor: pointer; min-height: 36px; flex-shrink: 0; }
+.gx-monitor__link:disabled { opacity: .6; cursor: default; }
+.gx-monitor__error { color: var(--error); margin: 0; }
+.gx-monitor__health { border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--outline); background: color-mix(in srgb, var(--success) 10%, transparent); }
+.gx-monitor__health[data-level="good"] strong { color: var(--success); }
+.gx-monitor__health[data-level="warning"] { background: color-mix(in srgb, var(--warning) 12%, transparent); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.gx-monitor__health[data-level="warning"] strong { color: var(--warning); }
+.gx-monitor__health ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.gx-monitor__segments { display: inline-flex; border: 1px solid var(--outline); border-radius: var(--radius-full); padding: 3px; gap: 2px; flex-shrink: 0; }
+.gx-monitor__segments button { background: transparent; border: 0; color: var(--on-surface-variant); font: inherit; font-size: var(--fs-sm); padding: 6px 14px; border-radius: var(--radius-full); cursor: pointer; min-height: 34px; }
+.gx-monitor__segments button span { opacity: .7; font-variant-numeric: tabular-nums; margin-left: 2px; }
+.gx-monitor__segments button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.gx-monitor__use { margin: 0; }
+.gx-monitor__bar--small { height: 3px; margin-top: 5px; max-width: 70px; }
+.gx-monitor__pill--inline { margin-left: 6px; padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
+.gx-monitor__col-cpu, .gx-monitor__col-memoryMiB, .gx-monitor__col-ageSeconds { width: 1%; }
 .gx-monitor__table td { vertical-align: top; }
 .gx-monitor__table { overflow-anchor: none; }
 
-@media(max-width:600px) { .gx-monitor table { min-width: 0; } .gx-monitor td:first-child { min-width: 0; max-width: none; } .gx-monitor th button, .gx-monitor td { padding-left: 8px; padding-right: 8px; } .gx-monitor__temps { grid-template-columns: 1fr 1fr; gap: 8px; } .gx-monitor__temp strong { font-size: 22px; } .gx-monitor__stats { grid-template-columns: 1fr 1fr; } }
+@media(max-width:600px) { .gx-monitor table { min-width: 0; } .gx-monitor td:first-child { min-width: 0; max-width: none; } .gx-monitor th button, .gx-monitor td { padding-left: 8px; padding-right: 8px; } .gx-monitor__temps { grid-template-columns: 1fr 1fr; gap: 8px; } .gx-monitor__temp strong { font-size: 22px; } .gx-monitor__stats { grid-template-columns: 1fr 1fr; } .gx-monitor__summary { grid-template-columns: 1fr 1fr; } .gx-monitor__summary > :last-child:nth-child(odd) { grid-column: 1 / -1; } .gx-monitor__gpu-footer { flex-wrap: wrap; } .gx-monitor__segments { width: 100%; } .gx-monitor__segments button { flex: 1; } .gx-monitor td.gx-monitor__col-ageSeconds, .gx-monitor th.gx-monitor__col-ageSeconds { font-size: 12px; } .gx-monitor__table .gx-monitor__description { display: none; } .gx-monitor__table code.gx-monitor__process-name { margin-top: 4px; } }
 /* StarPilot Tuner shares Galaxy surfaces, spacing and source-aware state colors. */
 .gx-tuner { display: grid; gap: var(--sp-5); min-width: 0; padding-bottom: var(--sp-4); }
 .gx-tuner h2, .gx-tuner h3, .gx-tuner h4, .gx-tuner p { margin: 0; }

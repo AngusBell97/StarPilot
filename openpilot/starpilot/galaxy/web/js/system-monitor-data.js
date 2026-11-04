@@ -21,7 +21,8 @@ export function normalizeSnapshot(raw, expectedMode = "synthetic-preview") {
     if (!object(process) || integer(process.pid, 1) === null || !text(process.name) || !text(process.user) ||
         typeof process.kernel !== "boolean" || !text(process.state)) throw new Error("Invalid process in sample")
     return { instanceId: text(process.instanceId), pid: process.pid, name: process.name, user: process.user, kernel: process.kernel,
-      state: process.state, cpu: percent(process.cpu), memoryMiB: number(process.memoryMiB) }
+      state: process.state, cpu: percent(process.cpu), memoryMiB: number(process.memoryMiB), ageSeconds: number(process.ageSeconds),
+      openpilot: process.openpilot === true, managedName: text(process.managedName) }
   })
   if (new Set(processes.map((process) => process.pid)).size !== processes.length) throw new Error("Duplicate process PID in sample")
   const memory = { totalMiB: number(raw.memory.totalMiB, 0.01), usedMiB: number(raw.memory.usedMiB),
@@ -35,11 +36,20 @@ export function normalizeSnapshot(raw, expectedMode = "synthetic-preview") {
   return { sampleMono: number(raw.sampleMono), sourceId: text(raw.sourceId), intervalSeconds: number(raw.intervalSeconds, 0, 10), source: raw.source, sampledAt: raw.sampledAt, cpuPercent: percent(raw.cpuPercent), cores, memory, storage,
     batteryVoltage: number(raw.batteryVoltage, 0.01, 60),
     uptimeSeconds: number(raw.uptimeSeconds), processCount: integer(raw.processCount), processes,
+    managed: normalizeManaged(raw.managed),
     commaThermals: normalizeThermals(raw.commaThermals), externalGpus: Array.isArray(raw.externalGpus) ? raw.externalGpus.map(normalizeGpu).filter(Boolean) : [] }
 }
 
 const temperature = (value) => number(value, 1, 150)
 const LEVELS = new Set(["good", "idle", "warning", "danger"])
+
+function normalizeManaged(raw) {
+  if (!object(raw) || integer(raw.expected) === null || integer(raw.running) === null || !Array.isArray(raw.stopped)) return null
+  return { expected: raw.expected, running: raw.running,
+    stopped: raw.stopped.filter(p => object(p) && text(p.name)).map(p => ({ name: p.name, exitCode: Number.isInteger(p.exitCode) ? p.exitCode : null })) }
+}
+
+const peak = (raw) => object(raw) && temperature(raw.value) !== null && number(raw.at, 0) !== null ? { value: raw.value, at: raw.at } : null
 
 function normalizeThermals(raw) {
   if (!object(raw)) return null
@@ -57,7 +67,9 @@ function normalizeGpu(raw) {
     loadPercent: percent(raw.loadPercent), clockMhz: number(raw.clockMhz, 1), powerW: number(raw.powerW),
     powerLimitW: number(raw.powerLimitW, 0.1), fanRpm: number(raw.fanRpm), fanPercent: percent(raw.fanPercent),
     supplyVolts: number(raw.supplyVolts), supplyAmps: number(raw.supplyAmps, -100), frameMs: number(raw.frameMs),
-    link: text(raw.link), usbSpeedMbps: number(raw.usbSpeedMbps, 1), usbLinkErrors: integer(raw.usbLinkErrors) }
+    link: text(raw.link), usbSpeedMbps: number(raw.usbSpeedMbps, 1), usbLinkErrors: integer(raw.usbLinkErrors),
+    hotspotPeak: peak(raw.hotspotPeak), memoryPeak: peak(raw.memoryPeak), peaksSince: number(raw.peaksSince, 0),
+    peaksResettable: raw.peaksResettable === true }
 }
 
 // How close a temperature is to its limit: "hot" at the limit, "warm" within 10 °C of it.
@@ -74,10 +86,10 @@ export const displayNumber = (value, suffix = "") => value === null || value ===
 
 export function processRows(snapshot, { query = "", scope = "all", sort = "cpu", descending = true } = {}) {
   const q = query.trim().toLowerCase()
-  const keys = new Set(["name", "pid", "cpu", "memoryMiB", "user", "state"])
+  const keys = new Set(["name", "pid", "cpu", "memoryMiB", "user", "state", "ageSeconds"])
   const key = keys.has(sort) ? sort : "cpu"
   return (snapshot?.processes || []).filter((p) =>
-    (scope === "all" || (scope === "users" ? !p.kernel : p.user === "comma")) &&
+    (scope === "all" || (scope === "openpilot" ? p.openpilot : scope === "users" ? !p.kernel : p.user === "comma")) &&
     (!q || `${p.name} ${processFeature(p)} ${processInfo(p).description} ${p.pid} ${p.user} ${processState(p.state)}`.toLowerCase().includes(q))
   ).slice().sort((a, b) => {
     const av = key === "name" ? processInfo(a).title : a[key], bv = key === "name" ? processInfo(b).title : b[key]
@@ -144,6 +156,17 @@ export function processInfo(process) {
   const name = process.name.replace(/^openpilot\./, "")
   return catalogue.get(name) || { title: process.name, description: process.kernel && process.state !== "Z" ? "Linux kernel thread." : "" }
 }
+// A process-manager name (e.g. "controlsd") as a friendly title, when the catalogue knows its module.
+export function managedTitle(name) {
+  if (MANAGED_TITLES[name]) return MANAGED_TITLES[name]
+  for (const [alias, entry] of catalogue) if (alias.endsWith("." + name)) return entry.title
+  return name
+}
+const MANAGED_TITLES = { galaxy: "Galaxy web interface", galaxy_hotspot: "Galaxy hotspot", galaxy_phone: "Galaxy phone connection",
+  companion_uplink: "Companion connection", updated: "Software updates", usage_stats: "Usage statistics", ui: "Comma display",
+  manage_athenad: "Remote connection supervisor", pandad: "Vehicle communications", camerad: "Camera capture", loggerd: "Drive recording",
+  encoderd: "Video encoding", modem: "Cellular modem" }
+
 export const processIdentity = (p) => p.instanceId || String(p.pid) + ":" + p.name
 
 // Histories belong to one producer lifetime and use source monotonic time.

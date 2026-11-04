@@ -191,7 +191,11 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
     from openpilot.starpilot.galaxy.evidence import EvidenceSource
     evidence_source = EvidenceSource()
 
-  monitor_source = monitor if monitor is not None else SystemMonitor(messages=evidence_source)
+  hardware_feed = None
+  if monitor is None and evidence_source is not None:
+    from openpilot.starpilot.galaxy.hardware_feed import HardwareFeed
+    hardware_feed = HardwareFeed()
+  monitor_source = monitor if monitor is not None else SystemMonitor(messages=evidence_source, feed=hardware_feed)
   weather_source = None
   weather_lock = threading.Lock()
 
@@ -1683,14 +1687,16 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
                       '/api/sounds/download', '/api/sounds/cancel', '/api/software/action', '/api/drives/ignore',
                       '/api/recordings/delete-videos', '/api/sentry/notifications', '/api/sentry/events/delete', '/api/crash-reports/delete',
                       '/api/navigation/search', '/api/navigation/action', '/api/navigation/offline', '/api/drive-state/action',
-                      '/api/toyota-tools/action', '/api/vehicle-selection/preview', '/api/vehicle-selection/confirm'):
+                      '/api/toyota-tools/action', '/api/vehicle-selection/preview', '/api/vehicle-selection/confirm',
+                      '/api/system/monitor/reset-peaks'):
         self.json(405, {'error': 'Method unavailable'})
         return
       if (path.startswith(('/api/companion/', '/api/replay/', '/api/recordings/', '/api/connect/', '/api/cameras/', '/api/settings/', '/api/maps/',
                            '/api/bluetooth/',
                            '/api/starport/', '/api/spotify/', '/api/controllers/', '/api/vehicle-selection/', '/api/toyota-tools/',
                            '/api/models/', '/api/ui/', '/api/favorites/', '/api/sounds/', '/api/software/',
-                           '/api/drives/', '/api/navigation/', '/api/drive-state/', '/api/sentry/', '/api/crash-reports/')) and
+                           '/api/drives/', '/api/navigation/', '/api/drive-state/', '/api/sentry/', '/api/crash-reports/',
+                           '/api/system/')) and
           not self.require_session()):
         return
       if self.headers.get('Transfer-Encoding') is not None or \
@@ -2121,6 +2127,22 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
             self.json(401, {'error': 'Sign in to Galaxy'})
       elif path in ('/api/sentry/events/delete', '/api/crash-reports/delete'):
         delete_records(self, path, payload, sentry_events_lock, crash_reports_lock, notification_owner, motion_events, reports)
+      elif path == '/api/system/monitor/reset-peaks':
+        identity = self.settings_session()
+        if identity is None:
+          self.json(401, {'error': 'Sign in to Galaxy'})
+          return
+        if hardware_feed is None:
+          self.json(503, {'error': 'Temperature logging is unavailable'})
+          return
+        try:
+          if type(payload) is not dict or set(payload) != {'gpu'} or type(payload['gpu']) is not str:
+            raise ValueError('Invalid GPU')
+          hardware_feed.reset(payload['gpu'])
+        except ValueError:
+          self.json(400, {'error': 'Invalid GPU'})
+        else:
+          self.json(200, {'ok': True})
       elif path == '/api/recordings/delete-videos':
         identity = self.settings_session()
         if identity is None:
@@ -2981,6 +3003,8 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
     server = _LocalHTTPServer((host, port), Handler)
     if evidence_source is not None:
       evidence_source.start()
+    if hardware_feed is not None:
+      hardware_feed.start()
     if notification_owner is None:
       notification_owner = NotificationOwner()
     server.notification_source = notification_owner
@@ -2992,6 +3016,8 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
       pairing_authority.close()
     if evidence_source is not None:
       evidence_source.close()
+    if hardware_feed is not None:
+      hardware_feed.close()
     if "server" in locals():
       server.server_close(close_sources=False)
     raise
@@ -3001,6 +3027,7 @@ def make_server(*, port=8082, host='127.0.0.1', monitor=None, owner=None, crashe
   if pairing_authority is not None:
     server.pairing_authority = pairing_authority
   server.evidence_source = evidence_source
+  server.hardware_feed = hardware_feed
   server.map_source = map_source
   if recording_media_source is not None:
     server.recording_media_source = recording_media_source

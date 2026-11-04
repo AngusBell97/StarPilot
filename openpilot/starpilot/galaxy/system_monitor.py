@@ -35,9 +35,11 @@ class SystemMonitor:
   def __init__(self, root=Path('/proc'), *, storage=Path('/data'), clock=time.monotonic,
                wall_clock=time.time, disk_usage=shutil.disk_usage, page_size=None, messages=None,  # noqa: TID251 - Display capture date; intervals use monotonic.
                boot_clock=lambda: time.clock_gettime(getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC)),
-               params=None, chestnut_messages=None, jetlink=None):
+               params=None, feed=None, jetlink=None, clock_ticks=None):
     self.messages, self.boot_clock = messages, boot_clock
-    self.params, self.chestnut_messages = params, chestnut_messages
+    # HardwareFeed: chestnutState, managerState and the GPU temperature peaks, read in the background
+    self.params, self.feed = params, feed
+    self.clock_ticks = os.sysconf('SC_CLK_TCK') if clock_ticks is None else clock_ticks
     if jetlink is not None:
       self._jetlink = jetlink
     self.root = Path(root)
@@ -77,17 +79,6 @@ class SystemMonitor:
       return None
 
   # ---- temperatures and external GPUs -------------------------------------
-
-  def _fresh(self, sm, name):
-    """A message from `sm` that arrived in the last few seconds, else None."""
-    try:
-      if not sm.seen[name] or not sm.valid[name]:
-        return None
-      if not 0 <= self.clock() - sm.recv_time[name] < READING_FRESH_S:
-        return None
-      return sm[name]
-    except (OSError, RuntimeError, AttributeError, KeyError, TypeError, ValueError):
-      return None
 
   def _device_state(self):
     if self.messages is None:
@@ -132,15 +123,20 @@ class SystemMonitor:
 
   def _chestnut_state(self):
     try:
-      if self.chestnut_messages is None:
-        if self.messages is None:
-          return None
-        from openpilot.cereal import messaging
-        self.chestnut_messages = messaging.SubMaster(['chestnutState'])
-      self.chestnut_messages.update(0)
-      return self._fresh(self.chestnut_messages, 'chestnutState')
+      return self.feed.chestnut() if self.feed is not None else None
     except Exception:
       return None
+
+  def _with_peaks(self, gpu):
+    peaks = {'hotspotC': None, 'memoryTempC': None, 'since': None}
+    if self.feed is not None:
+      try:
+        peaks = self.feed.peaks(gpu['kind'])
+      except Exception:
+        pass
+    gpu['hotspotPeak'], gpu['memoryPeak'], gpu['peaksSince'] = peaks['hotspotC'], peaks['memoryTempC'], peaks['since']
+    gpu['peaksResettable'] = self.feed is not None
+    return gpu
 
   def _chestnut(self, device_state):
     from openpilot.common.hardware.usb import is_chestnut_usb_id
@@ -246,8 +242,24 @@ class SystemMonitor:
       except Exception:
         gpu = None
       if gpu is not None:
-        gpus.append(gpu)
+        gpus.append(self._with_peaks(gpu))
     return self._comma_thermals(device_state), gpus
+
+  def _managed(self, rows):
+    """The process manager's view: which of its processes should run and which are not running."""
+    try:
+      manager = self.feed.manager() if self.feed is not None else None
+    except Exception:
+      manager = None
+    if manager is None:
+      return None
+    by_pid = {p['pid']: p['name'] for p in manager if p['running'] and p['pid']}
+    for row in rows:
+      if row['pid'] in by_pid:
+        row['managedName'] = by_pid[row['pid']]
+    expected = [p for p in manager if p['shouldBeRunning']]
+    stopped = [{'name': p['name'], 'exitCode': p['exitCode']} for p in expected if not p['running']]
+    return {'expected': len(expected), 'running': len(expected) - len(stopped), 'stopped': stopped}
 
   def _sample(self):
     now = self.clock()
@@ -305,9 +317,9 @@ class SystemMonitor:
         previous = self.previous.get(identity) if comparable else None
         if capacity and previous is not None and current >= previous:
           cpu = round(min(100, (current - previous) / capacity * 100), 1)
-        rows.append({'pid': identity[0], 'name': name.removeprefix('/data/openpilot/'), 'user': user,
+        rows.append({'pid': identity[0], 'ppid': int(fields[1]), 'name': name.removeprefix('/data/openpilot/'), 'user': user,
                      'kernel': bool(int(fields[6]) & 0x00200000), 'state': fields[0], 'cpu': cpu,
-                     'instanceId': f'{self.source_id}:{identity[0]}:{identity[1]}',
+                     'instanceId': f'{self.source_id}:{identity[0]}:{identity[1]}', 'startTicks': identity[1],
                      'memoryMiB': round(max(0, int(fields[21])) * self.page_size / 1048576, 1)})
         process_ticks[identity] = current
       except (OSError, ValueError, IndexError):
@@ -331,6 +343,17 @@ class SystemMonitor:
     except OSError:
       pass
     uptime = float((self.root / 'uptime').read_text().split()[0])
+    # openpilot's own processes: the process manager and everything under it
+    parents = {row['pid']: row['ppid'] for row in rows}
+    managers = {row['pid'] for row in rows if row['name'].endswith('manager.py') or row['name'] == 'system.manager.manager'}
+    for row in rows:
+      start = row.pop('startTicks')
+      age = uptime - start / self.clock_ticks if self.clock_ticks else None
+      row['ageSeconds'] = round(age) if age is not None and math.isfinite(age) and age >= 0 else None
+      pid, hops = row['pid'], 0
+      while pid not in managers and pid in parents and hops < 64:
+        pid, hops = parents[pid], hops + 1
+      row['openpilot'] = pid in managers and not row['kernel']
     sampled_at = self.wall_clock()
     if not math.isfinite(uptime) or uptime < 0 or not math.isfinite(now) or not math.isfinite(sampled_at) or sampled_at <= 0:
       raise ValueError('Invalid sample time')
@@ -349,5 +372,6 @@ class SystemMonitor:
     comma, gpus = self._hardware()
     result['commaThermals'] = comma
     result['externalGpus'] = gpus
+    result['managed'] = self._managed(rows)
     self.previous, self.cpu_previous, self.previous_time = process_ticks, cpu_now, now
     return result
