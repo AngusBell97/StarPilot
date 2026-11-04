@@ -52,6 +52,7 @@ from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
 from openpilot.starpilot.navigation.intent import TurnIntent, matching_turn_signal
 from openpilot.starpilot.models.catalog import BUNDLED_CURRENT, BY_ID, DEFAULT_SMALL, DEFAULT_SMALL_SHA256
 from openpilot.starpilot.models.runner import CatalogModelState, load_verified_model
+from openpilot.starpilot.models.lane_obstacle import LaneObstacleDetector
 from openpilot.starpilot.models import jetlink_adapter
 import uuid
 from openpilot.selfdrive.controls.lib.drive_helpers import get_accel_from_plan, should_stop, smooth_value, get_curvature_from_plan
@@ -426,6 +427,9 @@ def main(demo=False):
       from openpilot.starpilot.models.jetlink_status import start_latency_writer
       start_latency_writer(jetlink_model)
   params.put_bool("ChestnutLoading", False)
+  # Change 37: the lane obstacle detector shares the Chestnut model's GPU context and its warped road image.
+  lane_obstacle = (LaneObstacleDetector.create(model)
+                   if getattr(model, "chestnut", False) and model is not jetlink_model else None)
   cloudlog.warning(f"models loaded in {time.monotonic() - st:.1f}s, modeld starting")
   release_compile_pool()
   # gc stays off for the realtime loop, so drop the load's cyclic garbage once now
@@ -434,7 +438,8 @@ def main(demo=False):
   config_realtime_process(7, 54)
 
   # messaging
-  pub_socks = ["modelIdentity", "modelV2", "drivingModelData", "cameraOdometry", "laneChangeAssistWire"] + (["chestnutGpuState"] if CHESTNUT else [])
+  pub_socks = (["modelIdentity", "modelV2", "drivingModelData", "cameraOdometry", "laneChangeAssistWire"] + (["chestnutGpuState"] if CHESTNUT else []) +
+               (["laneObstacleWire"] if lane_obstacle is not None else []))
   pm = PubMaster(pub_socks)
   sm = SubMaster(["deviceState", "carState", "narrowRoadCameraState", "extrinsicsCalibration", "driverMonitoringState",
                   "carControl", "controlsState", "lateralDelay", "starpilotNavigation", "longitudinalPlan"])
@@ -507,6 +512,8 @@ def main(demo=False):
       buf_extra = buf_main
       meta_extra = meta_main
 
+    if lane_obstacle is not None:
+      lane_obstacle.begin_frame(meta_main.timestamp_eof)
     sm.update(0)
     turn_supported = bool(model.npy.get('desire') is not None and model.npy['desire'].shape[-1] == 8)
     desire = navigation_turn.select(sm, time.monotonic_ns(), DH.desire,
@@ -660,6 +667,17 @@ def main(demo=False):
         pm.send('laneChangeAssistWire', lane_status_msg)
       pm.send('drivingModelData', drivingdata_send)
       pm.send('cameraOdometry', posenet_send)
+      # After everything the driving model publishes: queue the detector (even frames) or read its result (odd).
+      if lane_obstacle is not None:
+        if model is not lane_obstacle.model:
+          lane_obstacle = None
+        else:
+          obstacle_wire = lane_obstacle.step(run_count, modelv2_send.modelV2, v_ego)
+          if obstacle_wire is not None:
+            obstacle_msg = messaging.new_message('laneObstacleWire', 0)
+            obstacle_msg.valid = True
+            obstacle_msg.laneObstacleWire = obstacle_wire
+            pm.send('laneObstacleWire', obstacle_msg)
     last_vipc_frame_id = meta_main.frame_id
 
 if __name__ == "__main__":

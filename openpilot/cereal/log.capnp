@@ -2600,6 +2600,7 @@ struct Event {
     deviceState @6 :DeviceState;
     chestnutState @152 :ChestnutState;
     chestnutGpuState @153 :ChestnutState;
+    laneObstacleWire @159 :Data;
     logMessage @18 :Text;
     errorLogMessage @85 :Text;
 
