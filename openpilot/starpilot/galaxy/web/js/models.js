@@ -505,6 +505,16 @@ export const ModelsPage = {
     // the toggle follows the saved pair, or what was just clicked while picks are being chosen
     driveMode() { return this.pairView ?? (this.lab?.configuration.enabled ? "pair" : "single") },
     labPairRows() { return [this.labConfig.lateralModel, this.labConfig.longitudinalModel].map(id => this.labPairable.find(m => m.value === id)) },
+    // both pickers list every downloaded model; a big one is greyed out while the other role holds a big one
+    labLateralOptions() {
+      const other = this.labPairRows[1]
+      return this.labPairable.map(m => ({ ...m, blocked: m.small === false && other?.small === false && m.value !== other.value }))
+    },
+    labLongitudinalOptions() {
+      const other = this.labPairRows[0]
+      return this.labPairable.filter(m => m.value !== this.labConfig.lateralModel)
+        .map(m => ({ ...m, blocked: m.small === false && other?.small === false }))
+    },
     labPairHasBig() { return this.labPairRows.some(m => m?.small === false) },
     labPairSmall() { return this.labPairRows.find(m => m?.small === true)?.value || "" },
     labStats() { return this.lab?.runtime?.stats || {} },
@@ -589,6 +599,7 @@ export const ModelsPage = {
     labModelLabel(id) { return this.lab?.models?.find(m => m.value === id)?.label || id || "Not selected" },
     labActionAvailable(action, model = null) { return laboratoryActionAllowed(this.lab, action, model, this.labConfig) },
     changeLateral(value) {
+      if (this.labLateralOptions.find(m => m.value === value)?.blocked) return null
       this.labConfig.lateralModel = value
       const longitudinal = this.labPairable.find(m => m.value === this.labConfig.longitudinalModel)
       if (this.labConfig.longitudinalModel === value || !this.labCandidates.includes(longitudinal))
@@ -597,6 +608,7 @@ export const ModelsPage = {
       return this.afterPairPick()
     },
     changeLongitudinal(value) {
+      if (this.labLongitudinalOptions.find(m => m.value === value)?.blocked) return null
       this.labConfig.longitudinalModel = value
       this.labDirty = true
       return this.afterPairPick()
@@ -844,14 +856,14 @@ export const ModelsPage = {
                   <label class="gx-row__label" for="gx-lab-lateral">Lateral model<small>Path shape, curvature, lane geometry, and driving desire</small></label>
                   <GalaxySelect id="gx-lab-lateral" class="gx-field" aria-label="Lateral model" :disabled="labLocked" :value="labConfig.lateralModel" @change="changeLateral($event.target.value)">
                     <option value="">Choose a model</option>
-                    <option v-for="m in labPairable" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }} · {{ placement(m) }}</option>
+                    <option v-for="m in labLateralOptions" :key="m.value" :value="m.value" :disabled="m.blocked">{{ m.label }} · {{ m.version }} · {{ placement(m) }}{{ m.blocked ? ' · not with another big model' : '' }}</option>
                   </GalaxySelect>
                 </div>
                 <div class="gx-model-control">
                   <label class="gx-row__label" for="gx-lab-longitudinal">Longitudinal model<small>Speed, acceleration, stopping, leads, and scene confidence</small></label>
                   <GalaxySelect id="gx-lab-longitudinal" class="gx-field" aria-label="Longitudinal model" :disabled="labLocked" :value="labConfig.longitudinalModel" @change="changeLongitudinal($event.target.value)">
                     <option value="">Choose a model</option>
-                    <option v-for="m in labCandidates" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }} · {{ placement(m) }}</option>
+                    <option v-for="m in labLongitudinalOptions" :key="m.value" :value="m.value" :disabled="m.blocked">{{ m.label }} · {{ m.version }} · {{ placement(m) }}{{ m.blocked ? ' · not with another big model' : '' }}</option>
                   </GalaxySelect>
                 </div>
                 <p class="gx-row__desc">{{ labModelLabel(labConfig.lateralModel) }} steers · {{ labModelLabel(labConfig.longitudinalModel) }} paces</p>

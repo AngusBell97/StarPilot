@@ -422,6 +422,8 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
     Object.defineProperty(vm, 'labCandidates', { get: () => ModelsPage.computed.labCandidates.call(vm) })
     Object.defineProperty(vm, 'labPairRows', { get: () => ModelsPage.computed.labPairRows.call(vm) })
     Object.defineProperty(vm, 'driveMode', { get: () => ModelsPage.computed.driveMode.call(vm) })
+    Object.defineProperty(vm, 'labLateralOptions', { get: () => ModelsPage.computed.labLateralOptions.call(vm), configurable: true })
+    Object.defineProperty(vm, 'labLongitudinalOptions', { get: () => ModelsPage.computed.labLongitudinalOptions.call(vm), configurable: true })
     vm.labActionAvailable = action => action !== 'enable' || vm.labConfig.lateralModel !== vm.labConfig.longitudinalModel
     vm.runLabAction = async action => { vm.calls.push(action); return { message: action } }
     vm.confirmAction = async dialog => { vm.asked.push(dialog.title); return vm.accept !== false }
@@ -431,9 +433,16 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
   assert.deepEqual(big.labCandidates.map(m => m.value), ['rdf', 'tr'])        // a big lateral pairs only with small ones
   const small = page({ labConfig: { lateralModel: 'rdf', longitudinalModel: 'tr', mode: 'drive' } })
   assert.deepEqual(small.labCandidates.map(m => m.value), ['ls', 'rf', 'tr'])
-  const reset = page({ labConfig: { lateralModel: 'rdf', longitudinalModel: 'rf', mode: 'drive' } })
-  await reset.changeLateral('ls')                                               // big lateral: the big longitudinal moves to a small one
-  assert.equal(reset.labConfig.longitudinalModel, 'rdf')
+  // a big model is greyed out in either picker while the other role holds a big one
+  const blocked = page({ labConfig: { lateralModel: 'rdf', longitudinalModel: 'rf', mode: 'drive' } })
+  assert.deepEqual(blocked.labLateralOptions.filter(m => m.blocked).map(m => m.value), ['ls'])
+  assert.equal(await blocked.changeLateral('ls'), null)
+  assert.deepEqual([blocked.labConfig.lateralModel, blocked.labConfig.longitudinalModel, blocked.calls], ['rdf', 'rf', []])
+  const bigLateral = page()
+  assert.deepEqual(bigLateral.labLongitudinalOptions.map(m => [m.value, m.blocked]), [['rf', true], ['rdf', false], ['tr', false]])
+  assert.equal(await bigLateral.changeLongitudinal('rf'), null)
+  assert.equal(bigLateral.labConfig.longitudinalModel, 'rdf')
+  assert.match(ModelsPage.template, /:disabled="m.blocked"/)
 
   const toPair = page()
   assert.equal(toPair.driveMode, 'single')
