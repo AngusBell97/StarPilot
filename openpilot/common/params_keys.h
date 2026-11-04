@@ -400,6 +400,8 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"KeepScreenOnGpuLoading", {PERSISTENT, BOOL, "0"}},
     {"BurnInPixelShift", {PERSISTENT, BOOL, "0"}},
     {"BurnInStaticDim", {PERSISTENT, BOOL, "0"}},
+    {"SleepEyes", {PERSISTENT, BOOL, "0"}},
+    {"SleepEyesPureBlack", {PERSISTENT, BOOL, "0"}},
     {"LKASButtonControl", {PERSISTENT, INT, "0"}},
     {"SonataHybridLKASButtonControlMigrated", {PERSISTENT, BOOL, "0"}},
     {"MainCruiseButtonControl", {PERSISTENT, INT, "0"}},
