@@ -8,6 +8,7 @@ open; every brake request still passes straight through.
 """
 
 import math
+from openpilot.starpilot.longitudinal.lane_change_gap import overtake_manoeuvre
 
 HOLD_NS = 1_000_000_000          # keep Chill this long after the manoeuvre ends
 MAX_WINDOW_NS = 12_000_000_000   # never longer than this from the first qualifying frame (lane change max is 10 s)
@@ -41,7 +42,8 @@ class LaneChangeChill:
       self.reason = 'disabled'
       return False
     qualified = False
-    if frame is not None:
+    side_ok = overtake_manoeuvre(frame)  # only an overtake opens the window; the other side keeps the real mode
+    if frame is not None and side_ok:
       try:
         state = str(frame.lane_state)
         signal = str(frame.signal_direction)
@@ -65,7 +67,7 @@ class LaneChangeChill:
       return False
     if self.last_qualified_ns is None or now_ns < self.last_qualified_ns:
       self.reset()
-      self.reason = 'idle'
+      self.reason = 'idle' if side_ok else 'not_overtake_side'
       return False
     held = now_ns - self.last_qualified_ns <= HOLD_NS
     self.active = bool(qualified or held)

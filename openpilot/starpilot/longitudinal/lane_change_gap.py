@@ -14,6 +14,7 @@ MIN_PREP_SPEED_MPS = 20 * 0.44704
 PREPARE_SECONDS = 4.0
 SETTLE_SECONDS = 0.5
 PREDICT_SECONDS = 3.0
+NEAR_TERM_SECONDS = 1.0  # a lead-margin loss beyond this horizon is released at a bounded jerk, not stepped
 RELEASE_ACCEL_PER_SECOND = 0.6
 COMFORT_BRAKE_LIMIT = -1.0
 BRAKE_RELEASE_JERK = 2.0
@@ -50,6 +51,35 @@ class GapFrame:
   leads: tuple[GapLead, ...] = ()
   signal_direction: str = 'none'
   adjacent_lane_visible: bool = False
+  overtake_side: str | None = None  # 'right' in a right-hand-drive car (UK), 'left' in a left-hand-drive car, None unknown
+
+
+# Wheel side from driver monitoring (IsRhdDetected), refreshed by LaneGapPreferences.sample() in plannerd and
+# copied into every frame by project(). A right-hand-drive car drives on the left and overtakes on the right.
+WHEEL_SIDE = {'overtake': None}
+
+
+def overtake_side_from_rhd(is_rhd):
+  return None if type(is_rhd) is not bool else ('right' if is_rhd else 'left')
+
+
+def read_overtake_side(params):
+  try:
+    get_bool = getattr(params, 'get_bool', None)
+    return overtake_side_from_rhd(bool(get_bool('IsRhdDetected'))) if callable(get_bool) else None
+  except Exception:
+    return None
+
+
+def overtake_manoeuvre(frame):
+  """False only when the wheel side is known and this manoeuvre heads to the non-overtaking side: the close-gap
+  behaviour (response, fast pace, Chill window) is for overtakes; moving back to the slower lane runs native."""
+  side = getattr(frame, 'overtake_side', None)
+  if side not in ('left', 'right'):
+    return True
+  signal = getattr(frame, 'signal_direction', 'none')
+  direction = signal if signal in ('left', 'right') else getattr(frame, 'direction', 'none')
+  return direction not in ('left', 'right') or direction == side
 
 
 def project(sm, now_ns: int, *, pace: bool = False) -> GapFrame | None:
@@ -84,7 +114,7 @@ def project(sm, now_ns: int, *, pace: bool = False) -> GapFrame | None:
                     min((lead.acceleration_mps2 for lead in leads), default=0.0),
                     bool(sm['longitudinalPlan'].shouldStop) if pace else bool(sm['controlsState'].forceDecel),
                     bool(car.gasPressed), bool(car.brakePressed), bool(sm['modelV2'].action.shouldStop),
-                    leads, direction, visible_adjacent_lane(sm['modelV2'], direction))
+                    leads, direction, visible_adjacent_lane(sm['modelV2'], direction), WHEEL_SIDE['overtake'])
   except (AttributeError, IndexError, KeyError, TypeError, ValueError, OverflowError):
     return None
 
@@ -137,7 +167,7 @@ def approach_has_room(frame, follow_seconds):
 
 
 
-def response_has_room(frame, follow_seconds, acceleration):
+def response_has_room(frame, follow_seconds, acceleration, horizon=PREDICT_SECONDS):
   """Bounded three-second forecast for ALL observed leads; no lane exclusion.
 
   Includes increasing ego speed/closing reserve under the proposed acceleration.
@@ -149,6 +179,8 @@ def response_has_room(frame, follow_seconds, acceleration):
     if lead.acceleration_mps2 <= -LEAD_BRAKE_ABORT_MPS2:
       return False
     for t in (0., .5, 1., 1.5, 2., 2.5, 3.):
+      if t > horizon:
+        break
       lead_a = min(0., lead.acceleration_mps2)
       ego_speed = frame.speed_mps + acceleration * t
       closing = max(0., -lead.relative_speed_mps + (acceleration - lead_a) * t)
@@ -179,6 +211,24 @@ def continuous_leads(previous, current, dt):
           all(any(matches(a, b) for a in previous) for b in current))
 
 
+def plausible_continuation(anchor, current):
+  """Loose match for holding an already-raised response: the same cars drifting or stepping in the radar
+  (the car being passed slides sideways and its distance jumps 3-6 m a frame), or cars appearing only farther
+  away. Anything new and closer is a different scene and withdraws as before."""
+  if not anchor or not current:
+    return False
+  farthest = max(a.distance_m for a in anchor)
+
+  def same_car(a, b):
+    lateral = (a.lateral_m is None and b.lateral_m is None) or (
+      a.lateral_m is not None and b.lateral_m is not None and
+      math.isfinite(a.lateral_m) and math.isfinite(b.lateral_m) and abs(a.lateral_m - b.lateral_m) <= 1.5)
+    return (lateral and abs(b.distance_m - a.distance_m) <= 10.0 and
+            abs(b.relative_speed_mps - a.relative_speed_mps) <= 4.0 and
+            abs(b.acceleration_mps2 - a.acceleration_mps2) <= 2.0)
+  return all(any(same_car(a, b) for a in anchor) or b.distance_m >= farthest for b in current)
+
+
 def observation_qualified(policy, frame, long_active):
   # Cache observations before intent; this grants no control privilege.
   if frame is None:
@@ -196,6 +246,7 @@ class LeadHistory:
     self.leads = ()
     self.stable_seconds = 0.0
     self.dt = 0.0
+    self.anchor = ()  # the last observation that was continuous with its predecessor
 
   def update(self, frame):
     if frame is None:
@@ -210,6 +261,8 @@ class LeadHistory:
     same = self.dt > 0 and continuous_leads(self.leads, frame.leads, self.dt)
     self.stable_seconds = min(SETTLE_SECONDS, self.stable_seconds + self.dt) if same else 0.0
     self.stamp, self.leads = frame.model_ns, frame.leads
+    if same or previous is None:
+      self.anchor = frame.leads
     return previous is None or 0 < delta <= MAX_MODEL_GAP_NS
 
 
@@ -260,6 +313,11 @@ class LaneChangeGap:
     if policy is None or not policy.enabled or not policy.close_gap or not long_active:
       self.reset()
       return None
+    if not overtake_manoeuvre(frame):
+      # Not an overtake (UK: a lane change to the left): the native planner owns the whole manoeuvre.
+      self.reset()
+      self.reason = 'not_overtake_side'
+      return None
     if self.last_policy is not None and self.last_policy != policy:
       self.reset()
     self.last_policy = policy
@@ -309,7 +367,14 @@ class LaneChangeGap:
         self.reason = 'waiting_for_valid_intent'
       # No permission while uncertain; do not turn one async frame into expiry.
       if self.acceleration_ceiling is not None:
-        self.acceleration_ceiling = 0.0
+        if self.maneuver_started and not moving:
+          # The manoeuvre is over (model state off) but the indicator is still on for a cycle or two:
+          # hand control back from the last output, exactly as a released signal does. Clamping to zero
+          # here cut a +0.7 request to 0 and restarted the cruise and release ramps from zero (3 Nov drives).
+          self.reason = 'manoeuvre_complete'
+          self._release()
+        else:
+          self.acceleration_ceiling = 0.0
       if not self.maneuver_started and elapsed >= PREPARE_SECONDS * 1e9:
         self.expired = True
       return None
@@ -396,16 +461,41 @@ class LaneChangeGap:
       return native
     if not response_has_room(frame, policy.close_gap_seconds, 0.):
       self.response_reason = 'lead_margin'
+      if (self.phase == 'moving' and self.response_ever_raised and previous > native + 1e-9 and
+          response_has_room(frame, policy.close_gap_seconds, 0., horizon=NEAR_TERM_SECONDS)):
+        # The three-second forecast lost its margin but nothing is imminent (the one-second forecast still
+        # has room at zero acceleration): bring the raised request down to the native one at the brake
+        # jerk instead of stepping +0.4 -> -0.6 in one cycle (3 Nov drives). The planner keeps its
+        # lead-behaviour guard while this counts as raised; anything imminent still withdraws at once.
+        ramp = max(native, previous - BRAKE_RELEASE_JERK * self.history.dt)
+        if ramp > native + 1e-9:
+          self.response_aborted = False
+          self.response_raised = True
+          self.response_limit = ramp
+          self.response_reason = 'lead_margin_release'
+          return ramp
       return native
     # A fresh, otherwise admitted observation may change lead hypothesis.
     # Withdraw now, but allow the existing 0.5s stable-history gate to requalify.
     # Actual hazards, invalid authority, cancellation and active owners above
     # still latch withdrawal after an already-raised response.
     self.response_aborted = False
-    if self.history.stable_seconds + 1e-9 < SETTLE_SECONDS:
+    hold = self.history.stable_seconds + 1e-9 < SETTLE_SECONDS
+    if hold and not (self.phase == 'moving' and self.response_ever_raised):
       self.response_reason = 'lead_history'
       return native
     goal = min(cruise, 0.) if self.phase == 'preparing' else cruise
+    if hold:
+      # Moving with an already-raised response: a changed lead observation (the car being passed sliding
+      # sideways in the radar, a slot swap) HOLDS the request instead of withdrawing it to native braking,
+      # so the manoeuvre is one acceleration. Only while the observation is a plausible continuation of the
+      # last continuous one and every current lead has room for the held value; otherwise withdraw as
+      # before. No further rise until the history is stable again for 0.5 s.
+      if not (plausible_continuation(self.history.anchor, frame.leads) and
+              response_has_room(frame, policy.close_gap_seconds, max(previous, 0.))):
+        self.response_reason = 'lead_history'
+        return native
+      goal = min(goal, previous)
     if goal <= native:
       self.response_reason = 'native_sufficient'
       return native
@@ -419,7 +509,7 @@ class LaneChangeGap:
       dt -= release_time
     ramp += positive_jerk * dt
     goal = min(goal, ramp)
-    if goal > 0.:
+    if goal > 0. and not response_has_room(frame, policy.close_gap_seconds, goal):
       lo, hi = 0., goal
       for _ in range(16):
         mid = (lo + hi) * .5
@@ -430,7 +520,8 @@ class LaneChangeGap:
     result = max(native, goal)
     self.response_raised = result > native + 1e-9
     self.response_ever_raised |= self.response_raised
-    self.response_reason = ('signal_hold' if self.phase == 'preparing' else 'normal_acceleration') if self.response_raised else 'native_sufficient'
+    self.response_reason = (('signal_hold' if self.phase == 'preparing' else ('lead_history_hold' if hold else 'normal_acceleration'))
+                            if self.response_raised else 'native_sufficient')
     return result
 
   def limit_acceleration(self, target):
@@ -462,6 +553,7 @@ class LaneChangeGap:
                 car_ns=self.frame.car_ns if self.frame is not None else None,
                 radar_ns=self.frame.radar_ns if self.frame is not None else None,
                 phase=self.phase, reason=self.reason, response_vetoes=self.response_vetoes,
+                overtake_side=self.frame.overtake_side if self.frame is not None else None,
                 policy_enabled=self.last_policy.enabled if self.last_policy else None,
                 policy_close_gap=self.last_policy.close_gap if self.last_policy else None,
                 policy_gap_s=self.last_policy.close_gap_seconds if self.last_policy else None,
@@ -491,11 +583,12 @@ class LaneChangePace:
       self.history.reset()
       self.selected = False
     self.last_policy = policy
-    observed = policy.close_gap_fast_pace and observation_qualified(policy, frame, long_active)
+    side_ok = overtake_manoeuvre(frame)
+    observed = policy.close_gap_fast_pace and side_ok and observation_qualified(policy, frame, long_active)
     if not observed:
       self.history.reset()
       self.selected = False
-      self.reason = 'disabled_or_invalid'
+      self.reason = 'disabled_or_invalid' if side_ok else 'not_overtake_side'
     else:
       duplicate = self.history.stamp == frame.model_ns
       fresh = self.history.update(frame)
@@ -560,5 +653,6 @@ class LaneGapPreferences:
       self.last_attempt_ns = now_ns
       saved = read_saved(self.params)
       self.policy = saved.policy if saved.readable and saved.valid and saved.policy.close_gap else None
+      WHEEL_SIDE['overtake'] = read_overtake_side(self.params)
       self.last_success_ns = now_ns if saved.readable else -1
     return self.policy if self.last_success_ns > 0 and now_ns - self.last_success_ns <= self.MAX_AGE_NS else None

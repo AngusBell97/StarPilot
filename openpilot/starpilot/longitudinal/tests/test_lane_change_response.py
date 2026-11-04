@@ -179,8 +179,14 @@ def test_native_planner_signal_hold_and_moving_response(speed,lead_speed,distanc
 def test_native_protection_revokes_an_already_active_response(context):
   records=native_sequence(20.,18.,50.,context)
   assert any(r[3] for r in records[20:30]),records
-  assert not any(r[3] for r in records[30:]),records
-  if context=='model':assert all(r[1]<=-.7+1e-6 for r in records[30:])
+  start=30
+  if context=='model':
+    # 3 Nov 2026: the planner admits the end-to-end request only after E2E_ADMIT_CYCLES consecutive
+    # Experimental cycles, so the model veto of the raised response lands that much later.
+    from openpilot.selfdrive.controls.lib.longitudinal_planner import E2E_ADMIT_CYCLES
+    start=30+E2E_ADMIT_CYCLES-1
+  assert not any(r[3] for r in records[start:]),records
+  if context=='model':assert all(r[1]<=-.7+1e-6 for r in records[start:])
   if context=='second_lead':assert min(r[1] for r in records[30:])<0.  # magnitude belongs to native MPC
 
 
