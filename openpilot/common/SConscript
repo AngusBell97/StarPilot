@@ -1,7 +1,11 @@
 Import('env')
 
+# params.cc holds the whole keys table (637 keys in this build). clang at -O2 needs more memory for it than the
+# comma has and the low-memory killer stops the build; -O0 needs ~270 MB and params access is file I/O bound anyway.
+params_obj = env.Object('params.cc', CCFLAGS=[f for f in env['CCFLAGS'] if not str(f).startswith('-O')] + ['-O0'])
+
 common_libs = [
-  'params.cc',
+  params_obj,
   'swaglog.cc',
   'util.cc',
   'ratekeeper.cc',
