@@ -105,7 +105,7 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
   from pathlib import Path
   from types import SimpleNamespace as NS
   from unittest.mock import Mock
-  from openpilot.starpilot.ui.onroad_customization import (MODE_WIDGET, STOPPED_TIMER_WIDGET, LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET, placement,
+  from openpilot.starpilot.ui.onroad_customization import (MODE_WIDGET, STOPPED_TIMER_WIDGET, LEAD_INFO_WIDGETS, LEAD_GAP_WIDGET, placement,
                                                            widget_order, RAIL_WIDGETS)
 
   source = Path(__file__).parents[1] / 'onroad.py'
@@ -113,7 +113,7 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
   method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == '_ordered_widgets')
   namespace: dict[str, Any] = {'LANE_BAR_WIDGET': LANE_BAR_WIDGET, 'CLOCK_WIDGET': CLOCK_WIDGET, 'MODE_WIDGET': MODE_WIDGET, 'placement': placement, 'widget_order': widget_order,
                              'RAIL_WIDGETS': RAIL_WIDGETS, 'STOPPED_TIMER_WIDGET': STOPPED_TIMER_WIDGET,
-                             'LEAD_INFO_WIDGETS': LEAD_INFO_WIDGETS, 'LEAD_LADDER_WIDGET': LEAD_LADDER_WIDGET,
+                             'LEAD_INFO_WIDGETS': LEAD_INFO_WIDGETS, 'LEAD_GAP_WIDGET': LEAD_GAP_WIDGET,
                              'UNDIMMED_WIDGETS': frozenset(), 'dimmer': NS(scope=lambda key: __import__('contextlib').nullcontext()),
                'manual_slc_confirmation': lambda profile, state: False, 'AlertSize': NS(NONE='none', FULL='full'), 'CameraViewChoice': NS(NONE='none'),
                'rl': NS(Rectangle=lambda x, y, width, height: NS(x=x, y=y, width=width, height=height))}
@@ -129,7 +129,7 @@ def test_renderer_dispatches_each_widget_in_saved_order(profile, viewport):
   view._clock = lambda *args: seen.append(CLOCK_WIDGET)
   view._stopped_timer = lambda *args: seen.append(STOPPED_TIMER_WIDGET)
   view._lead_text = lambda state, key, *args: seen.append(key)
-  view._lead_ladder = lambda *args: seen.append(LEAD_LADDER_WIDGET)
+  view._lead_gap = lambda *args: seen.append(LEAD_GAP_WIDGET)
   view._slc_actions = lambda *args: seen.append('speed_limit_actions')
   for attr, key in [('unified_speed', 'cruise_limits'), ('current_speed', 'current_speed'), ('cem_gauge', 'cem_gauge'),
                     ('steering_wheel', 'steering_wheel'), ('torque_bar', 'torque_bar')]:

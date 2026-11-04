@@ -18,10 +18,10 @@ import pyray as rl
 from openpilot.starpilot.ui import clip
 from openpilot.starpilot.ui.burn_in import dimmer
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CLOCK_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET,
+from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CLOCK_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_INFO_WIDGETS, LEAD_GAP_WIDGET,
                                                          LEAD_SPEED_WIDGET, LEAD_TIME_WIDGET, MODE_WIDGET, RAIL_WIDGETS, STOPPED_TIMER_WIDGET, offset,
                                                          placement, rgba, widget_order, widget_size)
-from openpilot.starpilot.ui.lead_follow import (follow_state, follow_target_text, follow_time_s, ladder_fraction, lead_distance_text,
+from openpilot.starpilot.ui.lead_follow import (follow_state, follow_target_text, follow_time_s, lead_distance_text,
                                                 lead_speed_text, lead_time_text)
 from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice
 
@@ -56,16 +56,16 @@ ProjectionControlLayer = Callable[[OnroadState], None]
 # stopped timer (it counts), and the camera and map views.
 UNDIMMED_WIDGETS = frozenset(("speed_limit_actions", STOPPED_TIMER_WIDGET, "nav_map"))
 
-# Follow ladder colors by state: too far, on target, slightly close, too close.
+# Lead gap colours by state: too far, on target, slightly close, too close; grey while there is no lead.
 FOLLOW_STATE_COLORS = {
   "far": rl.Color(159, 178, 187, 255), "target": rl.Color(61, 220, 132, 255),
   "near": rl.Color(255, 176, 59, 255), "close": rl.Color(255, 77, 94, 255),
 }
-LEAD_BAR_COLOR = rl.Color(223, 229, 232, 255)
-LEAD_TRACK_COLOR = rl.Color(255, 255, 255, 41)
-# Ladder geometry in a 150 x 200 frame; the widget scales it by its height.
-LADDER_FRAME_HEIGHT = 200.0
-LADDER_DOT_TOP, LADDER_DOT_BOTTOM = 56.0, 150.0
+LEAD_GAP_IDLE_COLOR = rl.Color(159, 178, 187, 255)
+LEAD_GAP_DIVIDER_COLOR = rl.Color(255, 255, 255, 90)
+# Lead gap readout geometry per screen: padding, live text size, target text size, divider width and height, gap.
+# The live time on the Small UI is 40 px, the size of the lead-speed text at the top of the road view.
+LEAD_GAP_GEOMETRY = {Profile.LARGE: (20, 64, 44, 3, 60, 16), Profile.COMPACT: (10, 40, 28, 2, 28, 8)}
 
 
 def _load_fade(path: Path) -> rl.Texture:
@@ -336,7 +336,7 @@ class OnroadView:
     if not text:
       return
     width, height = widget_size(state.customization, profile, key)
-    size = 42 if profile == Profile.LARGE else 20
+    size = 42 if profile == Profile.LARGE else 40  # 40 px: the size of the lead-speed text at the top of the Small UI road view
     role = FontRole.SEMI_BOLD
     measured = self.fonts.measure(text, role, size)
     x = position["x"] + center_shift + (width - measured.width) / 2
@@ -346,41 +346,40 @@ class OnroadView:
     self.fonts.draw(text, role, size, x + offset_px, y + offset_px, rl.Color(0, 0, 0, min(color.a, 170)))
     self.fonts.draw(text, role, size, x, y, color)
 
-  def _lead_ladder(self, state: OnroadState, center_shift: float = 0) -> None:
-    """The follow ladder: lead bar on top, the car as a dot rising toward it, the target as a white rung."""
+  def _lead_gap(self, state: OnroadState, center_shift: float = 0) -> None:
+    """The lead gap readout: the live follow time in the state colour, a divider, then the profile's target."""
     profile = self.fonts.profile
-    position = self._lead_widget_placement(state, LEAD_LADDER_WIDGET)
+    position = self._lead_widget_placement(state, LEAD_GAP_WIDGET)
     if position is None:
       return
-    width, height = widget_size(state.customization, profile, LEAD_LADDER_WIDGET)
+    width, height = widget_size(state.customization, profile, LEAD_GAP_WIDGET)
     x0, y0 = position["x"] + center_shift, position["y"]
-    scale = height / LADDER_FRAME_HEIGHT
     document = state.customization
-    text_color = rl.Color(*rgba(document, "text", profile, LEAD_LADDER_WIDGET))
-    rl.draw_rectangle_rounded(rl.Rectangle(x0, y0, width, height), 0.3, 8,
-                              rl.Color(*rgba(document, "cardFill", profile, LEAD_LADDER_WIDGET)))
-
-    def box(x, y, w, h, color):
-      rl.draw_rectangle_rounded(rl.Rectangle(x0 + x * scale, y0 + y * scale, w * scale, h * scale), 1.0, 4, color)
-
+    text_color = rl.Color(*rgba(document, "text", profile, LEAD_GAP_WIDGET))
+    rl.draw_rectangle_rounded(rl.Rectangle(x0, y0, width, height), 0.5, 8,
+                              rl.Color(*rgba(document, "cardFill", profile, LEAD_GAP_WIDGET)))
     lead = state.conditional_lead
     current = follow_time_s(lead.distance_m, state.speed_mps) if lead is not None else None
     target = state.follow_target_s
-    accent = FOLLOW_STATE_COLORS.get(follow_state(current, target), text_color)
-    box(12, 20, 40, 10, LEAD_BAR_COLOR)
-    box(28, 24, 8, 156, LEAD_TRACK_COLOR)
-    box(14, 98, 36, 4, rl.WHITE)
-    fraction = ladder_fraction(current, target)
-    if fraction is not None:
-      center_y = LADDER_DOT_TOP + fraction * (LADDER_DOT_BOTTOM - LADDER_DOT_TOP)
-      rl.draw_circle_v(rl.Vector2(x0 + 32 * scale, y0 + center_y * scale), 12 * scale, accent)
+    accent = FOLLOW_STATE_COLORS.get(follow_state(current, target), LEAD_GAP_IDLE_COLOR)
+    pad, live_size, target_size, divider_width, divider_height, gap = LEAD_GAP_GEOMETRY[profile]
+    live = "--" if current is None else f"{min(current, 9.9):.1f}"
+    target_text = follow_target_text(target).removesuffix(" s") or "--"
     shadow = rl.Color(0, 0, 0, 170)
     offset_px = 2 if profile == Profile.LARGE else 1
-    for text, role, size, top, color in (("--" if current is None else f"{current:.1f} s", FontRole.BOLD, 30 * scale, 10, accent),
-                                         (follow_target_text(target) or "--", FontRole.SEMI_BOLD, 22 * scale, 89, text_color)):
-      x, y = x0 + 64 * scale, y0 + top * scale
-      self.fonts.draw(text, role, size, x + offset_px, y + offset_px, shadow)
-      self.fonts.draw(text, role, size, x, y, color)
+    x = x0 + pad
+    live_measure = self.fonts.measure(live, FontRole.BOLD, live_size)
+    y = y0 + (height - live_measure.height) / 2
+    self.fonts.draw(live, FontRole.BOLD, live_size, x + offset_px, y + offset_px, shadow)
+    self.fonts.draw(live, FontRole.BOLD, live_size, x, y, accent)
+    x += live_measure.width + gap
+    rl.draw_rectangle_rounded(rl.Rectangle(x, y0 + (height - divider_height) / 2, divider_width, divider_height), 1.0, 4,
+                              LEAD_GAP_DIVIDER_COLOR)
+    x += divider_width + gap
+    target_measure = self.fonts.measure(target_text, FontRole.SEMI_BOLD, target_size)
+    y = y0 + (height - target_measure.height) / 2
+    self.fonts.draw(target_text, FontRole.SEMI_BOLD, target_size, x + offset_px, y + offset_px, shadow)
+    self.fonts.draw(target_text, FontRole.SEMI_BOLD, target_size, x, y, text_color)
 
   def _lead_widgets(self, state: OnroadState, center_shift: float = 0) -> None:
     """The legacy (unordered) draw path; the compact screen dims each widget for burn-in like the ordered path."""
@@ -392,10 +391,10 @@ class OnroadView:
       else:
         self._lead_text(state, key, center_shift)
     if compact:
-      with dimmer.scope(LEAD_LADDER_WIDGET):
-        self._lead_ladder(state, center_shift)
+      with dimmer.scope(LEAD_GAP_WIDGET):
+        self._lead_gap(state, center_shift)
     else:
-      self._lead_ladder(state, center_shift)
+      self._lead_gap(state, center_shift)
 
   def _ordered_widgets(self, content, state, *, driver_camera=False, stock_layer=None, only_widget=None):
     profile = str(self.fonts.profile)
@@ -466,7 +465,7 @@ class OnroadView:
     if not driver_camera:
       for key in LEAD_INFO_WIDGETS:
         submit(key, lambda key=key: self._lead_text(state, key, (width - 1860) / 2 if large else 0))
-      submit(LEAD_LADDER_WIDGET, lambda: self._lead_ladder(state, (width - 1860) / 2 if large else 0))
+      submit(LEAD_GAP_WIDGET, lambda: self._lead_gap(state, (width - 1860) / 2 if large else 0))
     if state.alert.size == AlertSize.NONE and not driver_camera and placement(state.customization, profile, LANE_BAR_WIDGET)["enabled"]:
       submit(LANE_BAR_WIDGET, lambda: draw_lane_bar(content, state, (width if self.projection_viewport else 2160) if large else 536,
                                                   fonts=self.fonts, projection=bool(self.projection_viewport)))

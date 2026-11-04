@@ -197,17 +197,14 @@ export const LayoutWidgetPreview = {
       </template>
       <template v-else-if="['lead_speed', 'lead_distance', 'lead_time'].includes(widget.kind)">
         <text :x="widget.width / 2" :y="widget.height / 2" text-anchor="middle" dominant-baseline="middle"
-          :font-size="profile === 'large' ? 48 : 21" font-weight="600"
+          :font-size="profile === 'large' ? 48 : 42" font-weight="600"
           style="filter: drop-shadow(2px 2px 1px #000000aa)">{{ leadSample(widget.kind) }}</text>
       </template>
-      <g v-else-if="widget.kind === 'lead_time_ladder'" :transform="'scale(' + widget.height / 200 + ')'">
-        <rect x="0" y="0" width="150" height="200" rx="30" fill="#000000" fill-opacity=".5" />
-        <rect x="12" y="20" width="40" height="10" rx="5" fill="#dfe5e8" />
-        <rect x="28" y="24" width="8" height="156" rx="4" fill="#ffffff" fill-opacity=".16" />
-        <rect x="14" y="98" width="36" height="4" rx="2" fill="#ffffff" />
-        <circle cx="32" cy="100" r="12" fill="#3ddc84" />
-        <text x="64" y="38" font-size="30" font-weight="700" fill="#3ddc84">1.5 s</text>
-        <text x="64" y="110" font-size="22" font-weight="600" fill="#dfe5e8">1.5 s</text>
+      <g v-else-if="widget.kind === 'lead_gap'" :transform="'scale(' + Math.min(widget.width / 156, widget.height / 48) + ')'">
+        <rect x="0" y="0" width="156" height="48" rx="24" fill="#000000" fill-opacity=".5" />
+        <text x="10" y="39" font-size="40" font-weight="700" fill="#3ddc84" style="filter: drop-shadow(1px 1px 0 #000000aa)">1.5</text>
+        <rect x="76" y="10" width="2" height="28" rx="1" fill="#ffffff" fill-opacity=".35" />
+        <text x="88" y="36" font-size="28" font-weight="600" fill="#dfe5e8" style="filter: drop-shadow(1px 1px 0 #000000aa)">1.5</text>
       </g>
       <g v-else-if="widget.kind === 'now_playing'">
         <rect x="0" y="0" :width="widget.width" :height="widget.height" :rx="widget.height / 2" fill="#0f0d17" :fill-opacity="(widget.opacity ?? 85) / 100 * .92" />

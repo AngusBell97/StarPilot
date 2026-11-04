@@ -8,7 +8,7 @@ export const PATH_MODES = ["default", "color", "rainbow", "acceleration"]
 // Optional widgets start off and never block placement while off.
 const OPTIONAL_WIDGETS = ["driving_mode_descriptions", "clock", "stopped_timer", "lane_centering_bar"]
 // Widgets that may sit over the Speed limit actions: they hide on the device while a limit waits for an answer.
-const YIELDING_WIDGETS = ["stopped_timer", "lead_speed", "lead_distance", "lead_time", "lead_time_ladder"]
+const YIELDING_WIDGETS = ["stopped_timer", "lead_speed", "lead_distance", "lead_time", "lead_gap"]
 export const HEX = /^#[0-9a-fA-F]{8}$/
 const keysEqual = (value, keys) => value && typeof value === "object" && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))

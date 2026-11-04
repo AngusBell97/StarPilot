@@ -12,7 +12,7 @@ import pytest
 
 from openpilot.starpilot.ui.appearance_preferences import OnroadAppearance
 from openpilot.starpilot.ui.onroad_customization import (
-  CLOCK_WIDGET, DEFAULT_WIDGET_ORDER, LEAD_LADDER_WIDGET, LEAD_WIDGETS, MAX_BYTES, STOPPED_TIMER_WIDGET, customization_metadata, default_document,
+  CLOCK_WIDGET, DEFAULT_WIDGET_ORDER, LEAD_GAP_WIDGET, LEAD_WIDGETS, MAX_BYTES, STOPPED_TIMER_WIDGET, customization_metadata, default_document,
   offset, read_customization, validate_document, decode_document, widget_palette, rgba, widget_size)
 from openpilot.starpilot.ui.onroad_compact_widgets import CompactHudRenderer
 from openpilot.starpilot.ui.onroad_large_widgets import CurrentSpeedHud, UnifiedSpeedWidget, SteeringWheelWidget
@@ -212,8 +212,8 @@ def test_lead_widgets_are_opt_in_on_both_screens_and_migrate_saved_layouts():
       assert metadata[profile]['widgets'][key]['kind'] == key
       assert document['layouts'][profile][key]['enabled'] is False
       document['layouts'][profile].pop(key)
-    assert metadata[profile]['widgets'][LEAD_LADDER_WIDGET]['width'] / metadata[profile]['widgets'][LEAD_LADDER_WIDGET]['height'] == 0.75
-    assert rgba(document, 'cardFill', profile, LEAD_LADDER_WIDGET) == (0, 0, 0, 128)
+    assert metadata[profile]['widgets'][LEAD_GAP_WIDGET]['width'] > metadata[profile]['widgets'][LEAD_GAP_WIDGET]['height']
+    assert rgba(document, 'cardFill', profile, LEAD_GAP_WIDGET) == (0, 0, 0, 128)
   document['widgetOrder'] = {
     profile: [key for key in DEFAULT_WIDGET_ORDER[profile] if key not in LEAD_WIDGETS] for profile in ('large', 'compact')
   }
@@ -222,16 +222,31 @@ def test_lead_widgets_are_opt_in_on_both_screens_and_migrate_saved_layouts():
     for key in LEAD_WIDGETS:
       assert migrated['layouts'][profile][key] == metadata[profile]['widgets'][key]['default']
       assert key in migrated['widgetOrder'][profile]
+  # A Small UI lead text box saved before it grew to 236 x 40 is pulled inside its bounds rather than rejected.
+  grown = default_document()
+  grown['layouts']['compact']['lead_speed'].update(x=536 - 118, y=240 - 20, enabled=True)
+  assert validate_document(grown)['layouts']['compact']['lead_speed'] == {'x': 536 - 236, 'y': 240 - 40, 'enabled': True}
+  # A layout saved with the retired follow ladder still loads: the ladder is dropped and the gap readout filled in.
+  stale = default_document()
+  for profile in ('large', 'compact'):
+    stale['layouts'][profile]['lead_time_ladder'] = {'x': 0, 'y': 0, 'enabled': True}
+    stale['widgetColors'][profile]['lead_time_ladder'] = {'text': '#FF0000FF'}
+  stale['widgetOrder'] = {profile: [*DEFAULT_WIDGET_ORDER[profile], 'lead_time_ladder'] for profile in ('large', 'compact')}
+  migrated = validate_document(stale)
+  for profile in ('large', 'compact'):
+    assert 'lead_time_ladder' not in migrated['layouts'][profile] and migrated['layouts'][profile][LEAD_GAP_WIDGET]['enabled'] is False
+    assert 'lead_time_ladder' not in migrated['widgetOrder'][profile] and LEAD_GAP_WIDGET in migrated['widgetOrder'][profile]
+    assert 'lead_time_ladder' not in migrated['widgetColors'][profile]
   enabled = default_document()
-  enabled['layouts']['compact'][LEAD_LADDER_WIDGET]['enabled'] = True
-  assert validate_document(enabled)['layouts']['compact'][LEAD_LADDER_WIDGET]['enabled'] is True
+  enabled['layouts']['compact'][LEAD_GAP_WIDGET]['enabled'] = True
+  assert validate_document(enabled)['layouts']['compact'][LEAD_GAP_WIDGET]['enabled'] is True
   # Like the stopped timer, lead widgets may sit over the Speed limit actions (they yield at render time) and in the rail column.
   actions = enabled['layouts']['compact']['speed_limit_actions']
-  enabled['layouts']['compact'][LEAD_LADDER_WIDGET].update(x=actions['x'] + 10, y=actions['y'] + 10)
+  enabled['layouts']['compact'][LEAD_GAP_WIDGET].update(x=actions['x'] + 10, y=actions['y'] + 10)
   for key in LEAD_WIDGETS:
     enabled['layouts']['compact'][key]['enabled'] = True
-  enabled['layouts']['compact']['lead_time'].update(x=536 - 118, y=0)
-  assert validate_document(enabled)['layouts']['compact'][LEAD_LADDER_WIDGET] == enabled['layouts']['compact'][LEAD_LADDER_WIDGET]
+  enabled['layouts']['compact']['lead_time'].update(x=536 - 236, y=0)
+  assert validate_document(enabled)['layouts']['compact'][LEAD_GAP_WIDGET] == enabled['layouts']['compact'][LEAD_GAP_WIDGET]
   enabled['layouts']['compact']['clock'].update(x=actions['x'] + 10, y=actions['y'] + 10, enabled=True)
   with pytest.raises(ValueError):
     validate_document(enabled)

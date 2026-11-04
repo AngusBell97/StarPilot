@@ -174,7 +174,11 @@ def conditional_lead_from_message(radar) -> ConditionalLead | None:
   """The caller supplies only a current display radar observation."""
   try:
     lead = radar.leadOne
-    if lead.status is not True:
+    # This fork's RadarState.LeadData flags a lead with `present`; older schemas used `status`.
+    present = getattr(lead, 'present', None)
+    if present is None:
+      present = getattr(lead, 'status', None)
+    if present is not True:
       return None
     return ConditionalLead(float(lead.dRel), float(lead.vLead))
   except (AttributeError, TypeError, ValueError, OverflowError):

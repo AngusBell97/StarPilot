@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 from openpilot.starpilot.longitudinal.profile_document import (FOLLOWING_SPEEDS_MPH, default_personality_profiles, interpolate_category_curve,
                                                                profile_document, strict_profile_document)
 from openpilot.starpilot.ui.lead_follow import (DEFAULT_FOLLOW_S, NUDGE_STEP_S, STOP_DISTANCE_M, FollowTargetReader, default_follow_s,
-                                                encode_profile_document, follow_state, follow_time_s, interpolated_follow_s, ladder_fraction,
+                                                encode_profile_document, follow_state, follow_time_s, interpolated_follow_s,
                                                 lead_distance_text, lead_speed_text, lead_time_text, nudge_following_curve,
                                                 nudged_profile_document)
 
@@ -27,7 +27,7 @@ class FollowTimeTests(unittest.TestCase):
     for distance, speed in ((30.0, 1.0), (0.0, 20.0), (float("nan"), 20.0), ("x", 20.0), (30.0, None)):
       self.assertIsNone(follow_time_s(distance, speed))
 
-  def test_state_bands_and_ladder_position(self):
+  def test_state_bands(self):
     self.assertEqual(follow_state(None, 1.5), "none")
     self.assertEqual(follow_state(1.5, None), "none")
     self.assertEqual(follow_state(2.1, 1.5), "far")
@@ -35,10 +35,14 @@ class FollowTimeTests(unittest.TestCase):
     self.assertEqual(follow_state(1.3, 1.5), "target")
     self.assertEqual(follow_state(1.2, 1.5), "near")
     self.assertEqual(follow_state(0.8, 1.5), "close")
-    self.assertEqual(ladder_fraction(1.5, 1.5), 0.5, "on target sits on the rung")
-    self.assertEqual(ladder_fraction(0.0, 1.5), 0.0)
-    self.assertEqual(ladder_fraction(9.0, 1.5), 1.0)
-    self.assertIsNone(ladder_fraction(1.0, 0.0))
+
+  def test_radar_lead_flag_is_present_or_status(self):
+    from openpilot.starpilot.ui.onroad_state import ConditionalLead, conditional_lead_from_message
+    # This fork's RadarState.LeadData says `present`; the widgets stayed blank while the reader looked for `status`.
+    self.assertEqual(conditional_lead_from_message(NS(leadOne=NS(present=True, dRel=30.0, vLead=10.0))), ConditionalLead(30.0, 10.0))
+    self.assertIsNone(conditional_lead_from_message(NS(leadOne=NS(present=False, dRel=30.0, vLead=10.0))))
+    self.assertEqual(conditional_lead_from_message(NS(leadOne=NS(status=True, dRel=12.0, vLead=2.0))), ConditionalLead(12.0, 2.0))
+    self.assertIsNone(conditional_lead_from_message(NS(leadOne=NS(dRel=12.0, vLead=2.0))))
 
   def test_widget_text(self):
     lead = NS(distance_m=50.0, speed_mps=20.0)

@@ -222,13 +222,16 @@ CEM_GAUGE_INSET = (44, 24)
 CEM_GAUGE_SIZE = (256, 276)
 PROFILES['large']['widgets'][CEM_GAUGE_WIDGET] = _widget('CEM road gauge', CEM_GAUGE_WIDGET, *CEM_GAUGE_SIZE,
                                                          56, 536)
-# Lead widgets: three text readouts and the follow-time ladder. They read the radar lead directly, so
-# they work with the lead indicator hidden, and they start disabled like every added widget.
+# Lead widgets: three text readouts and the lead gap readout (the live follow time beside the profile's target).
+# They read the radar lead directly, so they work with the lead indicator hidden, and they start disabled like
+# every added widget.
 LEAD_SPEED_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_TIME_WIDGET = "lead_speed", "lead_distance", "lead_time"
 LEAD_INFO_WIDGETS = (LEAD_SPEED_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_TIME_WIDGET)
-LEAD_LADDER_WIDGET = "lead_time_ladder"
-LEAD_WIDGETS = (*LEAD_INFO_WIDGETS, LEAD_LADDER_WIDGET)
-LEAD_LADDER_SIZE = {"large": (150, 200), "compact": (72, 96)}
+LEAD_GAP_WIDGET = "lead_gap"
+LEAD_WIDGETS = (*LEAD_INFO_WIDGETS, LEAD_GAP_WIDGET)
+LEAD_GAP_SIZE = {"large": (360, 100), "compact": (156, 48)}
+# Widget IDs that no longer exist (the follow ladder); a saved layout that still names them loads with them dropped.
+RETIRED_WIDGETS = frozenset({"lead_time_ladder"})
 _LEAD_TEXT_NOTES = {
   LEAD_SPEED_WIDGET: "The lead car's speed from radar. Shown with or without the lead indicator.",
   LEAD_DISTANCE_WIDGET: ("Distance to the lead car from radar, in Galaxy's road-distance units (Localization), or the driving units "
@@ -236,7 +239,8 @@ _LEAD_TEXT_NOTES = {
   LEAD_TIME_WIDGET: ("Live follow time in profile seconds: the gap less the planner's 6 m stop margin, over your speed, "
                      "so it compares with the personality profile's following value."),
 }
-for _profile, (_width, _height, _x, _top) in {"large": (300, 72, 780, 520), "compact": (118, 20, 158, 180)}.items():
+# Small UI lead text is 40 px, the size of the lead-speed text at the top of the road view, so the boxes are 236 x 40.
+for _profile, (_width, _height, _x, _top) in {"large": (300, 72, 780, 520), "compact": (236, 40, 150, 120)}.items():
   for _index, (_key, _label) in enumerate(zip(LEAD_INFO_WIDGETS, ("Lead speed", "Lead distance", "Lead follow time"), strict=True)):
     _lead_text = _widget(_label, _key, _width, _height, _x, _top + _index * _height)
     _lead_text["default"]["enabled"] = False
@@ -244,15 +248,15 @@ for _profile, (_width, _height, _x, _top) in {"large": (300, 72, 780, 520), "com
     if _profile == "compact":
       _lead_text["bounds"] = {"x": 0, "y": 0, "width": 536, "height": 240}  # The rail column is allowed, like the rail widgets.
     PROFILES[_profile]["widgets"][_key] = _lead_text
-for _profile, (_x, _y) in {"large": (1640, 330), "compact": (400, 140)}.items():
-  _ladder = _widget("Lead follow ladder", LEAD_LADDER_WIDGET, *LEAD_LADDER_SIZE[_profile], _x, _y)
-  _ladder["default"]["enabled"] = False
-  _ladder["note"] = ("The bar at the top is the lead car, the dot is you and the white rung is the profile's follow time. "
-                     "The dot sits on the rung when you are at the target. The numbers are the live follow time and the target. "
-                     "Lead widgets may sit over the Speed limit actions area; they hide while a limit is waiting for your answer.")
+for _profile, (_x, _y) in {"large": (1460, 330), "compact": (300, 186)}.items():
+  _gap = _widget("Lead gap", LEAD_GAP_WIDGET, *LEAD_GAP_SIZE[_profile], _x, _y)
+  _gap["default"]["enabled"] = False
+  _gap["note"] = ("The live follow time in profile seconds, coloured grey when too far, green on target, amber slightly close "
+                  "and red too close, then the profile's target follow time. Lead widgets may sit over the Speed limit actions "
+                  "area; they hide while a limit is waiting for your answer.")
   if _profile == "compact":
-    _ladder["bounds"] = {"x": 0, "y": 0, "width": 536, "height": 240}
-  PROFILES[_profile]["widgets"][LEAD_LADDER_WIDGET] = _ladder
+    _gap["bounds"] = {"x": 0, "y": 0, "width": 536, "height": 240}
+  PROFILES[_profile]["widgets"][LEAD_GAP_WIDGET] = _gap
 ROAD_BASE_WIDTH = 1860
 SIDEBAR_EXTRA = 300
 ANCHOR_SHIFT = {"steering_wheel": 1.0, NAV_CARD_WIDGET: 1.0, NAV_MAP_WIDGET: 1.0,
@@ -288,7 +292,7 @@ RUNTIME_PREVIEW_WIDGETS = {
 _FRAME_COLORS = {"cardFill": "#00000000", "cardBorder": "#00000000"}
 _ACTION_COLORS = {"cardFill": "#0C1820EB", "cardBorder": "#A6DFBEFF", "text": "#FFFFFFFF"}
 _LEAD_COLORS = {**dict.fromkeys(LEAD_INFO_WIDGETS, {"text": "#FFFFFFFF"}),
-                LEAD_LADDER_WIDGET: {"cardFill": "#00000080", "text": "#FFFFFFFF"}}
+                LEAD_GAP_WIDGET: {"cardFill": "#00000080", "text": "#FFFFFFFF"}}
 WIDGET_COLORS = {
   "large": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
@@ -544,6 +548,9 @@ def validate_document(value):
   palette, layouts = value["palette"], value["layouts"]
   if type(palette) is not dict or set(palette) != set(PALETTE) or type(layouts) is not dict or set(layouts) != set(PROFILES):
     raise ValueError("Invalid customization fields")
+  if any(type(layout) is dict and RETIRED_WIDGETS & layout.keys() for layout in layouts.values()):
+    layouts = {profile: ({key: spot for key, spot in layout.items() if key not in RETIRED_WIDGETS} if type(layout) is dict else layout)
+               for profile, layout in layouts.items()}
   added_personality = type(layouts['large']) is dict and 'following_distance' not in layouts['large']
   if added_personality:
     layouts = copy.deepcopy(layouts)
@@ -618,6 +625,16 @@ def validate_document(value):
       if missing and missing <= OPTIONAL_WIDGETS:
         for optional in missing:
           layouts[profile][optional] = dict(data["widgets"][optional]["default"])
+      # The Small UI lead text boxes grew from 118 x 20 to 236 x 40; keep a saved box inside its bounds rather than reject it.
+      if profile == 'compact':
+        for key in LEAD_INFO_WIDGETS:
+          spot, widget = layouts[profile].get(key), data['widgets'][key]
+          bounds = widget_bounds(profile, key)
+          if type(spot) is dict:
+            for axis, extent in (('x', 'width'), ('y', 'height')):
+              limit = bounds[axis] + bounds[extent] - widget[extent]
+              if type(spot.get(axis)) in (int, float) and math.isfinite(spot[axis]) and spot[axis] > limit:
+                spot[axis] = limit
   if value['version'] < 11:
     old_defaults = {'large': {'speed_limit_actions': (100, 296), CEM_GAUGE_WIDGET: (56, 452)},
                     'compact': {'speed_limit_actions': (128, 186), 'clock': (168, 92), MODE_WIDGET: (162, 22)}}
@@ -631,7 +648,10 @@ def validate_document(value):
     if type(colors) is not dict or set(colors) != set(PROFILES):
       raise ValueError("Invalid widget color profiles")
     for profile, widgets in colors.items():
-      if type(widgets) is not dict or not widgets.keys() <= WIDGET_COLORS[profile].keys():
+      if type(widgets) is not dict:
+        raise ValueError("Invalid widget color IDs")
+      widgets = {key: overrides for key, overrides in widgets.items() if key not in RETIRED_WIDGETS}
+      if not widgets.keys() <= WIDGET_COLORS[profile].keys():
         raise ValueError("Invalid widget color IDs")
       for key, overrides in widgets.items():
         if type(overrides) is not dict or not overrides.keys() <= WIDGET_COLORS[profile][key].keys():
@@ -726,6 +746,7 @@ def validate_document(value):
     result['widgetOrder'] = {}
     for profile, order in orders.items():
       if type(order) is list:
+        order = [key for key in order if key not in RETIRED_WIDGETS]
         order = [*order, *(key for key in PROFILES[profile]['widgets']
                           if (key in OPTIONAL_WIDGETS or profile == 'large' and key == 'following_distance') and key not in order)]
       result['widgetOrder'][profile] = validate_widget_order(order, PROFILES[profile]['widgets'])

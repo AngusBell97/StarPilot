@@ -48,13 +48,6 @@ def follow_state(current: float | None, target: float | None) -> str:
   return 'near' if ratio >= CLOSE_RATIO else 'close'
 
 
-def ladder_fraction(current: float | None, target: float | None) -> float | None:
-  """0 at the lead bar, 0.5 on the target rung, 1 at the far end of the track."""
-  if current is None or target is None or not target > 0.0:
-    return None
-  return min(max(current / target / 2.0, 0.0), 1.0)
-
-
 def _finite(value) -> float | None:
   try:
     number = float(value)
