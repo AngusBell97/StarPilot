@@ -66,12 +66,9 @@ def test_inactive_lateral_resets_override(vehicle_model):
   (CAR.TESLA_MODEL_S_PREAP, True, False),
 ))
 def test_safety_flag_is_model_3_only(candidate, enabled, expected):
-  toggles = SimpleNamespace(tesla_cooperative_steering=enabled, trailer_load_kg=0.0)
-  from opendbc.car.tesla.coop_preferences import apply_cooperative
-  fingerprint = gen_empty_fingerprint()
-  fingerprint[2][0x489] = 8
-  params = CarInterface.get_params(candidate, fingerprint, [], False, False, False)
-  apply_cooperative(params, enabled)
+  params = CarInterface.get_params(candidate, gen_empty_fingerprint(), [], False, False, True)
+  from openpilot.starpilot.car.tesla.coop_preferences import prepare
+  prepare(params, enabled)
 
   has_flag = any(config.safetyParam & TeslaSafetyFlags.COOP_STEERING.value for config in params.safetyConfigs)
   assert has_flag is expected
@@ -134,7 +131,7 @@ def test_release_reports_gradual_offset_unwind(vehicle_model):
     offsets.append(controller.cooperative_offset_deg)
 
   assert offsets[0] > offsets[-1] >= 0.0
-  assert all(next_offset <= offset for offset, next_offset in zip(offsets, offsets[1:]))
+  assert all(next_offset <= offset for offset, next_offset in zip(offsets, offsets[1:], strict=False))
   assert offsets[-1] == pytest.approx(0.0, abs=1e-6)
   assert_finite_nonnegative_limit_errors(controller)
 

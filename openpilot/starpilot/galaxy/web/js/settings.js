@@ -351,6 +351,14 @@ export const SettingsPage = {
       }).filter(({ row }) =>
         !needle || `${row.label} ${row.value} ${row.reason}`.toLocaleLowerCase().includes(needle))
     },
+    // A heading row starts its own card; the rows after it belong to that card even when search hides the heading.
+    rowCards() {
+      const titles = []
+      const owner = (this.state.data?.rows || []).map((row) => (row.heading ? titles.push(row.label) : titles.length))
+      const cards = [{ title: "", entries: [] }, ...titles.map((title) => ({ title, entries: [] }))]
+      for (const entry of this.visibleRows) if (!entry.row.heading) cards[owner[entry.index] || 0].entries.push(entry)
+      return cards.filter((card, index) => !index || card.entries.length)
+    },
   },
   watch: {
     "state.data"(data) {
@@ -551,24 +559,16 @@ export const SettingsPage = {
             <div v-if="state.data.page === 'pip'" class="gx-settings__actions gx-actions">
               <button type="button" class="gx-btn gx-btn--tonal" @click="openCropEditor"><i class="bi bi-crop" aria-hidden="true"></i> Crop editor</button>
             </div>
-            <section class="gx-card gx-settings__section">
-              <div class="gx-section__header">
-                <nav v-if="navigationPath" class="gx-settings-path" aria-label="Toggle hierarchy"><ol>
-                  <li v-for="(item, index) in navigationItems" :key="item.id">
-                    <span v-if="index" class="gx-settings-path__separator" aria-hidden="true">›</span>
-                    <span v-if="index === navigationItems.length - 1" class="gx-settings-path__current" aria-current="page">{{ item.label }}</span>
-                    <button v-else type="button" class="gx-settings-path__parent" :disabled="busy" @click="jumpToPage(item.id)">{{ item.label }}</button>
-                  </li>
-                </ol></nav>
-                <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
-                <button v-if="!navigationPath && state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
+            <section v-for="(card, cardIndex) in rowCards" :key="card.title || 'main'" class="gx-card gx-settings__section">
+              <div v-if="cardIndex" class="gx-section__header"><i class="bi bi-car-front" aria-hidden="true"></i><span class="gx-section__title">{{ card.title }}</span></div>
+              <div v-else class="gx-section__header"><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span>
+                <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
-              <div v-if="navigationPath && pageDescription" class="gx-settings__intro" aria-label="Page information">${SETTINGS_PAGE_INTRO}</div>
-              <div v-if="!navigationPath && state.searchOpen" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
-              <component :is="row.paired ? 'GalaxyRangeSettingRow' : 'GalaxySettingRow'" v-for="{ row, index } in visibleRows" :key="rowKey(row, index)" :row="row" :index="index"
+              <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
+              <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index"
                 :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)"
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
-              <div v-if="!visibleRows.length" class="gx-empty">No matching settings.</div>
+              <div v-if="!cardIndex && !visibleRows.length" class="gx-empty">No matching settings.</div>
             </section>
             <SoundPacks v-if="state.data.page === 'sounds'" :unauthorized="unauthorized" :busy="busy" @installed="refreshSoundChoices" />
           </div>

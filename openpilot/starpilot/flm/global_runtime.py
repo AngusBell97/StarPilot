@@ -220,7 +220,9 @@ class GlobalRuntime:
     self.stage_effect = False
     self.centre_ack = None
     policy = getattr(getattr(self.controller, 'starpilot_extension', None), 'policy', None)
-    self.live_manual = bool(manual_current or getattr(self.controller, 'flm_surface', None) is not None or
+    self.live_manual = bool(manual_current or getattr(self.controller, 'manual_flm_effects', None) is not None or
+      getattr(self.controller, 'manual_flm_status', 'not_configured') not in ('configured', 'not_configured') or
+      getattr(self.controller, 'flm_surface', None) is not None or
                             getattr(policy, 'surface', None) is not None)
     self.native_required = bool(native_required)
     self.native_witness = native_witness
@@ -935,7 +937,7 @@ class GlobalRuntime:
       and application.binding == live_owner.binding
       and application.control_ns == self.now_ns
       and 0 <= control_ns - application.control_ns <= 30_000_000
-      and current_offer.observed_ns <= control_ns <= current_offer.expires_ns
+      and current_offer.observed_ns <= application.control_ns <= current_offer.expires_ns
       and self.source.observed_ns <= control_ns <= self.source.expires_ns
       and active and self.healthy and self.eligible and self.reason == 'qualified'
       and self.source.enabled and not (self.source.manual or self.live_manual)

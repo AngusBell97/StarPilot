@@ -18,7 +18,7 @@ from contextlib import contextmanager
 import math
 import time
 
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 
 
 ORBIT_STEP_S = 45.0
@@ -72,23 +72,14 @@ def dim_level(static_s: float) -> float:
   return 1.0 - (1.0 - DIM_LEVEL) * min(1.0, (static_s - DIM_AFTER_S) / DIM_FADE_S)
 
 
-def _c_name(name: str) -> str:
-  return "".join(part.capitalize() for part in name.removeprefix("_orig_").split("_"))
+# Keyword names raylib uses for colour arguments.
+_COLOR_KEYWORDS = frozenset(("color", "tint", "color1", "color2", "color3", "color4", "top_left", "bottom_left",
+                             "top_right", "bottom_right", "left", "right", "top", "bottom", "inner_color", "outer_color"))
 
 
-_COLOR_POSITIONS: dict[str, tuple[int, ...]] = {}
-
-
-def _color_positions(name: str) -> tuple[int, ...]:
-  positions = _COLOR_POSITIONS.get(name)
-  if positions is None:
-    try:
-      args = rl.ffi.typeof(getattr(rl.rl, _c_name(name))).args
-      positions = tuple(i for i, arg in enumerate(args) if arg.cname in ("Color", "struct Color"))
-    except (AttributeError, TypeError):
-      positions = ()
-    _COLOR_POSITIONS[name] = positions
-  return positions
+def _is_color(value) -> bool:
+  color_type = getattr(rl, "Color", None)
+  return color_type is not None and isinstance(value, color_type)
 
 
 def dim_color(color, factor: float):
@@ -105,6 +96,10 @@ def dim_color(color, factor: float):
   return rl.Color(int(r), int(g), int(b), max(0, min(255, int(round(a * factor)))))
 
 
+_STRUCT_FIELDS = ("r", "g", "b", "a", "x", "y", "z", "w", "width", "height", "id", "mipmaps", "format",
+                  "baseSize", "base_size", "glyphCount", "glyph_count")
+
+
 def _freeze(value):
   """A comparable, hashable summary of a draw argument (floats to whole pixels)."""
   if isinstance(value, bool) or value is None or isinstance(value, (int, str, bytes)):
@@ -113,15 +108,12 @@ def _freeze(value):
     return round(value) if math.isfinite(value) else repr(value)
   if isinstance(value, (tuple, list)):
     return tuple(_freeze(item) for item in value)
-  try:
-    kind = rl.ffi.typeof(value)
-  except TypeError:
-    return type(value).__name__
-  if kind.kind == "struct":
-    return tuple(_freeze(getattr(value, field)) for field, _ in kind.fields)
-  if kind.kind == "pointer":
-    return int(rl.ffi.cast("uintptr_t", value))
-  return kind.cname
+  # Native raylib structs (Color, Vector2, Rectangle, Texture, Font...): summarise their plain fields.
+  fields = tuple((name, getattr(value, name)) for name in _STRUCT_FIELDS if hasattr(value, name))
+  if fields:
+    return (type(value).__name__,) + tuple((name, _freeze(item)) for name, item in fields
+                                           if isinstance(item, (bool, int, float, str)) or item is None)
+  return type(value).__name__
 
 
 class _Recorder:
@@ -131,17 +123,16 @@ class _Recorder:
     self.depth = 0
 
   def wrap(self, name: str, original: Callable) -> Callable:
-    positions = _color_positions(name)
     def call(*args, **kwargs):
       if self.depth:
         # A patched call that forwards to another wrapped call: record and dim once.
         return original(*args, **kwargs)
       self.calls.append((name, _freeze(args), _freeze(sorted(kwargs.items())) if kwargs else ()))
-      if self.factor < 1.0 and positions:
-        args = list(args)
-        for index in positions:
-          if index < len(args):
-            args[index] = dim_color(args[index], self.factor)
+      if self.factor < 1.0:
+        args = [dim_color(arg, self.factor) if _is_color(arg) else arg for arg in args]
+        for key, value in kwargs.items():
+          if key in _COLOR_KEYWORDS and (_is_color(value) or isinstance(value, (tuple, list))):
+            kwargs[key] = dim_color(value, self.factor)
       self.depth += 1
       try:
         return original(*args, **kwargs)
@@ -174,7 +165,7 @@ class StaticDimmer:
     return dim_level(now - entry[1])
 
   def color(self, color):
-    """Dim a colour drawn by a native call that bypasses the pyray wrappers."""
+    """Dim a colour drawn by a native call that bypasses the patched module functions."""
     recorder = self._current
     if recorder is None:
       return color

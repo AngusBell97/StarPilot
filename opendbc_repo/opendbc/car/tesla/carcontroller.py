@@ -26,11 +26,6 @@ class CarController(CarControllerBase):
     super().__init__(dbc_names, CP)
     self.speed_sync = (SpeedSynchronizer(experimental_test=EXPERIMENTAL_TEST_BUILD) if CP.carFingerprint == CAR.TESLA_MODEL_3 and
                        CP.openpilotLongitudinalControl and any(s.safetyParam & SYNC_FLAG for s in CP.safetyConfigs) else None)
-    self.apply_angle_command_last = 0.0
-    self.coop_steer = CooperativeSteeringController()
-    self.coop_enabled = CP.carFingerprint == CAR.TESLA_MODEL_3 and any(
-      config.safetyParam & TeslaSafetyFlags.COOP_STEERING.value for config in CP.safetyConfigs)
-    self._clear_steering_limit_info()
     if CP.carFingerprint == CAR.TESLA_MODEL_S_PREAP:
       self.preap = PreAPStockCarController(dbc_names, CP)
       return
@@ -38,31 +33,14 @@ class CarController(CarControllerBase):
       self.hw1 = HW1CarController(dbc_names, CP)
       return
     self.apply_angle_last = 0
+    self.coop_steer = CooperativeSteeringController()
+    self.coop_enabled = CP.carFingerprint == CAR.TESLA_MODEL_3 and bool(CP.safetyConfigs[0].safetyParam & TeslaSafetyFlags.COOP_STEERING)
+    self.steering_limit_info = {}
     self.packer = CANPacker(dbc_names[Bus.party])
     self.tesla_can = TeslaCAN(CP, self.packer)
 
     # Vehicle model used for lateral limiting
     self.VM = VehicleModel(get_safety_CP())
-
-  def _clear_steering_limit_info(self):
-    self.steering_limit_info_valid = False
-    self.model_limit_error_deg = 0.0
-    self.resume_limit_error_deg = 0.0
-    self.cooperative_limit_error_deg = 0.0
-    self.cooperative_offset_deg = 0.0
-    self.steering_limit_mono_time = 0
-    self.combined_limit_error_deg = 0.0
-
-  def get_steering_limit_info(self) -> dict[str, bool | float | int]:
-    return {
-      "valid": self.steering_limit_info_valid,
-      "modelLimitErrorDeg": self.model_limit_error_deg,
-      "resumeLimitErrorDeg": self.resume_limit_error_deg,
-      "cooperativeLimitErrorDeg": self.cooperative_limit_error_deg,
-      "cooperativeOffsetDeg": self.cooperative_offset_deg,
-      "monoTime": self.steering_limit_mono_time,
-      "combinedLimitErrorDeg": self.combined_limit_error_deg,
-    }
 
   def update(self, CC, CS, now_nanos):
     if self.CP.carFingerprint == CAR.TESLA_MODEL_S_PREAP:
@@ -78,8 +56,8 @@ class CarController(CarControllerBase):
     # When enabling in a tight curve, we wait until user reduces steering force to start steering.
     # Canceling is done on rising edge and is handled generically with CC.cruiseControl.cancel
     lat_active = CC.latActive and (not CS.out.steeringDisengage if self.coop_enabled else CS.hands_on_level < 3)
-    if not (self.coop_enabled and lat_active):
-      self._clear_steering_limit_info()
+    if not lat_active:
+      self.steering_limit_info = {}
 
     if self.frame % 2 == 0:
       requested_angle = actuators.steeringAngleDeg
@@ -87,31 +65,18 @@ class CarController(CarControllerBase):
       self.apply_angle_last = apply_steer_angle_limits_vm(actuators.steeringAngleDeg, self.apply_angle_last, CS.out.vEgoRaw, CS.out.steeringAngleDeg,
                                                           lat_active, CarControllerParams, self.VM)
 
-      self.apply_angle_command_last, lat_active = self.coop_steer.update(
-        self.apply_angle_last, lat_active, self.coop_enabled, CS, self.VM,
-      )
-
+      command_angle, lat_active = self.coop_steer.update(self.apply_angle_last, lat_active, self.coop_enabled, CS, self.VM)
+      self.command_angle = command_angle
       if self.coop_enabled and lat_active:
-        model_limit_error_deg = abs(requested_angle - self.apply_angle_last)
-        resume_limit_error_deg = self.coop_steer.resume_limit_error_deg
-        cooperative_limit_error_deg = self.coop_steer.cooperative_limit_error_deg
-        cooperative_offset_deg = self.coop_steer.cooperative_offset_deg
-        combined_limit_error_deg = abs(requested_angle + cooperative_offset_deg - self.apply_angle_command_last)
-        limit_values = (model_limit_error_deg, resume_limit_error_deg, cooperative_limit_error_deg,
-                        cooperative_offset_deg, combined_limit_error_deg)
-
-        if all(np.isfinite(value) for value in limit_values):
-          self.steering_limit_info_valid = True
-          self.model_limit_error_deg = model_limit_error_deg
-          self.resume_limit_error_deg = resume_limit_error_deg
-          self.cooperative_limit_error_deg = cooperative_limit_error_deg
-          self.cooperative_offset_deg = cooperative_offset_deg
-          self.steering_limit_mono_time = now_nanos
-          self.combined_limit_error_deg = combined_limit_error_deg
-        else:
-          self._clear_steering_limit_info()
-
-      can_sends.append(self.tesla_can.create_steering_control(self.apply_angle_command_last, lat_active))
+        self.steering_limit_info = {
+          "valid": True, "monoTime": now_nanos,
+          "modelLimitErrorDeg": abs(actuators.steeringAngleDeg - self.apply_angle_last),
+          "resumeLimitErrorDeg": self.coop_steer.resume_limit_error_deg,
+          "cooperativeLimitErrorDeg": self.coop_steer.cooperative_limit_error_deg,
+          "cooperativeOffsetDeg": self.coop_steer.cooperative_offset_deg,
+          "combinedLimitErrorDeg": abs(actuators.steeringAngleDeg + self.coop_steer.cooperative_offset_deg - command_angle),
+        }
+      can_sends.append(self.tesla_can.create_steering_control(command_angle, lat_active))
 
     if self.frame % 10 == 0:
       can_sends.append(self.tesla_can.create_steering_allowed())
@@ -150,7 +115,7 @@ class CarController(CarControllerBase):
 
     # TODO: HUD control
     new_actuators = actuators.as_builder()
-    new_actuators.steeringAngleDeg = self.apply_angle_command_last
+    new_actuators.steeringAngleDeg = getattr(self, "command_angle", self.apply_angle_last)
 
     self.frame += 1
     return new_actuators, can_sends

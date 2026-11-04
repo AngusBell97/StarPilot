@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import patch
 
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 import pytest
 
 from openpilot.common.params import Params

@@ -8,7 +8,7 @@ from opendbc.car import gen_empty_fingerprint
 from opendbc.car.structs import car
 from opendbc.car.tesla.interface import CarInterface
 from opendbc.car.tesla.carcontroller import CarController
-from opendbc.car.tesla.coop_preferences import apply_cooperative
+from openpilot.starpilot.car.tesla.coop_preferences import prepare as apply_cooperative
 from opendbc.car.tesla.screen_button import apply_screen_button, screen_qualified
 from opendbc.car.tesla.values import CAR, DBC
 
@@ -86,9 +86,9 @@ def test_disengagement_invalidates_diagnostics_between_can_ticks():
   controller = CarController(DBC[CAR.TESLA_MODEL_3], cp)
   cc = car.CarControl.new_message(latActive=True)
   controller.update(cc.as_reader(), state(torque=1.), 1_000_000_000)
-  assert controller.get_steering_limit_info()['valid']
+  assert controller.steering_limit_info.get('valid', False)
   controller.update(cc.as_reader(), state(torque=5.1, disengage=True), 1_010_000_000)
-  assert not controller.get_steering_limit_info()['valid']
+  assert not controller.steering_limit_info.get('valid', False)
 
 
 def assert_except_pedal_jerk(before, after, longitudinal_only=False):

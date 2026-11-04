@@ -485,6 +485,8 @@ class ConditionalModePolicy:
 
   def _cem(self, now_s: float, authority: Authority, warm: bool, scene: SceneEvidence, settings: ModeSettings) -> Decision:
     committed = settings.cem_stop and scene.forcing_stop is True and authority.driving_enabled and authority.long_active
+    if scene.standstill is True and scene.standstill_stop_hold is None and not committed and self.cem_previous_stop_hold:
+      return self._decision(True, authority, True, warm, Reason.CEM_STOP, 8)
     speed_requested = self._speed_trigger(scene, settings)
     if speed_requested:
       self.cem_speed_until = now_s + CEM_HOLD_S

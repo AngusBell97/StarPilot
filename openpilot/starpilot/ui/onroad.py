@@ -13,7 +13,7 @@ from typing import Protocol
 import hashlib
 import json
 
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 
 from openpilot.starpilot.ui import clip
 from openpilot.starpilot.ui.burn_in import dimmer

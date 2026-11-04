@@ -13,7 +13,7 @@ import zlib
 import numpy as np
 from dataclasses import replace
 
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 
 from openpilot.starpilot.ui.layout_preview_transport import SCENES, validate_preview_document
 from openpilot.starpilot.ui.developer_preview import OnroadVisualPreview
@@ -319,7 +319,7 @@ class _Canvas:
       if scale < 1.0:
         width, height = round(width * scale), round(height * scale)
         rl.image_resize(image, width, height)
-      return _png_rgba(width, height, bytes(rl.ffi.buffer(image.data, width * height * 4)))
+      return _png_rgba(width, height, bytes(image.data[:width * height * 4]))
     finally:
       rl.unload_image(image)
 
@@ -374,7 +374,7 @@ class _Canvas:
       try:
         rl.clear_background(rl.BLANK)
         # Match the runtime's transparent cache coverage before exporting straight-alpha PNG.
-        rl.rl.rlSetBlendFactorsSeparate(0x0302, 0x0303, 1, 0x0303, 0x8006, 0x8006)
+        rl.rl_set_blend_factors_separate(0x0302, 0x0303, 1, 0x0303, 0x8006, 0x8006)
         rl.begin_blend_mode(rl.BlendMode.BLEND_CUSTOM_SEPARATE)
         try:
           if general and key == 'driver_monitor':
@@ -397,7 +397,7 @@ class _Canvas:
         rl.image_crop(image, rl.Rectangle(crop_x, crop_y, width, height))
         if art_width != width:
           rl.image_resize(image, art_width, art_height)
-        captures.append((key, _straight_rgba(bytes(rl.ffi.buffer(image.data, art_width * art_height * 4)))))
+        captures.append((key, _straight_rgba(bytes(image.data[:art_width * art_height * 4]))))
       finally:
         rl.unload_image(image)
     sheet_width = max(slot['x'] + slot['width'] for slot in sprites.values())

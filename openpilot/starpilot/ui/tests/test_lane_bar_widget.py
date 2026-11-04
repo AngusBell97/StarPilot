@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import patch
 import numpy as np
 import pytest
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET as KEY, PROFILES, DEFAULT_WIDGET_ORDER,
   RUNTIME_PREVIEW_WIDGETS, default_document, validate_document, decode_document)
 from openpilot.starpilot.ui.onroad_torque import draw_lane_bar

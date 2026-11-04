@@ -56,6 +56,7 @@ from openpilot.starpilot.ui.conditional_feature import BUTTON_PREFIX, Conditiona
 from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.ui.wheel_feature import WheelFeature, PREFIX as WHEEL_PREFIX
 from openpilot.starpilot.longitudinal.output_max import KEY as OUTPUT_MAX_KEY
+from openpilot.starpilot.ui.tesla_coop_feature import TeslaCoopFeature
 from openpilot.starpilot.ui.tesla_screen_feature import TeslaScreenFeature, KEYS as TESLA_SCREEN_KEYS
 from openpilot.starpilot.ui.ford_bluepilot_feature import FordBluePilotFeature, KEYS as FORD_BLUEPILOT_KEYS
 from openpilot.starpilot.ui.ford_cluster_feature import FordClusterFeature
@@ -168,7 +169,6 @@ class FeatureSettingsOwner:
                                       configuration_longitudinal=self.configuration_longitudinal)
     self.long_profiles = LongProfileFeature(self)
     self.tesla_screen = TeslaScreenFeature(self)
-    from openpilot.starpilot.ui.tesla_coop_feature import TeslaCoopFeature
     self.tesla_coop = TeslaCoopFeature(self)
     from openpilot.starpilot.ui.gm_cancel_remap_feature import GmCancelRemapFeature
     self.gm_cancel_remap = GmCancelRemapFeature(self)
@@ -1057,6 +1057,11 @@ class FeatureSettingsOwner:
       title = "BluePilot Controller Options"
       rows.extend(FordBluePilotFeature(self).rows(parked, options=True))
       rows.extend(FordClusterFeature(self).rows(parked))
+    elif page == FeaturePage.TUNING:
+      title = "Manual steering tune"
+      capability = self._capability("torque")
+      rows.extend(self.torque.manual_rows(capability, parked and self.authority("torque") and
+                                         self.authority("parked_preferences") and capability is not None))
     elif page == FeaturePage.TORQUE:
       title = "Steering and Torque"
       rows.extend(FordBluePilotFeature(self).rows(parked))
@@ -1365,6 +1370,8 @@ class FeatureSettingsOwner:
                     row.key.startswith('conditional:') and not row.key.startswith(BUTTON_PREFIX) else fingerprint)
             for row in rows]
     subtitle = (
+        "Parked changes apply after the next drive starts. These are explicit manual overrides, separate from Auto Learn."
+        if page == FeaturePage.TUNING else
         "Configure features supported by this vehicle. Restart requirements are shown with each setting."
         if page == FeaturePage.VEHICLE else
         "Configure automatic Chill and Experimental switching."
@@ -1446,7 +1453,7 @@ class FeatureSettingsOwner:
       return self._apply_pedal_setup(request)
     if key in PREAP_RADAR_KEYS:
       return self.preap_radar.apply(request)
-    if key == "TeslaCooperativeSteering":
+    if key == "TeslaCoopSteering":
       return self.tesla_coop.apply(request)
     if key in TESLA_SCREEN_KEYS:
       return self.tesla_screen.apply(request)

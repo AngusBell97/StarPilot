@@ -104,15 +104,14 @@ static void tesla_rx_hook(const CANPacket_t *msg) {
     const int angle_meas_new = (((msg->data[4] & 0x3FU) << 8) | msg->data[5]) - 8192U;
     update_sample(&angle_meas, angle_meas_new);
 
+    const unsigned int raw_torsion_bar_torque = ((msg->data[2] & 0x0FU) << 8) | msg->data[3];
+    const int torsion_bar_torque = (int)raw_torsion_bar_torque - 2050;
     const int hands_on_level = msg->data[4] >> 6;  // EPAS3S_handsOnLevel
-    const int torsion_bar_torque = (((msg->data[2] & 0x0FU) << 8) | msg->data[3]) - 2050;  // 0.01 Nm
     const int eac_status = msg->data[6] >> 5;  // EPAS3S_eacStatus
     const int eac_error_code = msg->data[2] >> 4;  // EPAS3S_eacErrorCode
 
     // Disengage on normal user override, or if high angle rate fault from user overriding extremely quickly
-    steering_disengage = (hands_on_level >= 3) ||
-                         (tesla_coop_steering && (SAFETY_ABS(torsion_bar_torque) > 500)) ||
-                         ((eac_status == 0) && (eac_error_code == 9));
+    steering_disengage = (hands_on_level >= 3) || (tesla_coop_steering && (SAFETY_ABS(torsion_bar_torque) > 500)) || ((eac_status == 0) && (eac_error_code == 9));
   }
 
   // Vehicle speed (DI_speed)
@@ -343,11 +342,10 @@ static safety_config tesla_init(uint16_t param) {
     {0x27D, 0, 3, .check_relay = true, .disable_static_blocking = true},  // APS_eacMonitor
   };
 
+  tesla_coop_steering = GET_FLAG(param, 256U);
   tesla_longitudinal = false;
-  tesla_coop_steering = false;
 #ifdef ALLOW_DEBUG
   tesla_longitudinal = GET_FLAG(param, 1U);
-  tesla_coop_steering = GET_FLAG(param, 256U);
 #endif
   tesla_screen_configure(tesla_sync_param_valid(param) ? (param & ~2048U) : param);
   tesla_sync_configure(param, tesla_longitudinal);
@@ -359,7 +357,7 @@ static safety_config tesla_init(uint16_t param) {
   tesla_autopark = true;
   tesla_autopark_prev = false;
 
-  static RxCheck tesla_model3_y_rx_checks[] = {
+  static const RxCheck tesla_model3_y_rx_checks[] = {
     {.msg = {{0x2b9, 2, 8, 25U, .max_counter = 7U, .ignore_quality_flag = true}, { 0 }, { 0 }}},    // DAS_control
     {.msg = {{0x488, 2, 4, 50U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},   // DAS_steeringControl
     {.msg = {{0x257, 0, 8, 50U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},   // DI_speed (speed in kph)

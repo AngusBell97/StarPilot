@@ -122,6 +122,11 @@ def stock_lateral_off(cp, cs, native, *, allow_independent_cancel=False, allow_i
 
   from openpilot.starpilot.car.toyota.aol import qualified as toyota_qualified
 
+  from opendbc.car.gm.aol import qualified_gm
+  from opendbc.car.subaru.stock_aol import qualified as subaru_qualified
+
+  stock_gas = bool(cp.brand == 'gm' and qualified_gm(cp) and cp.pcmCruise and not cp.openpilotLongitudinalControl or
+                   cp.brand == 'subaru' and subaru_qualified(cp, marked_only=True))
   independent_angle = angle_qualified(cp, marked_only=True)
   independent_brake = independent_angle or (allow_independent_brake and (
     toyota_qualified(cp, marked_only=True) and not cs.cruiseState.enabled or
@@ -132,7 +137,7 @@ def stock_lateral_off(cp, cs, native, *, allow_independent_cancel=False, allow_i
     not cs.accFaulted and not cs.doorOpen and not cs.seatbeltUnlatched and
     (not cs.brakePressed or independent_brake and allow_independent_brake) and
     not cs.regenBraking and (not cs.gasPressed or independent_angle or
-      allow_independent_gas and (toyota_qualified(cp, marked_only=True) or
+      allow_independent_gas and (stock_gas or toyota_qualified(cp, marked_only=True) or
         cp.brand == 'hyundai' and stock_canfd_qualified(cp, marked_only=True))) and
     (not physical_cancel(cs, cp) or independent_angle and allow_independent_cancel) and
     native is not None and native.requestedLateral and native.lateralAllowed and not native.requestedLongitudinal)
@@ -389,7 +394,15 @@ class TransportPauseFeedback:
           for event in sm['onroadEvents'])):
       return None
     native = independent_lateral_health(sm, cp, cs, self.session, now_ns)
-    if (native is None or not native.pandaInventory or not native.requestedLongitudinal or native.longitudinalAllowed or
+    # Separate health may report brake withdrawal before the matching axis status.
+    # Retain only the existing LAT intent; LONG still follows its physical pedal.
+    ford_brake_health = bool(ford_withdrawal and cs.brakePressed and not cs.gasPressed and
+      native is not None and native.sourcePandaStatesMonoTime > 0 and
+      native.sourcePandaStatesMonoTime < int(sm.logMonoTime['pandaStates']) and
+      all(not slot.controlsAllowed for slot, config in zip(sm['pandaStates'], cp.safetyConfigs, strict=True)
+          if str(config.safetyModel) not in ('silent', 'noOutput')))
+    if (native is None or not native.pandaInventory or not native.requestedLongitudinal or
+        native.longitudinalAllowed and not ford_brake_health or
         native.observedMonoTime < self.lateral_native_ns or
         (native.pandaSerial, tuple(slot.hardwareSerial for slot in native.pandaInventory)) != self.lateral_inventory):
       return None
@@ -792,7 +805,7 @@ class TransportPauseFeedback:
     return native
 
   def _longitudinal_cancel_current(self, sm, cp, cs, axis, now_ns, *, latched, cancel_source_ns, withdrawal_required=True) -> SafetyState | None:
-    from opendbc.car.hyundai.ev6_aol import qualified
+    from opendbc.car.hyundai.canfd_stock_aol import qualified_long as qualified
     from openpilot.starpilot.car.hyundai.aol import qualified_ccnc_long_aol as ev9_qualified
     from opendbc.car.structs import car
 
@@ -820,7 +833,7 @@ class TransportPauseFeedback:
       return None
     native = current_native(sm, cp, now_ns=now_ns, axis_session_id=self.session)
     if (native is None or not native.pandaInventory or not native.requestedLateral or not native.lateralAllowed or
-        not native.requestedLongitudinal or withdrawal_required and native.longitudinalAllowed or
+        not native.requestedLongitudinal or
         native.observedMonoTime < self.lateral_native_ns or
         not native_inventory_matches_cp(native, cp) or
         (native.pandaSerial, tuple(p.hardwareSerial for p in native.pandaInventory)) != self.lateral_inventory):
@@ -836,6 +849,12 @@ class TransportPauseFeedback:
       not p.heartbeatLost and not blocking_fault_list(p.faults, cp) and
       (str(c.safetyModel) not in ('silent', 'noOutput') or not p.controlsAllowed)
       for p, c in zip(pandas, cp.safetyConfigs, strict=True))
+    raw_withdrawal = bool((self.longitudinal_cancel_ns or fresh_cancel) and
+      0 < native.sourcePandaStatesMonoTime < stamp and
+      all(not p.controlsAllowed for p, c in zip(pandas, cp.safetyConfigs, strict=True)
+          if str(c.safetyModel) not in ('silent', 'noOutput')))
+    if withdrawal_required and native.longitudinalAllowed and not raw_withdrawal:
+      return None
     return native if current_pandas else None
 
 
@@ -870,11 +889,17 @@ class TransportPauseFeedback:
     toyota_pedal = bool(toyota_qualified(cp, marked_only=True) and cs.brakePressed != cs.gasPressed and
       not cs.regenBraking and self.lateral_only_baseline and
       not native.requestedLongitudinal and not native.longitudinalAllowed)
+    from opendbc.car.gm.aol import qualified_gm
+    from opendbc.car.subaru.stock_aol import qualified as subaru_qualified
+    stock_gas = bool((cp.brand == 'gm' and qualified_gm(cp) and cp.pcmCruise and not cp.openpilotLongitudinalControl or
+      cp.brand == 'subaru' and subaru_qualified(cp, marked_only=True)) and
+      cs.gasPressed and not cs.brakePressed and not cs.regenBraking and self.lateral_only_baseline and
+      not native.requestedLongitudinal and not native.longitudinalAllowed)
     stock_user = stock_lateral_user_event(cp)
     stock_lateral = bool(reason == 'availabilityPause' and axis.sourceCarStateMonoTime == 0 and
       not axis.lateralActive and not axis.longitudinalActive and not axis.desiredLongitudinal and
       stock_lateral_off(cp, cs, native, allow_independent_brake=toyota_pedal,
-                        allow_independent_gas=toyota_pedal and cs.gasPressed) and previous is not None and
+                        allow_independent_gas=stock_gas or toyota_pedal and cs.gasPressed) and previous is not None and
       previous[0] == self.session and previous[7] == self.session and
       previous[14] == intent_producer_session and previous[15] == self.availability_epoch and
       (previous[11] and not previous[12] and previous[13] and not previous[10] and
@@ -1177,7 +1202,7 @@ class TransportPauseFeedback:
       return False
     native = _configured_transport_native(sm, cp, self.session, now_ns, allow_restricted_lateral=True)
     return bool(native is not None and native.pandaInventory and native.requestedLateral and
-      not native.lateralAllowed and
+      (not native.lateralAllowed or subaru_stop and not axis.desiredLateral and not axis.lateralActive) and
       (not native.requestedLongitudinal and not combined_stop or
        combined_stop and native.requestedLongitudinal and native.longitudinalAllowed) and
       native.observedMonoTime >= self.lateral_native_ns and

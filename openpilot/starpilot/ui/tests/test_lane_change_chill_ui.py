@@ -4,7 +4,7 @@ from dataclasses import replace
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch
 
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 
 from openpilot.starpilot.conditional_mode.policy import ModeChoice, Reason
 from openpilot.starpilot.ui.onroad import axis_status_color, driving_mode_description

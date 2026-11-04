@@ -1,6 +1,6 @@
 """SP-011 MAX/SET warning, separate from the sign's confirmation pulses."""
 import time
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 from openpilot.starpilot.common.slc_warning import MaxSpeedWarning
 
 class WarningVisual:

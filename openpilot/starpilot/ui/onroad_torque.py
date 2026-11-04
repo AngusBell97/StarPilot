@@ -3,7 +3,7 @@
 import math
 from functools import lru_cache
 import numpy as np
-import pyray as rl
+from openpilot.starpilot.ui.raylib import rl
 
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.starpilot.lateral.lane_feedback import BLUE, DIRECTION_EPSILON, MAX_CORRECTION, STOCK_CORRECTION

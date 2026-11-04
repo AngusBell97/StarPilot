@@ -1,6 +1,7 @@
 from dataclasses import replace
 from unittest.mock import Mock, patch
 
+from openpilot.starpilot.ui.raylib import rl
 import pytest
 
 from openpilot.starpilot.ui.onroad_state import speed_limit_bounds

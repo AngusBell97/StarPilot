@@ -9,8 +9,8 @@ inline bool tesla_preap_aol_param(uint16_t param) {
 inline constexpr AolSafetyProfile TESLA_PREAP_AOL_PROFILE{39U, tesla_preap_aol_param, true};
 
 inline bool tesla_screen_aol_param(uint16_t param) {
-  return param == 512U || param == 513U || param == 1536U || param == 1537U ||
-         param == 768U || param == 769U || param == 1792U || param == 1793U;
+  param &= ~256U;
+  return param == 512U || param == 513U || param == 1536U || param == 1537U;
 }
 
 inline constexpr AolSafetyProfile TESLA_SCREEN_AOL_PROFILE{10U, tesla_screen_aol_param, true};

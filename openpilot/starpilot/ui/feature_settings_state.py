@@ -57,6 +57,7 @@ class FeaturePage(StrEnum):
   TRAFFIC = "traffic"
   CURVE = "curve"
   TORQUE = "torque"
+  TUNING = "tuning"
   BLUEPILOT = "torque/bluepilot"
   AOL = "aol"
   WHEEL = "wheel"
@@ -65,7 +66,8 @@ class FeaturePage(StrEnum):
   CONDITIONAL_CCM = "conditional/ccm"
 
 
-TORQUE_CONFIRM_ACTIONS = frozenset(("torque_adopt", "torque_reset", "torque_reset_profile", "torque_rebase", "torque_prepare_firestar", "torque_gain_rebase"))
+TORQUE_CONFIRM_ACTIONS = frozenset(("torque_adopt", "torque_reset", "torque_reset_profile", "torque_rebase",
+                                  "torque_prepare_firestar", "torque_gain_rebase", "torque:surface:reset"))
 SLC_CONFIRM_ACTIONS = frozenset(("slc_reset",))
 SLC_OFFSET_KEYS = tuple(f"slc:offset:{index}" for index in range(1, 8))
 LANE_CHANGE_CONFIRM_ACTIONS = frozenset(("lane_change:reset",))
@@ -74,6 +76,14 @@ CONDITIONAL_CONFIRM_ACTIONS = frozenset(("conditional:reset", "conditional:manua
 PORT_CONFIRM_ACTIONS = frozenset('map_memory:forget:'+str(i) for i in range(64))
 FEATURE_CONFIRM_ACTIONS = (PORT_CONFIRM_ACTIONS | TORQUE_CONFIRM_ACTIONS | SLC_CONFIRM_ACTIONS | LANE_CHANGE_CONFIRM_ACTIONS |
                            CURVE_CONFIRM_ACTIONS | CONDITIONAL_CONFIRM_ACTIONS | {"reset_profiles", "pip:reset", "sentry:reset"})
+
+
+HEADING_PREFIX = "heading:"
+
+
+def is_heading(key: str) -> bool:
+  """A section title inside a page: shown like a row but never a control, and never a change request."""
+  return key.startswith(HEADING_PREFIX)
 
 
 @dataclass(frozen=True)

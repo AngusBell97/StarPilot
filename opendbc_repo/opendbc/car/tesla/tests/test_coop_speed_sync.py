@@ -5,7 +5,7 @@ from opendbc.car.structs import car
 from opendbc.car.tesla.interface import CarInterface
 from opendbc.car.tesla.carcontroller import CarController
 from opendbc.car.tesla.carstate import CarState
-from opendbc.car.tesla.coop_preferences import apply_cooperative, supported
+from openpilot.starpilot.car.tesla.coop_preferences import prepare as apply_cooperative, supported
 from opendbc.car.tesla.screen_button import apply_screen_button, screen_qualified, screen_tap_supported
 from opendbc.car.tesla.values import CAR, CANBUS, DBC, TeslaFlags
 
@@ -142,9 +142,9 @@ def test_real_controller_and_carstate_cooperate_after_sync_startup():
   for tick in range(10):
     cs.out.steeringTorque, cs.out.steeringDisengage = 1., False
     controller.update(cc.as_reader(), cs, 1_000_000_000 + tick * 10_000_000)
-  assert controller.get_steering_limit_info()['valid']
+  assert controller.steering_limit_info.get('valid', False)
   cs.out.steeringTorque, cs.out.steeringDisengage = 5.1, True
   controller.update(cc.as_reader(), cs, 1_100_000_000)
-  assert not controller.get_steering_limit_info()['valid']
+  assert not controller.steering_limit_info.get('valid', False)
   assert cp.safetyConfigs[0].safetyParam == 2305
 

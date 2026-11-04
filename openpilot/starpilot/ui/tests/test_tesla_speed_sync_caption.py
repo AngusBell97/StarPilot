@@ -131,7 +131,7 @@ def test_actual_snapshot_never_promotes_mismatch_to_an_alert():
 
 @pytest.mark.parametrize('profile', ['large', 'compact'])
 def test_caption_follows_max_visibility_and_alert_priority(profile, monkeypatch):
-  import pyray as rl
+  from openpilot.starpilot.ui.raylib import rl
   from openpilot.starpilot.ui.tests.test_unified_speed_native import fonts, state, foreground_calls
   from openpilot.starpilot.ui.onroad_compact_widgets import CompactHudRenderer
   from openpilot.starpilot.ui.onroad_large_widgets import UnifiedSpeedWidget
