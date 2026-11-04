@@ -18,41 +18,6 @@ from openpilot.starpilot.lateral.lane_led_settings import LaneLedSettings, RANGE
 
 V8_VERSION = 8
 V8_LABEL = "v8"
-OBSTACLE_MAX_AGE_NS = 350_000_000             # a detection older than this (10 Hz, read ~0.1 s after its frame) is no detector
-
-
-class ObstacleFeed:
-  """Latest laneObstacleWire from modeld (change 37). Never raises: any problem reads as 'no detector'."""
-
-  def __init__(self, sock=None):
-    self.sock = sock
-    self._tried = sock is not None
-    self.last = None
-    self.last_ns = 0
-
-  def poll(self, now_ns: int):
-    try:
-      if self.sock is None and not self._tried:
-        self._tried = True
-        import openpilot.cereal.messaging as messaging
-        from openpilot.starpilot.lateral.lane_obstacle_wire import SERVICE
-        self.sock = messaging.sub_sock(SERVICE, conflate=True)
-      if self.sock is not None:
-        import openpilot.cereal.messaging as messaging
-        from openpilot.starpilot.lateral.lane_obstacle_wire import decode
-        msg = messaging.recv_one_or_none(self.sock)
-        if msg is not None and msg.valid:
-          wire = decode(bytes(msg.laneObstacleWire))
-          if wire is not None:
-            self.last, self.last_ns = wire, now_ns
-    except Exception:
-      self.sock, self.last = None, None
-    w = self.last
-    # Age from when the detected frame was processed (carried in the result), not from when the result arrived.
-    ok = w is not None and w.healthy and 0 <= now_ns - w.detect_mono_ns <= OBSTACLE_MAX_AGE_NS
-    if not ok:
-      return False, False, math.inf, 0.0
-    return True, bool(w.blocked), float(w.distance), float(w.length)
 PREFIX = "LaneCenteringV8"
 LEVER_STATE_KEY = PREFIX + "LeverState"      # the lever learner's regression state (JSON), carried across drives
 _STORE_INTERVAL_S = 60.0
@@ -122,7 +87,6 @@ class V8Controller:
     self._last_store_t = math.nan
     self._stored_frames = 0
     self._was_active = False
-    self.obstacles = ObstacleFeed()
 
   def reset(self):
     self.controller.reset()      # the lever learner survives: it describes the car, not the engagement
@@ -197,8 +161,6 @@ class V8Controller:
     except (AttributeError, TypeError, ValueError):
       lane_change = False
     pause = bool(getattr(observation.settings, "pause_on_signal", True))
-    import time
-    ob_ok, ob_blocked, ob_dist, ob_len = self.obstacles.poll(time.monotonic_ns())
     obs = LaneLedObservation(
       t=motion.timestamp_ns / 1e9, speed=float(observation.speed_mps),
       measured_curvature=float(motion.measured_curvature if measured_curvature is None else measured_curvature),
@@ -207,8 +169,7 @@ class V8Controller:
       model_path_x=path_x, model_path_y=path_y, model_path_ystd=path_std,
       lateral_active=bool(observation.lateral_active) and observation.mode.lateral_authority,
       lane_change=lane_change or (pause and bool(observation.turn_signal_active)),
-      driver_override=bool(observation.driver_override), inputs_stale=not bool(observation.model_valid),
-      obstacle_ok=ob_ok, obstacle_blocked=ob_blocked, obstacle_distance=ob_dist, obstacle_length=ob_len)
+      driver_override=bool(observation.driver_override), inputs_stale=not bool(observation.model_valid))
     r = self.controller.update(obs)
     # Persist the lever learner's state once a minute while it gathers frames, and when lateral control ends.
     self._store_state(obs.t, force=self._was_active and not obs.lateral_active)
@@ -228,8 +189,6 @@ class V8Controller:
       "lim_a": bool(fl.get("accel_limited", False)), "lim_j": bool(fl.get("jerk_limited", False)), "lim_t": bool(fl.get("total_limited", False)),
       "lever": rd(r.diagnostics.get("lever"), 3), "lever_n": int(r.diagnostics.get("lever_n", 0) or 0),
       "guard_l": rd(r.diagnostics.get("guard_l"), 2), "guard_r": rd(r.diagnostics.get("guard_r"), 2), "guard": bool(r.diagnostics.get("guard_active", False)),
-      "ob_ok": ob_ok, "ob_blk": ob_blocked, "ob_d": rd(ob_dist if math.isfinite(ob_dist) else -1.0, 1),
-      "ob_hold": bool(r.diagnostics.get("obstacle_hold", False)), "ob_left": rd(r.diagnostics.get("obstacle_left_m", 0.0), 1),
     }
     theta = r.diagnostics.get("lever_theta")
     if theta is not None:

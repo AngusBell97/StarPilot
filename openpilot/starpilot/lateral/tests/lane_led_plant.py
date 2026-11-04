@@ -115,6 +115,7 @@ class Scenario:
   stds: tuple = (0.05, 0.05)
   noise: float = 0.0                  # m, per-frame lateral noise on each line
   dropouts: tuple = ()                # (t0, t1) windows with no boundaries at all
+  left_dropouts: tuple = ()           # (t0, t1) windows where only the left line is missing (the right line and both edges stay)
   stale: tuple = ()                   # (t0, t1) windows with no new model frame
   lane_changes: tuple = ()            # (t0, t1) windows with lane_change=True
   one_line_from: float | None = None  # after this time only the left line (and edges) are reported
@@ -141,7 +142,8 @@ def model_frame(road, car, t, sc: Scenario, rng, geom):
   if not any(a <= t < b for a, b in sc.dropouts):
     left_gone = (sc.switch_left_to_edge_at is not None and t >= sc.switch_left_to_edge_at and
                  (sc.switch_left_to_edge_until is None or t < sc.switch_left_to_edge_until))
-    if not left_gone:
+    left_dropped = any(a <= t < b for a, b in sc.left_dropouts)
+    if not left_gone and not left_dropped:
       boundaries.append(Boundary(0, "line", x, geom["left"] + noise_l, sc.stds[0], sc.probs[0]))
     if not (sc.one_line_from is not None and t >= sc.one_line_from):
       boundaries.append(Boundary(1, "line", x, geom["right"] + noise_r, sc.stds[1], sc.probs[1]))

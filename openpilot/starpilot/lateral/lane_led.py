@@ -49,12 +49,6 @@ _LINE_BRIDGE_S = 2.0                                       # s a two-line track 
 _RECOVERY_FLOOR = 2.8                                      # s: the Recovery slider is floored here (change 33): 1.5 rang at 2 Hz on the road (3 Nov), 2.0-2.5 ring in replay, 2.8 is road-proven
 _CURV_AGREE_FRAMES = 0                                     # probe: frames of same-sign curvature innovation before _CURV_INNOVATION applies (0: never)
 _HEADING_SCHEDULE = (99.0, 99.0, 1.0)                      # probe: (v_full, v_min, share_at_v_min): heading innovation share falls linearly from 1 at v_full to share at v_min
-# Change 37, Chestnut obstacle detector: an object inside the ego lane hands the car fully to the model until it is passed;
-# while the detector is healthy the model no longer needs the divergence escape to steer round things, so lanes lead harder.
-_OBSTACLE_PASS_M = 4.0                                     # m past the obstacle's far end (camera to rear bumper about 3.5 m)
-_OBSTACLE_MIN_HOLD_S = 0.5                                 # s held after the last in-lane detection whatever the distance
-_OBSTACLE_RETURN_S = 2.0                                   # s for the hand-back to the lines after an obstacle (fade_in is 0.75)
-_DETECTOR_DIVERGENCE_M = 1.2                               # m: divergence escape threshold while the detector is healthy (gross line errors only)
 
 
 # ----------------------------------------------------------------------------- inputs and outputs
@@ -89,10 +83,6 @@ class LaneLedObservation:
   driver_override: bool = False
   inputs_stale: bool = False
   limited_by_safety: bool = False
-  obstacle_ok: bool = False           # the Chestnut obstacle detector is running and fresh (change 37)
-  obstacle_blocked: bool = False      # an object sits inside the ego lane within its look-ahead
-  obstacle_distance: float = math.inf # m ahead of the camera to its nearest in-lane point
-  obstacle_length: float = 0.0        # m, assumed length of that object (by class)
 
 
 @dataclass
@@ -761,7 +751,7 @@ class Arbiter:
     self.low_trust_s = 0.0
 
   def update(self, kappa_lane: float, kappa_model: float, trust: float, veto: bool, speed: float,
-             dt: float, s: LaneLedSettings, ff_step: float = 0.0, fade_in: float | None = None) -> tuple[float, float, bool]:
+             dt: float, s: LaneLedSettings, ff_step: float = 0.0) -> tuple[float, float, bool]:
     target = 0.0 if veto else float(np.clip(trust / max(s.trust_full, 1e-3), 0.0, 1.0))
     if trust < 0.2:
       self.low_trust_s += dt
@@ -769,7 +759,7 @@ class Arbiter:
         target = 0.0
     else:
       self.low_trust_s = 0.0
-    up, down = dt / max(s.fade_in if fade_in is None else max(fade_in, s.fade_in), 1e-3), dt / max(s.fade_out, 1e-3)
+    up, down = dt / max(s.fade_in, 1e-3), dt / max(s.fade_out, 1e-3)
     self.weight = float(np.clip(target, self.weight - down, self.weight + up))
     candidate = self.weight * kappa_lane + (1.0 - self.weight) * kappa_model
     # Final guarantee: the published request changes by at most the comfort jerk budget plus whatever the road
@@ -792,45 +782,6 @@ class Arbiter:
     self.weight = 0.0
 
 
-# ----------------------------------------------------------------------------- F. obstacle hold (change 37)
-
-class ObstacleHold:
-  """Hand the car to the model while an object is in the lane and until the car has driven past it.
-
-  Each in-lane detection arms a hold to the odometer reading at which the object's far end plus _OBSTACLE_PASS_M is
-  behind the camera; the narrow camera loses an object some metres before the car reaches it, so the distance, not
-  the detection, decides when the lines may lead again. A detector that stops while a hold runs does not cut it short."""
-
-  def __init__(self):
-    self.reset()
-
-  def reset(self):
-    self.odo = 0.0
-    self.until = -math.inf
-    self.last_t = -math.inf
-    self.active = False
-    self.return_s = 0.0          # time left of the slow hand-back after a hold ends
-
-  def update(self, t: float, speed: float, dt: float, blocked: bool, distance: float, length: float) -> bool:
-    self.odo += max(speed, 0.0) * dt
-    if blocked and math.isfinite(distance):
-      self.until = max(self.until, self.odo + max(distance, 0.0) + max(length, 0.0) + _OBSTACLE_PASS_M)
-      self.last_t = t
-    was = self.active
-    self.active = blocked or self.odo < self.until or t - self.last_t < _OBSTACLE_MIN_HOLD_S
-    if was and not self.active:
-      self.return_s = _OBSTACLE_RETURN_S
-    elif self.active:
-      self.return_s = 0.0
-    else:
-      self.return_s = max(0.0, self.return_s - dt)
-    return self.active
-
-  @property
-  def remaining(self) -> float:
-    return max(0.0, self.until - self.odo) if math.isfinite(self.until) else 0.0
-
-
 # ----------------------------------------------------------------------------- version 8 controller
 
 class LaneLedController:
@@ -845,7 +796,6 @@ class LaneLedController:
     self.controller = LaneController()
     self.arbiter = Arbiter()
     self.lever_learner = LeverLearner()
-    self.obstacle = ObstacleHold()
     self._lever = math.nan          # the lever in use, rate-limited so the toggle or a learned change never steps
     self._led_s = 0.0               # time lane-led without a veto (the learner waits for the loop to settle)
     self._ey_hist = deque()         # (t, e_y) over the last second or so: the learner needs the car's drift rate across the lane
@@ -867,7 +817,7 @@ class LaneLedController:
     """Full reset: only for disengagement or a version switch, never for a data gap."""
     keep_bias = self.slew.effective.bias_persist
     self.gate.reset(); self.tracker.reset(); self.delay_state.reset()
-    self.controller.reset(keep_bias=keep_bias); self.arbiter.reset(); self.obstacle.reset()
+    self.controller.reset(keep_bias=keep_bias); self.arbiter.reset()
     self._last_t = math.nan; self._last_sample = None; self._last_frame_t = math.nan; self._gap_s = 0.0
     self._trust_f = 0.0; self._kappa_meas_f = math.nan; self._led_s = 0.0; self._ey_hist.clear()
     self._guard_l = math.nan; self._guard_r = math.nan
@@ -892,8 +842,6 @@ class LaneLedController:
       return "driver_override"
     if obs.speed < s.min_speed:
       return "below_min_speed"
-    if self.obstacle.active:
-      return "obstacle"
     if obs.model_path_x is not None and obs.model_path_y is not None and self.tracker.mode != "none":
       x1 = obs.speed * 1.0
       try:
@@ -902,10 +850,6 @@ class LaneLedController:
       except (TypeError, ValueError):
         return ""
       threshold = s.model_divergence_m if obs.speed >= 8.0 else min(s.model_divergence_m, 0.4)
-      # Change 37: with the detector watching the lane, the model no longer needs this escape to steer round a parked
-      # car or a cone (the obstacle hold does that, fully); only a gross disagreement, a wrong line, still vetoes.
-      if obs.obstacle_ok:
-        threshold = max(threshold, _DETECTOR_DIVERGENCE_M)
       dev = my - self.tracker.centre_at(x1)
       # With one line the tracked curve is the guard boundary, not a centre, and the lateral target follows the model's
       # path anyway (change 25), so the model's distance from it says nothing: on the fourth drive every lane wider than
@@ -923,7 +867,7 @@ class LaneLedController:
         away, toward = max(0.0, sign * (dev - dev0)), max(0.0, -sign * dev)
       else:
         away, toward = abs(dev), 0.0
-      if (away > threshold or (toward > _GUARD_YIELD and not obs.obstacle_ok)) and ystd < 0.3:
+      if (away > threshold or toward > _GUARD_YIELD) and ystd < 0.3:
         return "model_divergence"
     return ""
 
@@ -960,7 +904,6 @@ class LaneLedController:
     lever_step = _LEVER_RATE * dt
     self._lever = float(np.clip(lever_target, self._lever - lever_step, self._lever + lever_step))
     lever = self._lever
-    self.obstacle.update(obs.t, speed, dt, bool(obs.obstacle_blocked), float(obs.obstacle_distance), float(obs.obstacle_length))
     self.tracker.set_horizon(speed)
     self.tracker.predict(speed * dt, yaw_rate * dt, lever)
     self.tracker.apply_pending(dt)
@@ -1087,8 +1030,7 @@ class LaneLedController:
     kappa_lane = self.controller.update(e_y_hat, e_psi_hat, kappa_ff, speed, dt, s, learn_bias=learn_bias, driving=driving,
                                         kappa_meas=kappa_meas)
     candidate, weight, jerk_limited = self.arbiter.update(kappa_lane, kappa_model, trust, veto, speed, dt, s,
-                                                          ff_step=self.controller.ff_step,
-                                                          fade_in=_OBSTACLE_RETURN_S if self.obstacle.return_s > 0.0 else None)
+                                                          ff_step=self.controller.ff_step)
     self.delay_state.record(obs.t, obs.published_curvature if math.isfinite(obs.published_curvature) else candidate)
 
     state = "lane_led" if weight > 0.8 else "model_led" if weight < 0.2 else "blended"
@@ -1114,8 +1056,6 @@ class LaneLedController:
                           "boundary_confidence": self.tracker.boundary_confidence,
                           "omega": LaneController.omega(s), "bandwidth_scale": self.controller.sigma, "ff_step": self.controller.ff_step,
                           "lever": lever, "lever_theta": self.lever_learner.theta(s.axle_to_camera_m) if s.lever_learn else None,
-                          "obstacle_ok": bool(obs.obstacle_ok), "obstacle_hold": self.obstacle.active,
-                          "obstacle_left_m": self.obstacle.remaining,
                           "lever_n": self.lever_learner.n,
                           "flags": dict(self.controller.flags)})
 

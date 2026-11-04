@@ -11,6 +11,7 @@ from openpilot.starpilot.lateral.lane_v6 import LaneCenteringV6Controller
 
 from openpilot.starpilot.lateral.stock_dom_adapter import STOCK_DEFAULTS, StockController, settings as stock_settings
 from openpilot.starpilot.lateral.lane_v8_adapter import V8_DEFAULTS, V8Controller, settings as v8_settings
+from openpilot.starpilot.lateral.lane_v10_adapter import V10_DEFAULTS, V10Controller, settings as v10_settings
 
 from openpilot.starpilot.lateral.lane_v9_adapter import V9_DEFAULTS, V9Controller, settings as v9_settings
 
@@ -46,6 +47,7 @@ DEFAULTS["LaneCenteringV51MaxCorrection"] = .0024  # Start at the existing 200% 
 DEFAULTS.update({"LaneCenteringV51RecoveryTime": 3., "LaneCenteringV51RecoveryMin": 2.})
 DEFAULTS.update(STOCK_DEFAULTS)
 DEFAULTS.update(V8_DEFAULTS)
+DEFAULTS.update(V10_DEFAULTS)
 DEFAULTS.update(V9_DEFAULTS)
 
 def version_keys(version):
@@ -86,6 +88,9 @@ def read_selected(params):
     if source == b"8":
       settings = v8_settings(params)
       return (8, settings) if raw(params, VERSION) == source else (0, LaneCenteringSettings())
+    if source == b"10":
+      settings = v10_settings(params)
+      return (10, settings) if raw(params, VERSION) == source else (0, LaneCenteringSettings())
     if source not in (b"5", b"6", b"51"):
       return 0, LaneCenteringSettings()
     version = int(source)
@@ -174,6 +179,7 @@ class LaneCenteringVersions:
     self.v6 = LaneCenteringV6Controller()
     self.stock = StockController()
     self.v8 = V8Controller()
+    self.v10 = V10Controller()
     self.v9 = V9Controller()
     self.version = 4
     self.active = self.v4
@@ -182,24 +188,26 @@ class LaneCenteringVersions:
     return getattr(self.active, name)
 
   def reset(self):
-    self.v4.reset(); self.v5.reset(); self.v51.reset(); self.v6.reset(); self.stock.reset(); self.v8.reset(); self.v9.reset()
+    self.v4.reset(); self.v5.reset(); self.v51.reset(); self.v6.reset(); self.stock.reset(); self.v8.reset(); self.v9.reset(); self.v10.reset()
 
   def update(self, observation, *, version=4, motion=None, measured_curvature=None, lateral_delay_s=None):
-    if version not in (4, 5, 6, 7, 8, 51, 90):
+    if version not in (4, 5, 6, 7, 8, 10, 51, 90):
       self.reset()
       return self.active._result(observation.base_curvature, "invalid_version")
     switched = version != self.version
     if switched:
-      inherited = 0. if version in (7, 8, 90) or self.version in (7, 8, 90) else self.active._correction
-      self.v4.reset(); self.v5.reset(); self.v51.reset(); self.v6.reset(); self.stock.reset(); self.v8.reset(); self.v9.reset()
+      inherited = 0. if version in (7, 8, 10, 90) or self.version in (7, 8, 10, 90) else self.active._correction
+      self.v4.reset(); self.v5.reset(); self.v51.reset(); self.v6.reset(); self.stock.reset(); self.v8.reset(); self.v9.reset(); self.v10.reset()
       self.version = version
-      self.active = {4: self.v4, 5: self.v5, 51: self.v51, 6: self.v6, 7: self.stock, 8: self.v8, 90: self.v9}[version]
+      self.active = {4: self.v4, 5: self.v5, 51: self.v51, 6: self.v6, 7: self.stock, 8: self.v8, 10: self.v10, 90: self.v9}[version]
       # Carry the current scalar only. Targets, adaptation and histories are new.
       self.active._correction = inherited
     if version in (7, 90):
       result = self.active.update(observation, measured_curvature=measured_curvature, lateral_delay_s=lateral_delay_s)
     elif version == 8:
       result = self.v8.update(observation, motion=motion, measured_curvature=measured_curvature)
+    elif version == 10:
+      result = self.v10.update(observation, motion=motion, measured_curvature=measured_curvature)
     elif version == 4:
       result = self.v4.update(observation)
     else:

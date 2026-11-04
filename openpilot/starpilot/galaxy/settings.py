@@ -17,7 +17,7 @@ from typing import Protocol, cast
 
 from openpilot.starpilot.ui.feature_settings_owner import FeatureSettingsOwner
 from openpilot.starpilot.ui.slc_menu import SLC_PAGES
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu, lane_v10_menu
 from openpilot.starpilot.galaxy.setting_descriptions import description
 from openpilot.starpilot.galaxy.localization_settings import LocalizationSettingsOwner
 from openpilot.starpilot.ui.controller_feature import SETUP_ACTION, SETUP_QUESTION
@@ -841,6 +841,10 @@ class SettingsGateway:
     native_request = self._native_request(view.page, ctx, request)
     if native_request.key in lane_v8_menu.KEYS:
       error = lane_v8_menu.error(self._owner(ctx), native_request)
+      if error:
+        raise SettingsChanged(error)
+    if native_request.key in lane_v10_menu.KEYS:
+      error = lane_v10_menu.error(self._owner(ctx), native_request)
       if error:
         raise SettingsChanged(error)
     if native_request.key in lane_v9_menu.KEYS:

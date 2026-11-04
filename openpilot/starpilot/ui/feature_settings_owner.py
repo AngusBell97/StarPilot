@@ -44,7 +44,7 @@ from openpilot.starpilot.ui.torque_feature import TorqueFeature
 from openpilot.starpilot.ui.controller_feature import ControllerFeature, SETUP_ACTION
 from openpilot.starpilot.ui.slc_offset_feature import SlcOffsetOwner
 from openpilot.starpilot.ui.slc_menu import SLC_PAGES, menu_rows
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_stock_menu, lane_v8_menu, lane_v9_menu
+from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_stock_menu, lane_v8_menu, lane_v9_menu, lane_v10_menu
 from openpilot.starpilot.lateral.lane_tuning import NUMBERS as LANE_NUMBERS, BOOLS as LANE_BOOLS, PREFIX as LANE_PREFIX, KEYS as LANE_V4_KEYS, DEFAULTS as LANE_DEFAULTS
 from openpilot.starpilot.longitudinal.profile_preferences import read_document_value, read_profile_health
 from openpilot.starpilot.longitudinal.profile_document import default_slc_limits, SLC_LIMIT_DEFAULTS, SLC_LIMIT_BOUNDS
@@ -1396,6 +1396,8 @@ class FeatureSettingsOwner:
     key = request.key
     if key in lane_v8_menu.KEYS:
       return lane_v8_menu.apply(self, request)
+    if key in lane_v10_menu.KEYS:
+      return lane_v10_menu.apply(self, request)
     if key in lane_v9_menu.KEYS:
       return lane_v9_menu.apply(self, request)
     if key in lane_stock_menu.KEYS:

@@ -166,10 +166,11 @@ def test_gate_hysteresis_ignores_flicker():
 
 
 def test_source_switch_to_edge_has_no_step():
+  from openpilot.starpilot.lateral import lane_led as ll
   sc = Scenario(R300, speed=18.0, switch_left_to_edge_at=6.0, duration=12.0)
   res = run(LaneLedController(), sc)
   assert max_step_ratio(res) <= 1.0 + 1e-6
-  after = res["t"] > 6.5
+  after = res["t"] > 6.5 + ll._LINE_BRIDGE_S   # the bridge (change 32) carries the two-line centre for _LINE_BRIDGE_S first
   assert (res["state"][after] == "lane_led").all()
   assert (res["mode"][after] == "one_right").all(), "the edge never defines the centre; the right line's guard curve carries the heading"
   assert np.abs(res["e_y_true"][after]).max() < 0.10, "losing the left line must not move the car: the model's path is the lateral reference"
@@ -178,9 +179,10 @@ def test_source_switch_to_edge_has_no_step():
 def test_one_line_follows_the_model_laterally_and_the_line_in_heading():
   """Change 25: with one line there is no remembered width. The lateral target is the model's path relative to the
   line's guard curve; the model aims 0.3 m toward +y here and the car goes there, lane-led, without a step."""
+  from openpilot.starpilot.lateral import lane_led as ll
   sc = Scenario(STRAIGHT, speed=18.0, one_line_from=5.0, model_offset=0.3, duration=16.0)
   res = run(LaneLedController(), sc)
-  at7 = (res["t"] > 6.5) & (res["t"] < 8.0)
+  at7 = (res["t"] > 5.5 + ll._LINE_BRIDGE_S) & (res["t"] < 8.0 + ll._LINE_BRIDGE_S)   # after the bridge (change 32) has run out
   assert (res["mode"][at7] == "one_left").all() and (res["state"][at7] == "lane_led").all()
   late = res["t"] > 13.0
   assert (res["state"][late] == "lane_led").all()
@@ -413,6 +415,59 @@ def test_hold_through_short_gap_keeps_driving():
   assert res["weight"][during].min() > 0.8, "a gap shorter than the hold keeps the lane controller driving"
   assert np.abs(res["e_y_true"][res["t"] > 9.5]).max() < 0.10
   assert "holding_through_gap" in set(res["reason"][during])
+
+
+def test_lever_state_survives_a_long_day():
+  """3 Nov: n counts frames that straights never decay, so a day of driving took it past MEMORY and load() threw the state away."""
+  L = LeverLearner()
+  for _ in range(3000):
+    L.observe(0.01, 1.0 / 300.0, 18.0)
+  st = L.state(); st["n"] = 2.0 * LeverLearner.MEMORY
+  M = LeverLearner()
+  assert M.load(st), "a frame count past MEMORY is normal after a long day and must load"
+  assert abs(M.theta(1.5)[1] - L.theta(1.5)[1]) < 1e-9
+  bad = dict(st); bad["A"] = [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]]
+  assert not LeverLearner().load(bad)
+
+
+def test_recovery_slider_is_floored():
+  """Change 33: recovery below _RECOVERY_FLOOR rang at 2 Hz on the road (3 Nov, 1.5 s) and in replay (2.0 to 2.5 s)."""
+  from openpilot.starpilot.lateral import lane_led as ll
+  assert LaneController.omega(settings(recovery_time=1.5)) == LaneController.omega(settings(recovery_time=ll._RECOVERY_FLOOR))
+  assert LaneController.omega(settings(recovery_time=3.2)) < LaneController.omega(settings(recovery_time=ll._RECOVERY_FLOOR))
+
+
+def test_short_line_dropout_is_bridged():
+  """Change 32: one of two lines gone for under the bridge time leaves the tracked centre, the trust and the weight alone."""
+  from openpilot.starpilot.lateral import lane_led as ll
+  sc = Scenario(R300, speed=18.0, left_dropouts=((8.0, 8.9),), model_lean=0.0008, duration=14.0)
+  res = run(LaneLedController(), sc, record_diag=True)
+  during = (res["t"] >= 8.0) & (res["t"] < 9.5)
+  assert set(res["mode"][during]) == {"two"}, "the two-line centre is kept from the remaining line and the last width"
+  assert res["weight"][during].min() > 0.95 and res["trust"][during].min() > 0.9
+  assert np.abs(res["e_y_true"][res["t"] > 8.0]).max() < 0.08
+  assert max_step_ratio(res) <= 1.0 + 1e-6
+  saved = ll._LINE_BRIDGE_S
+  try:
+    ll._LINE_BRIDGE_S = 0.0
+    off = run(LaneLedController(), sc)
+  finally:
+    ll._LINE_BRIDGE_S = saved
+  # (the plant's lines are clean and its clearance 0.6 m, so the one-line jump there is 0.2 m and the trust barely moves;
+  # on the car with clearance 0.2 the jump is 0.6 m and the trust fell to 0.1, see DRIVE-20261102d.md)
+  assert "one_right" in set(off["mode"][during]), "without the bridge the same dropout falls to one-line mode"
+
+
+def test_long_line_dropout_falls_to_one_line_after_the_bridge():
+  from openpilot.starpilot.lateral import lane_led as ll
+  sc = Scenario(R300, speed=18.0, left_dropouts=((8.0, 12.0),), duration=16.0)
+  res = run(LaneLedController(), sc)
+  bridged = (res["t"] >= 8.0) & (res["t"] < 8.0 + ll._LINE_BRIDGE_S - 0.1)
+  after = (res["t"] >= 8.0 + ll._LINE_BRIDGE_S + 0.3) & (res["t"] < 12.0)
+  assert set(res["mode"][bridged]) == {"two"}
+  assert "one_right" in set(res["mode"][after]), "past the bridge the one-line rules take over"
+  assert (res["mode"][res["t"] > 13.0] == "two").all()
+  assert max_step_ratio(res) <= 1.0 + 1e-6
 
 
 def test_long_gap_fades_to_model_and_back():
