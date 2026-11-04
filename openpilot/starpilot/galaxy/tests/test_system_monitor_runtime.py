@@ -329,6 +329,26 @@ class HardwareReadingsTest(unittest.TestCase):
     self.peaks_path.write_text('{not json')
     self.assertIsNone(HardwareFeed(self.peaks_path, messages=self.chestnut_messages).peaks('chestnut')['hotspotC'])
 
+  def test_messages_stamped_during_update_are_fresh(self):
+    # SubMaster.update stamps each message with the time it ran, so the feed must read its clock after it
+    test = self
+
+    class LiveMessages(SimpleNamespace):
+      def update(self, timeout):
+        test.now += 0.01
+        self.recv_time = {'chestnutState': test.now, 'managerState': test.now}
+
+      def __getitem__(self, key):
+        return test.chestnut if key == 'chestnutState' else SimpleNamespace(processes=test.managed)
+
+    messages = LiveMessages(seen={'chestnutState': True, 'managerState': True}, valid={'chestnutState': True, 'managerState': True},
+                            recv_time={})
+    feed = HardwareFeed(self.peaks_path, messages=messages, jetlink_telemetry=None, clock=lambda: self.now, wall_clock=lambda: self.wall)
+    feed.poll()
+    self.assertIsNotNone(feed.chestnut())
+    self.assertEqual(len(feed.manager()), 3)
+    self.assertEqual(feed.peaks('chestnut')['hotspotC']['value'], 78.0)
+
   def test_jetlink_peaks_and_save_throttle(self):
     telemetry = {'temp_c': 70.0}
     feed = HardwareFeed(self.peaks_path, messages=self.chestnut_messages, jetlink_telemetry=lambda: telemetry,

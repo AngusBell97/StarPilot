@@ -82,9 +82,10 @@ class HardwareFeed:
   # ---- one tick --------------------------------------------------------------
 
   def poll(self):
-    now = self.clock()
     sm = self.messages
     sm.update(0)
+    # after update: it stamps what it receives with the time it ran, which must not count as the future
+    now = self.clock()
     chestnut = manager = None
     if sm.seen['chestnutState'] and sm.valid['chestnutState'] and 0 <= now - sm.recv_time['chestnutState'] < FRESH_S:
       state = sm['chestnutState']
