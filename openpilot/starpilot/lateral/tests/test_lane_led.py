@@ -417,6 +417,57 @@ def test_hold_through_short_gap_keeps_driving():
   assert "holding_through_gap" in set(res["reason"][during])
 
 
+def test_weak_line_beside_a_strong_one_is_dropped():
+  """Change 38: a kerb line at 0.2 beside a centre line at 0.95 stops being used after switch_hold, even above drop_confidence."""
+  g = BoundaryGate(); s = settings()
+  good = lines(prob=0.95)
+  for _ in range(10):
+    g.update(good, 0.05, s)
+  assert g.selected()[0] is not None and g.selected()[1] is not None
+  weak_left = (Boundary(0, "line", good[0].x, good[0].y, 0.05, 0.2), good[1])
+  for _ in range(3):
+    g.update(weak_left, 0.05, s)
+  assert g.selected()[0] is not None, "still within the switch hold"
+  for _ in range(3):
+    g.update(weak_left, 0.05, s)
+  assert g.selected()[0] is None and g.selected()[1] is not None
+  # the same 0.2 line beside a 0.5 line keeps its vote (above drop_confidence, no strong partner)
+  g2 = BoundaryGate()
+  for _ in range(10):
+    g2.update(good, 0.05, s)
+  both_weak = (Boundary(0, "line", good[0].x, good[0].y, 0.05, 0.2), Boundary(1, "line", good[1].x, good[1].y, 0.05, 0.5))
+  for _ in range(10):
+    g2.update(both_weak, 0.05, s)
+  assert g2.selected()[0] is not None
+
+
+def test_one_centre_line_anchors_the_car_instead_of_following_the_model_cut():
+  """Change 39: with only the right (oncoming-side) line the car holds 1.75 m from it although the model aims 0.5 m right;
+  a model aiming toward the kerb is still followed (within the edge guard)."""
+  sc = Scenario(STRAIGHT, speed=18.0, left_dropouts=((5.0, 16.0),), model_offset=0.5, duration=18.0)   # 0.5: under the two-line divergence veto, over the old one-line guard (+0.325)
+  res = run(LaneLedController(), sc)
+  late = (res["t"] > 9.0) & (res["t"] < 16.0)
+  assert set(res["mode"][late]) == {"one_right"}, set(res["mode"][late])
+  assert (res["state"][late] == "lane_led").mean() > 0.9
+  assert np.abs(res["e_y_true"][late]).max() < 0.12, "held at the lane centre, 1.75 m from the right line"
+  assert max_step_ratio(res) <= 1.0 + 1e-6
+  sc2 = Scenario(STRAIGHT, speed=18.0, left_dropouts=((5.0, 16.0),), model_offset=-0.4, duration=18.0)
+  res2 = run(LaneLedController(), sc2)
+  late2 = (res2["t"] > 11.0) & (res2["t"] < 16.0)
+  assert res2["e_y_true"][late2].mean() > 0.3, "the model may still pull the car toward the kerb side (e_y_true is centre minus car, +0.4 = car 0.4 m left)"
+
+
+def test_oncoming_line_clearance_floor():
+  """Change 40: the guard from the right line is at least 0.5 m of clearance whatever the slider says."""
+  c = LaneLedController(settings(line_clearance=0.2))
+  s = c.slew.effective
+  xs = np.linspace(0.0, 60.0, 25)
+  right = Boundary(1, "line", xs, np.full(25, 1.75), 0.05, 0.95); left = Boundary(0, "line", xs, np.full(25, -1.75), 0.05, 0.95)
+  obs = LaneLedObservation(t=0.0, speed=18.0, measured_curvature=0.0, model_curvature=0.0, delay=0.33)
+  assert c._guard_distance(right, s, obs) == pytest.approx(0.5 * s.car_width + 0.5)
+  assert c._guard_distance(left, s, obs) == pytest.approx(0.5 * s.car_width + 0.2)
+
+
 def test_lever_state_survives_a_long_day():
   """3 Nov: n counts frames that straights never decay, so a day of driving took it past MEMORY and load() threw the state away."""
   L = LeverLearner()
@@ -639,7 +690,7 @@ def test_one_line_veto_is_about_shape_not_lane_width():
   assert wide.reason == "ok" and wide.state == "lane_led" and wide.mode == "one_left", (wide.reason, wide.state, wide.mode)
   turn = last(0.004 * x * x)                             # pulling away from the line: 1.3 m further out at 18 m
   assert turn.reason == "model_divergence" and turn.state == "model_led"
-  obstacle = last(np.full(len(x), -0.7))                 # 0.4 m inside the guard: the model is steering round something
+  obstacle = last(np.full(len(x), -1.0))                 # 0.7 m inside the guard (yield 0.6 since change 41): the model is steering round something
   assert obstacle.reason == "model_divergence"
 
 

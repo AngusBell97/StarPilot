@@ -18,7 +18,7 @@ from openpilot.starpilot.lateral.lane_v10_settings import LaneLedSettings, RANGE
 
 V10_VERSION = 10
 V10_LABEL = "v10"
-OBSTACLE_MAX_AGE_NS = 350_000_000             # a detection older than this (10 Hz, read ~0.1 s after its frame) is no detector
+OBSTACLE_MAX_AGE_NS = 500_000_000             # a detection older than this is no detector (0.35 s at the 00:25 install; 0.5 s from 4 Nov 11:00 for the vision session's 5 Hz retune)
 
 
 class ObstacleFeed:

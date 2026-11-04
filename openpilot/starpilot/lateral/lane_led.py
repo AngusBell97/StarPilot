@@ -45,6 +45,10 @@ _RESIDUAL_FULL, _RESIDUAL_ZERO = 0.08, 0.20                # m rms fit residual 
 _CONFIDENCE_FULL = 0.5                                     # line probability at which trust from confidence is full
 ROAD_JERK = 2.0                                            # m/s^3 rate bound on the feedforward (host ISO limit is 5)
 _EDGE_CONFIDENCE = 0.7                                     # an edge has no probability; a line+edge pair is a trusted pair
+_WEAK_LINE_PROB, _STRONG_LINE_PROB = 0.25, 0.8                # change 38 (0.35 cost 2 cm of bend-in on route 28's weak kerb lines; 0.25 costs 1): a line this weak beside one this strong gets no vote (dropped after switch_hold)
+_ANCHOR_SIDE = 1                                           # change 39: the line on the oncoming side (right, UK): with it alone the car holds a fixed distance from it
+_ANCHOR_LINE_M = 1.75                                      # m from that line to the car's centre when it is the only line (a normal lane's centre)
+_ONCOMING_LINE_CLEARANCE = 0.5                             # change 40: the clearance guard from the oncoming-side line is at least this, whatever the slider
 _LINE_BRIDGE_S = 2.0                                       # s a two-line track carries on from one line plus the last width when the other line drops (change 32; 0 off; 1.5 on the first road day, 2.0 from 4 Nov)
 _RECOVERY_FLOOR = 2.8                                      # s: the Recovery slider is floored here (change 33): 1.5 rang at 2 Hz on the road (3 Nov), 2.0-2.5 ring in replay, 2.8 is road-proven
 _CURV_AGREE_FRAMES = 0                                     # probe: frames of same-sign curvature innovation before _CURV_INNOVATION applies (0: never)
@@ -159,10 +163,16 @@ class BoundaryGate:
 
   def update(self, boundaries, dt: float, s: LaneLedSettings):
     seen = {(b.side, b.kind): b for b in boundaries}
+    # Change 38: a weak line beside a strong one is not averaged into the centre. On the S003 right-hander the fading
+    # kerb line walked 0.66 m inward at probability 0.1 to 0.3 while the centre line stayed above 0.9, and the two-line
+    # centre followed it toward the oncoming lane for the 0.2 s hysteresis and beyond (routes 25 and 24).
+    probs = {side: (seen[(side, "line")].prob if (side, "line") in seen and seen[(side, "line")].prob is not None else math.nan) for side in (0, 1)}
     for key, slot in self.slots.items():
       b = seen.get(key)
       slot.boundary = b
-      if self._qualifies(b, s, slot.adopted):
+      weak = (key[1] == "line" and math.isfinite(probs[key[0]]) and probs[key[0]] < _WEAK_LINE_PROB
+              and math.isfinite(probs[1 - key[0]]) and probs[1 - key[0]] >= _STRONG_LINE_PROB)
+      if self._qualifies(b, s, slot.adopted) and not weak:
         slot.qualified_s += dt
         slot.unqualified_s = 0.0
         if not slot.adopted and slot.qualified_s >= s.switch_hold:
@@ -228,6 +238,7 @@ class CentreTracker:
     self.width = 3.5            # observed two-line width, filtered (2 s): never a centre source, only a CAP on guard pushes
     self.width_age_s = math.inf # observed frames since two lines were last seen
     self.bridge_s = 0.0         # s spent bridging a dropped second line with the last width (change 32)
+    self.one_d = math.nan       # line-to-centre distance of the current one-line curve (change 39 reads it)
     self.residual = 0.0         # filtered (0.5 s) rms fit residual: fit quality, not frame noise
     self.innovation_limited = False
     self.mode = "none"          # last usable observation's mode; "none" until one arrives
@@ -339,6 +350,7 @@ class CentreTracker:
       sign = 1.0 if one.side == 0 else -1.0
       d = one_line_d[one.side] if math.isfinite(one_line_d[one.side]) else 0.5 * s.car_width + s.line_clearance
       centre = y1 + sign * d
+      self.one_d = d
       weight = c1.astype(float) * self._std_weight(one, s)
       mode = "one_left" if one.side == 0 else "one_right"
     self.innovation_limited = False
@@ -530,7 +542,7 @@ _LEVER_SETTLE_S = 1.0                                      # lane-led this long 
 _LEVER_RATE_S = 1.0                                        # s of tracked-offset history the lateral drift rate is fitted over
 _LEVER_MAX_DRIFT = 0.3                                     # m/s: faster across the lane than this is a lane change or a snap, not a sample
 _LEVER_MAX_EY = 0.5
-_GUARD_YIELD = 0.3                                         # m: a model path this much closer to the only line than the guard allows is an obstacle, not a hug
+_GUARD_YIELD = 0.6                                         # m: a model path this much closer to the only line than the guard allows is an obstacle, not a hug (0.3 until change 41: on the S003 right-hander the model's 0.8 m cut sat 0.48 m inside the guard and the yield handed the car to it)
 _BIAS_LEARN_EY = 0.15                                      # m: the bias integrates only this close to the target (change 27)
 _FF_MODEL_MARGIN = 1.5e-3                                  # 1/m: the feedforward may differ from the model's curvature by this, or
 _FF_MODEL_MARGIN_REL = 0.3                                 # by this fraction of it, whichever is larger (change 28)
@@ -961,6 +973,20 @@ class LaneLedController:
         e_y_ref = centre + (my - self.tracker.centre_at(xm)) if math.isfinite(my) else 0.0
       except (TypeError, ValueError):
         e_y_ref = 0.0
+      # Change 39: with only the oncoming-side line the target is a fixed distance from it, as a driver holds position
+      # from the centre line, and the model may only pull the car further from that line (the kerb-side guards and
+      # road edge bound that). Following the model's path toward the line is what put the car's side 7 cm from the
+      # centre line on the S003 right-hander (route 25); no width is remembered, which is what failed in change 25.
+      # The anchor distance is a normal lane's half width, or half the two-line width seen in the last 20 s when that is
+      # narrower (the same 20 s memory the guard cap uses): on the narrow lanes of route 28 a fixed 1.75 m sat the car
+      # 0.25 m toward the kerb. A width that has since grown only moves the anchor toward the lane's middle, never past it.
+      anchor = min(_ANCHOR_LINE_M, 0.5 * self.tracker.width) if self.tracker.width_age_s <= 20.0 else _ANCHOR_LINE_M
+      if _ANCHOR_SIDE == 1 and self.tracker.mode == "one_right" and math.isfinite(self.tracker.one_d):
+        line_y0 = centre + self.tracker.one_d
+        e_y_ref = min(e_y_ref, line_y0 - anchor)
+      elif _ANCHOR_SIDE == 0 and self.tracker.mode == "one_left" and math.isfinite(self.tracker.one_d):
+        line_y0 = centre - self.tracker.one_d
+        e_y_ref = max(e_y_ref, line_y0 + anchor)
     else:
       e_y_ref = 0.0
     # Clearance guards: the tracked curve is itself the guard for a single line; edges and the other line are raw.
@@ -1110,7 +1136,10 @@ class LaneLedController:
     about the lane's middle), never below min_width so a hugging model path cannot disarm the guard. Without the cap a
     single line on a lane narrower than the car plus two clearances would push the car over the unseen line. The cap
     only ever reduces a push away from a boundary."""
-    d = 0.5 * s.car_width + (s.line_clearance if b.kind == "line" else s.edge_clearance)
+    clearance = s.line_clearance if b.kind == "line" else s.edge_clearance
+    if b.kind == "line" and b.side == _ANCHOR_SIDE:
+      clearance = max(clearance, _ONCOMING_LINE_CLEARANCE)   # change 40
+    d = 0.5 * s.car_width + clearance
     if self.tracker.width_age_s <= 20.0:   # seconds of observed frames since two lines were last seen
       w_ref = self.tracker.width
     elif obs.model_path_x is not None and obs.model_path_y is not None:

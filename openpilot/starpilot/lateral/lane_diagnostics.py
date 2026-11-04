@@ -53,9 +53,9 @@ class LaneDiagnostics:
     # At most25Hz, normally once per20Hz model frame. Existing100Hz feedback remains unchanged.
     self.last_model_ns, self.last_emit_ns = model_ns, now_ns
     self.sequence += 1
-    if getattr(controller, "version", None) == 8:
+    if getattr(controller, "version", None) in (8, 10):   # v10 (4 Nov split) logs the same geometry as v8
       event("lane_centering_diagnostic", version=1, session=self.session, sequence=self.sequence,
-        revision=self.revision, control_ns=now_ns, model_ns=model_ns, algorithm=8, reason=result.reason,
+        revision=self.revision, control_ns=now_ns, model_ns=model_ns, algorithm=controller.version, reason=result.reason,
         geometry=_clean(controller.diagnostic), requested=result.correction, limit=result.correction_limit, host=_clean(host))
       return
     if getattr(controller, "version", None) in (7, 90):
