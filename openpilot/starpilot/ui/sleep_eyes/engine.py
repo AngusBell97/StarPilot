@@ -1251,7 +1251,7 @@ _lat_right = lateral(-1)
 # Priorities: 9 transitions, 7 ignition, 6 orange alerts, 5 lateral g / lane change, 4 brake / accel / engage,
 # 2 signals, 0 idle and events.
 SPECS: dict[str, Spec] = {
-  'ignOn': Spec('Ignition on', 4700, r_ign_on, start=s_ign_on, prio=7, no_blink=True),
+  'ignOn': Spec('Waking up (out of Park)', 4700, r_ign_on, start=s_ign_on, prio=7, no_blink=True),
   'eng': Spec('Engaged', 2800, r_engaged, start=s_engaged, prio=4),
   'sigL': Spec('Signal left', 3100, signal(-1), prio=2, loop='blinker', loop_value=-1),
   'sigR': Spec('Signal right', 3100, signal(1), prio=2, loop='blinker', loop_value=1),
@@ -1265,7 +1265,7 @@ SPECS: dict[str, Spec] = {
   'accel': Spec('Hard accel', 2300, r_accel, prio=4),
   'brake': Spec('Hard brake', 1900, r_brake, prio=4, no_blink=True),
   'dis': Spec('Disengaged', 3000, r_disengaged, start=s_disengaged, prio=4, no_blink=True),
-  'ignOff': Spec('Ignition off', 5600, r_ign_off, end=e_ign_off, prio=7, no_blink=True),
+  'ignOff': Spec('Going to sleep (into Park)', 5600, r_ign_off, end=e_ign_off, prio=7, no_blink=True),
   'alAttn': Spec('Pay attention', 4200, r_al_attention, prio=6, no_blink=True, loop='alert', loop_value='alAttn'),
   'alWheel': Spec('Touch steering wheel', 4200, r_al_wheel, prio=6, no_blink=True, loop='alert', loop_value='alWheel'),
   'alSteer': Spec('Turn exceeds steering limit', 5200, r_al_steer, prio=6, no_blink=True, loop='alert', loop_value='alSteer'),

@@ -25,6 +25,7 @@ class SleepEyesController:
     self._started_prev: bool | None = None
     self._logged_want: bool | None = None
     self._slow = False
+    self._touched = False
 
   @property
   def visible(self) -> bool:
@@ -46,6 +47,7 @@ class SleepEyesController:
     """Whether the eyes should be on screen this frame. blocked = critical alert, eGPU hold or manual screen off."""
     now = time.monotonic()
     self.limit_hit = False
+    self._touched = touched
     if self._started_prev is not None and started != self._started_prev:
       # Ignition off while the eyes show: keep them (they doze off). Ignition on: back to the normal timing.
       self.sticky = self.visible and not started
@@ -80,7 +82,8 @@ class SleepEyesController:
         view.enter()
       gui_app.set_screen_override(view)
     elif view.visible:
-      if urgent or engine.current != 'ignOn':  # let a wake-up finish before switching to the driving view
+      # Let a wake-up finish before switching to the driving view, unless it was a tap.
+      if urgent or self._touched or engine.current != 'ignOn':
         view.leave(animate=not urgent)
     if not want and (view.finished or not view.visible):
       if gui_app.screen_override is view:

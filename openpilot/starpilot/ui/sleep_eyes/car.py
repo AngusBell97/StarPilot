@@ -59,8 +59,12 @@ def orange_alert(ss) -> str | None:
 
 
 class CarWatcher:
+  """Sleep and wake follow the Park gear: the comma loses power the moment the car switches off, so going
+  offroad is never seen. Shifting into Park dozes the eyes off; shifting out of Park wakes them up."""
+
   def __init__(self):
     self.started: bool | None = None
+    self.in_park: bool | None = None
     self.engaged: bool | None = None
     self.lane_change = 'off'
     self.accel_since: float | None = None
@@ -75,8 +79,10 @@ class CarWatcher:
       engine.parked = not started
     elif started != self.started:
       self.started = started
-      engine.play('ignOn' if started else 'ignOff', now, force=True)
+      self.in_park = None  # the gear decides asleep or awake at the start of each drive
       if not started:
+        # Only seen if the comma stays powered after the car switches off.
+        engine.play('ignOff', now, force=True)
         engine.ctx.update(blinker=0, alert=None, lat_hold=False)
         self.engaged = None
         return
@@ -84,6 +90,12 @@ class CarWatcher:
       return
 
     ss, cs = sm['selfdriveState'], sm['carState']
+    in_park = str(cs.gearShifter) == 'park'
+    if self.in_park is None:
+      engine.parked = in_park
+    elif in_park != self.in_park:
+      engine.play('ignOff' if in_park else 'ignOn', now, force=True)
+    self.in_park = in_park
     engaged = bool(ss.enabled)
     if self.engaged is None:
       engine.engaged = engaged
