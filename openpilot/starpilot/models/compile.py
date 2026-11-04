@@ -321,6 +321,15 @@ def make_warp(nv12, model_w, model_h, frame_skip, image_history_pipeline=IMAGE_H
   return warp_enqueue
 
 
+def to_policy_device(warped):
+  """The warped image on the policy's device. A Chestnut policy fed by a comma-GPU warp (WARP_DEV=QCOM) goes through
+  host memory: the pinned runtime cannot copy QCOM buffers straight into AMD ("need copyin"), as the stateful path
+  already does for big models. Same-device builds are unchanged."""
+  if str(warped.device) != str(Device.DEFAULT):
+    return warped.to("CPU").realize().to(Device.DEFAULT)
+  return warped.to(Device.DEFAULT)
+
+
 def make_run_split_policy(vision_runner, policy_runners, metadata, policy_order, frame_skip,
                           image_history_pipeline=IMAGE_HISTORY_IN_POLICY):
   sample_desire_fn = partial(sample_desire, frame_skip=frame_skip)
@@ -361,7 +370,7 @@ def make_run_split_policy(vision_runner, policy_runners, metadata, policy_order,
   if image_history_pipeline == IMAGE_HISTORY_IN_POLICY:
     def run_policy(warped, img_q, big_img_q, feat_q, desire_q, packed_npy_inputs):
       packed_npy_inputs = packed_npy_inputs.to(Device.DEFAULT)
-      warped = warped.to(Device.DEFAULT)
+      warped = to_policy_device(warped)
       Tensor.realize(packed_npy_inputs, warped)
       img = shift_and_sample(img_q, warped[0:1], sample_skip_fn)
       big_img = shift_and_sample(big_img_q, warped[1:2], sample_skip_fn)
@@ -412,7 +421,7 @@ def make_run_supercombo(model_runner, metadata, frame_skip, image_history_pipeli
   if image_history_pipeline == IMAGE_HISTORY_IN_POLICY:
     def run_policy(warped, img_q, big_img_q, feat_q, desire_q, packed_npy_inputs):
       packed_npy_inputs = packed_npy_inputs.to(Device.DEFAULT)
-      warped = warped.to(Device.DEFAULT)
+      warped = to_policy_device(warped)
       Tensor.realize(packed_npy_inputs, warped)
       img = shift_and_sample(img_q, warped[0:1], sample_skip_fn)
       big_img = shift_and_sample(big_img_q, warped[1:2], sample_skip_fn)
