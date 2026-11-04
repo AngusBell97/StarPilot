@@ -86,7 +86,8 @@ class Config:
   close_lo: float = 0.8
   close_hi: float = 1.6
   close_v: float = 4.0
-  confirm: int = 3
+  confirm: int = 2
+  confirm_s: float = 0.2            # ...and in range for at least this long: the same at 5 Hz or 10 Hz
 
 
 def decode(packet: np.ndarray) -> list[Detection]:
@@ -220,7 +221,7 @@ class ObstacleTracker:
   faster than cfg.close_v, only if its range closes at about the car's own speed: parked cars, cones and stopped
   vehicles close at 1x, the traffic ahead hardly closes and oncoming traffic closes at about 2x. The closing speed is
   a robust (Theil-Sen) fit over the last 1.5 s (four sightings over 0.4 s at least) and must be in range for
-  cfg.confirm results in a row, because one reading at 50 m is noisy."""
+  cfg.confirm results in a row and cfg.confirm_s seconds, because one reading at 50 m is noisy."""
 
   KEEP_S = 0.6
   HIST_S = 1.5
@@ -278,8 +279,11 @@ class ObstacleTracker:
         continue
       if v_ego > cfg.close_v:
         r = self.closing_ratio(tr['hist'])
-        tr['ok_run'] = tr.get('ok_run', 0) + 1 if r is not None and cfg.close_lo <= r <= cfg.close_hi else 0
-        if tr['ok_run'] < cfg.confirm:
+        ok_now = r is not None and cfg.close_lo <= r <= cfg.close_hi
+        tr['ok_run'] = tr.get('ok_run', 0) + 1 if ok_now else 0
+        if ok_now and tr['ok_run'] == 1:
+          tr['ok_since'] = t
+        if tr['ok_run'] < cfg.confirm or t - tr.get('ok_since', t) < cfg.confirm_s:
           continue
       if blocking is None or tr['placed'].x_near < blocking.x_near:
         blocking = tr['placed']

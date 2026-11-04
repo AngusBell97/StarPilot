@@ -80,10 +80,16 @@ def load_artifact(path: Path = ARTIFACT):
 
 
 class LaneObstacleDetector:
-  """Runs at most every MIN_PERIOD_S, and only in time modeld has spare before its next camera frame."""
+  """Runs at most every MIN_PERIOD_S, in the time modeld has spare before its next camera frame.
+
+  On the road modeld has ~6.6 ms spare per frame (4 Nov drive) while a detection needs ~4.6 ms to queue and ~8-10 ms to
+  read back. So it runs at ~5 Hz: the queue must fit in the spare time; the read-back may run up to READ_OVERRUN_NS
+  into the next frame. Submits are at least 3 frames apart, so that never happens on two frames in a row and modeld
+  catches up (no frames dropped: ~26 ms spare per 4 frames against ~14 ms needed)."""
   FRAME_PERIOD_NS = 50_000_000
-  MARGIN_NS = 4_000_000          # always leave this much before the next frame is due
-  MIN_PERIOD_S = 0.095           # 10 Hz cap
+  MARGIN_NS = 1_000_000          # leave this much before the next frame is due
+  READ_OVERRUN_NS = 5_000_000    # a read-back may delay the next frame by up to this much
+  MIN_PERIOD_S = 0.19            # ~5 Hz cap
   MAX_PENDING_S = 0.6            # a queued result not read by then is dropped
   LEAD_MEMORY_S = 2.0            # a confident lead is remembered this long through probability dips
 
@@ -117,10 +123,12 @@ class LaneObstacleDetector:
     self.stats['frames'] += 1
 
   def cost(self, phase: str) -> float:
-    return float(np.percentile(self.samples[phase], 75)) * 0.85 ** self.waited
+    # Relaxes after each refusal so one slow sample cannot block it for good, but never below 70 % of what was measured.
+    return float(np.percentile(self.samples[phase], 75)) * max(0.85 ** self.waited, 0.7)
 
   def _fits(self, phase: str) -> bool:
-    if self.deadline_ns - time.monotonic_ns() - self.MARGIN_NS >= self.cost(phase) * 1e9:
+    allow = self.READ_OVERRUN_NS if phase == 'read' else 0
+    if self.deadline_ns - time.monotonic_ns() - self.MARGIN_NS + allow >= self.cost(phase) * 1e9:
       self.waited = 0
       return True
     self.waited += 1
