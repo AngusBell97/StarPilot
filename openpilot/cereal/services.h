@@ -51,6 +51,7 @@ static std::map<std::string, service> services = {
   { "aolSafetyWire", {"aolSafetyWire", true, 10.000000, 10, 256000}},
   { "aolIntentWire", {"aolIntentWire", true, 100.000000, 10, 256000}},
   { "laneChangeAssistWire", {"laneChangeAssistWire", true, 20.000000, 10, 256000}},
+  { "laneObstacleWire", {"laneObstacleWire", true, 10.000000, 1, 256000}},
   { "mapdOut", {"mapdOut", true, 20.000000, 10, 256000}},
   { "mapdExtendedOut", {"mapdExtendedOut", true, 1.000000, 1, 256000}},
   { "mapdIn", {"mapdIn", true, 1.000000, 1, 256000}},
