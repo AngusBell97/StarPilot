@@ -5,7 +5,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 from openpilot.common.params import Params
-from openpilot.starpilot.ui.display_owner import DisplayOwner, EYES_OFF_BLOCKS_BLACK, SCREEN_OFF_BLOCKS_EYES
+from openpilot.starpilot.ui.display_owner import DisplayOwner, EYES_OFF_BLOCKS_BLACK, SCREEN_OFF_NEEDED_FOR_EYES
 from openpilot.starpilot.ui.display_preferences import SCREEN_OFF, SLEEP_EYES, SLEEP_EYES_BLACK, read_preferences
 from openpilot.starpilot.ui.feature_settings_state import FeatureSettingsRequest
 from openpilot.starpilot.ui.presentation import Profile
@@ -33,6 +33,9 @@ def test_rows_sit_next_to_turn_off_comma_screen_and_black_needs_eyes(owner):
   params, display = owner
   keys = [r.key for r in display.snapshot(Profile.LARGE).rows]
   assert keys[keys.index(SCREEN_OFF) + 1:keys.index(SCREEN_OFF) + 3] == [SLEEP_EYES, SLEEP_EYES_BLACK]
+  eyes = row(display, SLEEP_EYES)
+  assert not eyes.available and eyes.reason == SCREEN_OFF_NEEDED_FOR_EYES
+  assert change(display, SCREEN_OFF, "On")
   assert row(display, SLEEP_EYES).available
   black = row(display, SLEEP_EYES_BLACK)
   assert not black.available and black.reason == EYES_OFF_BLOCKS_BLACK
@@ -43,19 +46,21 @@ def test_rows_sit_next_to_turn_off_comma_screen_and_black_needs_eyes(owner):
   assert prefs.sleep_eyes and prefs.sleep_eyes_black
 
 
-def test_turn_off_comma_screen_greys_out_and_disables_sleep_eyes(owner):
+def test_sleep_eyes_needs_turn_off_comma_screen(owner):
   params, display = owner
-  assert change(display, SLEEP_EYES, "On")
-  stale = row(display, SLEEP_EYES)
   assert change(display, SCREEN_OFF, "On")
+  assert change(display, SLEEP_EYES, "On")
+  assert read_preferences(params, large=True).sleep_eyes
+  stale = row(display, SLEEP_EYES)
+  assert change(display, SCREEN_OFF, "Off")
   eyes = row(display, SLEEP_EYES)
-  assert not eyes.available and eyes.reason == SCREEN_OFF_BLOCKS_EYES and eyes.value == "On"
+  assert not eyes.available and eyes.reason == SCREEN_OFF_NEEDED_FOR_EYES and eyes.value == "On"
   assert not read_preferences(params, large=True).sleep_eyes  # saved On, but not in effect
   # A request made from a page opened before Turn Off Comma Screen changed is refused.
   params.put_bool(SLEEP_EYES, False)
   assert not display.apply(FeatureSettingsRequest(SLEEP_EYES, row(display, SLEEP_EYES).source, "On",
                                                   dependencies=stale.dependencies))
-  assert change(display, SCREEN_OFF, "Off")
+  assert change(display, SCREEN_OFF, "On")
   assert change(display, SLEEP_EYES, "On")
 
 

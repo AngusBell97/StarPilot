@@ -23,7 +23,7 @@ KEYS = (MASTER, *CUSTOM_KEYS, SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
 BOOLEAN_KEYS = (MASTER, SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
 STANDALONE_KEYS = (SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
 SCREEN_OFF_DESCRIPTION = "Pauses Comma UI rendering to save CPU/GPU. Tap once to wake."
-SLEEP_EYES_DESCRIPTION = "When the screen would sleep, it shows animated eyes that react to driving instead. Tap to wake."
+SLEEP_EYES_DESCRIPTION = "Turn Off Comma Screen shows animated eyes that react to driving instead of a black screen. Tap to wake."
 SLEEP_EYES_BLACK_DESCRIPTION = "Sleep Eyes on a pure black background: only the eyes and their effects light up."
 PIXEL_SHIFT_DESCRIPTION = "Burn-in protection: moves the whole picture a pixel at a time, at most 2 pixels, every 45 seconds."
 STATIC_DIM_DESCRIPTION = "Burn-in protection: HUD items and the border that stay the same for 10 seconds fade slightly over 20 seconds until they change."
@@ -96,7 +96,7 @@ class DisplayPreferences:
   driving_timeout: int = 10
   pixel_shift: bool = False
   static_dim: bool = False
-  # Effective: Sleep Eyes never runs while Turn Off Comma Screen is on.
+  # Effective: Sleep Eyes only runs while Turn Off Comma Screen is on (it replaces the black screen).
   sleep_eyes: bool = False
   sleep_eyes_black: bool = False
 
@@ -112,7 +112,7 @@ def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
     choice = read_choice(params, key, large=large)
     flags[key] = choice.valid and choice.value == 1
   pixel_shift, static_dim = flags[PIXEL_SHIFT], flags[STATIC_DIM]
-  sleep_eyes = flags[SLEEP_EYES] and not turn_off_screen
+  sleep_eyes = flags[SLEEP_EYES] and turn_off_screen
   sleep_eyes_black = sleep_eyes and flags[SLEEP_EYES_BLACK]
   if not master.valid or master.value != 1:
     return DisplayPreferences(keep_screen_on_gpu_loading=keep_gpu, turn_off_screen=turn_off_screen,

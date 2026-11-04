@@ -35,10 +35,10 @@ STANDALONE_REASONS = {
   STATIC_DIM: STATIC_DIM_DESCRIPTION,
 }
 AUTO_PREFIX = "display:auto:"
-SCREEN_OFF_BLOCKS_EYES = "Unavailable while Turn Off Comma Screen is on"
+SCREEN_OFF_NEEDED_FOR_EYES = "Turn on Turn Off Comma Screen to use"
 EYES_OFF_BLOCKS_BLACK = "Turn on Sleep Eyes to use"
-# Sleep Eyes can only be switched on while Turn Off Comma Screen is off, and the
-# pure black option only while Sleep Eyes is on. Switching off is always allowed.
+# Sleep Eyes replaces Turn Off Comma Screen's black screen, so it needs that option on; the pure black
+# option also needs Sleep Eyes on.
 EYES_REQUIRES = {SLEEP_EYES: (SCREEN_OFF,), SLEEP_EYES_BLACK: (SCREEN_OFF, SLEEP_EYES)}
 
 
@@ -46,8 +46,8 @@ def eyes_blocker(key: str, saved: dict) -> str:
   if key not in EYES_REQUIRES:
     return ""
   screen_off = saved[SCREEN_OFF]
-  if not screen_off.readable or screen_off.valid and screen_off.value == 1:
-    return SCREEN_OFF_BLOCKS_EYES
+  if not (screen_off.readable and screen_off.valid and screen_off.value == 1):
+    return SCREEN_OFF_NEEDED_FOR_EYES
   if key == SLEEP_EYES_BLACK:
     eyes = saved[SLEEP_EYES]
     if not (eyes.valid and eyes.value == 1):
@@ -110,7 +110,7 @@ class DisplayOwner:
                       ((MASTER, master.raw),))
       editable = parked and choice.readable and (boolean or master.valid and master.value == 1 or not valid)
       if blocker := eyes_blocker(key, saved):
-        # Greyed out; a saved On stays visible but can still be switched off by fixing the blocker first.
+        # Greyed out; a saved On stays visible (and inactive) until its requirement is met again.
         editable = False
         reason = blocker
       numeric = valid and not boolean and choice.value != AUTO

@@ -12,7 +12,7 @@ import unittest
 from openpilot.common.params import Params
 from openpilot.starpilot.ui import display_compact
 from openpilot.starpilot.ui.display_owner import DisplayOwner
-from openpilot.starpilot.ui.display_preferences import BURN_IN, EYES, GPU_LOADING, MASTER, SCREEN_OFF, SLEEP_EYES_BLACK, STANDALONE_KEYS, read_choice, read_preferences
+from openpilot.starpilot.ui.display_preferences import BURN_IN, EYES, GPU_LOADING, MASTER, SCREEN_OFF, STANDALONE_KEYS, read_choice, read_preferences
 from openpilot.starpilot.ui.feature_settings_state import (
   FEATURE_CONTROL_LEFT, FEATURE_CONTROL_RIGHT, FEATURE_ROW_HEIGHT, FEATURE_VISIBLE_ROWS,
   FeatureInput, FeatureSettingsRequest, feature_row_top, row_change,
@@ -168,8 +168,8 @@ class DisplaySettingsTests(unittest.TestCase):
         self.assertTrue(read_preferences(self.params, large=True).enabled)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        # Sleep Eyes Pure Black stays greyed out until Sleep Eyes itself is on.
-        self.assertTrue(all(row.available for row in submenu.rows if row.key != SLEEP_EYES_BLACK))
+        # Sleep Eyes needs Turn Off Comma Screen, and Pure Black needs Sleep Eyes: both start greyed out.
+        self.assertTrue(all(row.available for row in submenu.rows if row.key not in EYES))
         self.assertEqual(submenu.parent_title, "System")
         session._display_ui(FeatureUiAction("open", submenu.rows[1]))
         self.assertEqual(session.system_snapshot().parent_title, "Custom Display Settings")
