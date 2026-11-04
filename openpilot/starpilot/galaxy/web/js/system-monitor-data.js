@@ -32,12 +32,38 @@ export function normalizeSnapshot(raw, expectedMode = "synthetic-preview") {
     memory.usedMiB = null; memory.availableMiB = null; memory.percent = null
   }
   if (storage.totalGiB !== null && storage.usedGiB !== null && storage.usedGiB > storage.totalGiB) storage.usedGiB = null
-  const v = object(raw.vitals) ? raw.vitals : {}
-  const vitals = Object.fromEntries(["cpuTempC", "gpuTempC", "hotspotTempC", "gpuEdgeTempC", "memoryUsedBytes", "memoryTotalBytes",
-    "onboardMaxAgeMs", "maxAgeMs", "memoryMaxAgeMs"].map((key) => [key, number(v[key])]))
   return { sampleMono: number(raw.sampleMono), sourceId: text(raw.sourceId), intervalSeconds: number(raw.intervalSeconds, 0, 10), source: raw.source, sampledAt: raw.sampledAt, cpuPercent: percent(raw.cpuPercent), cores, memory, storage,
     batteryVoltage: number(raw.batteryVoltage, 0.01, 60),
-    uptimeSeconds: number(raw.uptimeSeconds), processCount: integer(raw.processCount), processes, vitals }
+    uptimeSeconds: number(raw.uptimeSeconds), processCount: integer(raw.processCount), processes,
+    commaThermals: normalizeThermals(raw.commaThermals), externalGpus: Array.isArray(raw.externalGpus) ? raw.externalGpus.map(normalizeGpu).filter(Boolean) : [] }
+}
+
+const temperature = (value) => number(value, 1, 150)
+const LEVELS = new Set(["good", "idle", "warning", "danger"])
+
+function normalizeThermals(raw) {
+  if (!object(raw)) return null
+  return { cpuTempC: temperature(raw.cpuTempC), gpuTempC: temperature(raw.gpuTempC), memoryTempC: temperature(raw.memoryTempC),
+    maxTempC: temperature(raw.maxTempC), fanPercent: percent(raw.fanPercent),
+    status: ["ok", "overheated", "critical"].includes(raw.status) ? raw.status : null, statusText: text(raw.statusText) }
+}
+
+function normalizeGpu(raw) {
+  if (!object(raw) || !["chestnut", "jetlink"].includes(raw.kind) || !text(raw.name)) return null
+  return { kind: raw.kind, name: raw.name, detail: text(raw.detail), status: LEVELS.has(raw.status) ? raw.status : "idle",
+    statusText: text(raw.statusText) || "Connected", runningModel: raw.runningModel === true, readingsNote: text(raw.readingsNote),
+    hotspotC: temperature(raw.hotspotC), memoryTempC: temperature(raw.memoryTempC),
+    hotspotLimitC: temperature(raw.hotspotLimitC), memoryLimitC: temperature(raw.memoryLimitC),
+    loadPercent: percent(raw.loadPercent), clockMhz: number(raw.clockMhz, 1), powerW: number(raw.powerW),
+    powerLimitW: number(raw.powerLimitW, 0.1), fanRpm: number(raw.fanRpm), fanPercent: percent(raw.fanPercent),
+    supplyVolts: number(raw.supplyVolts), supplyAmps: number(raw.supplyAmps, -100), frameMs: number(raw.frameMs),
+    link: text(raw.link), usbSpeedMbps: number(raw.usbSpeedMbps, 1), usbLinkErrors: integer(raw.usbLinkErrors) }
+}
+
+// How close a temperature is to its limit: "hot" at the limit, "warm" within 10 °C of it.
+export function heatLevel(value, limit) {
+  if (value === null || value === undefined || limit === null || limit === undefined) return "normal"
+  return value >= limit ? "hot" : value >= limit - 10 ? "warm" : "normal"
 }
 
 export const processFeature = (process) => processInfo(process).title === process.name ? "" : processInfo(process).title
@@ -46,23 +72,15 @@ const PROCESS_STATES = new Map([["R", "Running"], ["S", "Sleeping"], ["D", "Wait
 export const processState = (state) => PROCESS_STATES.get(state) || state
 export const displayNumber = (value, suffix = "") => value === null || value === undefined ? "—" : `${value.toFixed(1)}${suffix}`
 
-export function vital(snapshot, field, budget, elapsedMs = 0) {
-  const v = snapshot?.vitals
-  if ((field === "memoryUsedBytes" || field === "memoryTotalBytes") && v?.memoryUsedBytes != null && v?.memoryTotalBytes != null &&
-      v.memoryUsedBytes > v.memoryTotalBytes) return null
-  return v && v[budget] > 0 && elapsedMs >= 0 && elapsedMs < v[budget] ? v[field] ?? null : null
-}
-
-export function processRows(snapshot, { query = "", scope = "all", category = "", sort = "cpu", descending = true } = {}) {
+export function processRows(snapshot, { query = "", scope = "all", sort = "cpu", descending = true } = {}) {
   const q = query.trim().toLowerCase()
-  const keys = new Set(["name", "category", "pid", "cpu", "memoryMiB", "user", "state"])
+  const keys = new Set(["name", "pid", "cpu", "memoryMiB", "user", "state"])
   const key = keys.has(sort) ? sort : "cpu"
   return (snapshot?.processes || []).filter((p) =>
     (scope === "all" || (scope === "users" ? !p.kernel : p.user === "comma")) &&
-    (!category || processInfo(p).category === category) &&
-    (!q || `${p.name} ${processFeature(p)} ${processInfo(p).description} ${processInfo(p).category} ${p.pid} ${p.user} ${processState(p.state)}`.toLowerCase().includes(q))
+    (!q || `${p.name} ${processFeature(p)} ${processInfo(p).description} ${p.pid} ${p.user} ${processState(p.state)}`.toLowerCase().includes(q))
   ).slice().sort((a, b) => {
-    const av = key === "category" ? processInfo(a).category : key === "name" ? processInfo(a).title : a[key], bv = key === "category" ? processInfo(b).category : key === "name" ? processInfo(b).title : b[key]
+    const av = key === "name" ? processInfo(a).title : a[key], bv = key === "name" ? processInfo(b).title : b[key]
     if (av === null) return bv === null ? a.pid - b.pid : 1
     if (bv === null) return -1
     const cmp = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv))
@@ -70,64 +88,61 @@ export function processRows(snapshot, { query = "", scope = "all", category = ""
   })
 }
 
-export const PROCESS_CATEGORIES = ["Driving assistance", "Cameras & recording", "Navigation & location",
-  "Display, sound & media", "Galaxy & connectivity", "Device services", "Other / unclassified"]
 const catalogue = new Map()
-function describe(aliases, title, category, description) {
-  for (const alias of aliases.split("|")) catalogue.set(alias, { title, category: PROCESS_CATEGORIES[category], description })
+function describe(aliases, title, description) {
+  for (const alias of aliases.split("|")) catalogue.set(alias, { title, description })
 }
-describe("selfdrive.controls.controlsd", "Steering and speed control", 0, "Calculates steering and acceleration/braking requests from plans and vehicle state.")
-describe("selfdrive.controls.plannerd", "Speed planning", 0, "Plans requested speed and acceleration, including speed-limit and curve-speed features.")
-describe("selfdrive.selfdrived.selfdrived", "Engagement and alerts", 0, "Coordinates driving-assistance engagement and driver alerts.")
-describe("selfdrive.car.card", "Vehicle interface", 0, "Reads vehicle state and translates control requests for the car.")
-describe("selfdrive.controls.radard", "Lead tracking", 0, "Combines lead-vehicle estimates from available model and sensor data; the name does not imply a fitted radar.")
-describe("selfdrive.modeld.modeld", "Driving model", 0, "Runs the driving model on road-camera images.")
-describe("selfdrive.modeld.dmonitoringmodeld", "Driver monitoring model", 0, "Runs the cabin-camera driver monitoring model.")
-describe("selfdrive.monitoring.dmonitoringd", "Driver attention", 0, "Uses driver monitoring results to assess attention and request alerts.")
-describe("selfdrive.locationd.locationd", "Vehicle motion estimation", 0, "Estimates vehicle motion from available sensor and model inputs.")
-describe("selfdrive.locationd.calibrationd", "Camera calibration", 0, "Estimates camera alignment relative to the car.")
-describe("selfdrive.locationd.paramsd", "Vehicle parameter learning", 0, "Estimates vehicle and steering parameters used by driving assistance.")
-describe("selfdrive.locationd.torqued", "Steering torque learning", 0, "Learns steering torque response from driving measurements.")
-describe("selfdrive.locationd.lagd", "Steering delay estimation", 0, "Estimates the delay in vehicle steering response.")
-describe("starpilot.flm.steerlearnerd", "Steering model learning", 0, "Learns steering behaviour for the steering model.")
-describe("selfdrive.pandad.pandad|./pandad", "Vehicle communications", 0, "Manages communication with the Panda vehicle interface.")
-describe("./camerad|system.camerad.webcam.camerad", "Camera capture", 1, "Captures camera images for other processes.")
-describe("./encoderd", "Video encoding", 1, "Encodes camera video for recording or live streaming.")
-describe("./loggerd", "Drive recording", 1, "Writes driving logs and coordinates recording segments.")
-describe("system.loggerd.uploader", "Upload service", 1, "Uploads eligible recordings and logs under configured rules.")
-describe("system.loggerd.deleter", "Recording cleanup", 1, "Removes older recordings when storage space is needed.")
-describe("system.logmessaged", "Application logs", 1, "Collects application log messages.")
-describe("system.proclogd", "Process telemetry recording", 1, "Records process and system activity for diagnostics.")
-describe("system.journald", "System log recording", 1, "Collects operating-system journal records.")
-describe("system.tombstoned", "Crash collection", 1, "Collects native crash reports.")
-describe("selfdrive.navigation.navd", "Navigation instructions", 2, "Provides navigation instructions to driving software.")
-describe("selfdrive.navigation.mapsd", "Navigation maps", 2, "Provides navigation map data.")
-describe("starpilot.navigation.runtime", "Route guidance", 2, "Maintains destination routes and guidance from location.")
-describe("starpilot.navigation.navtilesd", "Map tiles", 2, "Serves map tiles used by navigation.")
-describe("system.qcomgpsd.qcomgpsd|system.ubloxd.ubloxd|system.ubloxd.pigeond", "GPS service", 2, "Works with the device GPS receiver and its location data.")
-describe("selfdrive.ui.ui", "Comma display", 3, "Runs the device's on-screen interface.")
-describe("selfdrive.ui.soundd", "Alert sounds", 3, "Plays driving-assistance alert sounds.")
-describe("system.micd", "Microphone input", 3, "Reads microphone audio for device features.")
-describe("starpilot.soloist.supervisor", "Music service supervisor", 3, "Supervises the configured music playback service.")
-describe("starpilot.galaxy.managed", "Galaxy web interface", 4, "Serves Galaxy pages and device APIs, including this monitor.")
-describe("starpilot.galaxy_bluetooth.bootstrap", "Galaxy phone connection", 4, "Starts the Galaxy Bluetooth phone connection.")
-describe("starpilot.galaxy.hotspot_daemon", "Galaxy hotspot", 4, "Manages the Galaxy device hotspot.")
-describe("starpilot.galaxy.companion_uplink_daemon", "Companion connection", 4, "Manages the companion uplink.")
-describe("starpilot.system.starport.daemon", "StarPort", 4, "Manages the StarPort phone projection service.")
-describe("system.athena.manage_athenad", "Remote connection supervisor", 4, "Supervises the configured remote connection service.")
-describe("system.athena.athenad", "Remote connection", 4, "Handles requests through the configured remote connection.")
-describe("system.webrtc.webrtcd", "Live streaming", 4, "Serves WebRTC live streaming connections.")
-describe("common.hardware.comma.modem", "Cellular modem", 4, "Manages the device cellular modem.")
-describe("system.manager.manager|./manager.py|system/manager/manager.py|openpilot/system/manager/manager.py", "Process manager", 5, "Starts and supervises configured device processes.")
-describe("system.hardware.hardwared", "Device hardware", 5, "Monitors temperature and power and manages cooling.")
-describe("system.sensord.sensord", "Motion sensors", 5, "Reads device motion sensors.")
-describe("system.timed", "Clock synchronisation", 5, "Maintains device time using available time sources.")
-describe("system.updated.updated", "Software updates", 5, "Checks and prepares software updates under configured rules.")
-describe("starpilot.analytics.runtime", "Usage statistics", 5, "Maintains StarPilot usage statistics.")
+describe("selfdrive.controls.controlsd", "Steering and speed control", "Calculates steering and acceleration/braking requests from plans and vehicle state.")
+describe("selfdrive.controls.plannerd", "Speed planning", "Plans requested speed and acceleration, including speed-limit and curve-speed features.")
+describe("selfdrive.selfdrived.selfdrived", "Engagement and alerts", "Coordinates driving-assistance engagement and driver alerts.")
+describe("selfdrive.car.card", "Vehicle interface", "Reads vehicle state and translates control requests for the car.")
+describe("selfdrive.controls.radard", "Lead tracking", "Combines lead-vehicle estimates from available model and sensor data; the name does not imply a fitted radar.")
+describe("selfdrive.modeld.modeld", "Driving model", "Runs the driving model on road-camera images.")
+describe("selfdrive.modeld.dmonitoringmodeld", "Driver monitoring model", "Runs the cabin-camera driver monitoring model.")
+describe("selfdrive.monitoring.dmonitoringd", "Driver attention", "Uses driver monitoring results to assess attention and request alerts.")
+describe("selfdrive.locationd.locationd", "Vehicle motion estimation", "Estimates vehicle motion from available sensor and model inputs.")
+describe("selfdrive.locationd.calibrationd", "Camera calibration", "Estimates camera alignment relative to the car.")
+describe("selfdrive.locationd.paramsd", "Vehicle parameter learning", "Estimates vehicle and steering parameters used by driving assistance.")
+describe("selfdrive.locationd.torqued", "Steering torque learning", "Learns steering torque response from driving measurements.")
+describe("selfdrive.locationd.lagd", "Steering delay estimation", "Estimates the delay in vehicle steering response.")
+describe("starpilot.flm.steerlearnerd", "Steering model learning", "Learns steering behaviour for the steering model.")
+describe("selfdrive.pandad.pandad|./pandad", "Vehicle communications", "Manages communication with the Panda vehicle interface.")
+describe("./camerad|system.camerad.webcam.camerad", "Camera capture", "Captures camera images for other processes.")
+describe("./encoderd", "Video encoding", "Encodes camera video for recording or live streaming.")
+describe("./loggerd", "Drive recording", "Writes driving logs and coordinates recording segments.")
+describe("system.loggerd.uploader", "Upload service", "Uploads eligible recordings and logs under configured rules.")
+describe("system.loggerd.deleter", "Recording cleanup", "Removes older recordings when storage space is needed.")
+describe("system.logmessaged", "Application logs", "Collects application log messages.")
+describe("system.proclogd", "Process telemetry recording", "Records process and system activity for diagnostics.")
+describe("system.journald", "System log recording", "Collects operating-system journal records.")
+describe("system.tombstoned", "Crash collection", "Collects native crash reports.")
+describe("selfdrive.navigation.navd", "Navigation instructions", "Provides navigation instructions to driving software.")
+describe("selfdrive.navigation.mapsd", "Navigation maps", "Provides navigation map data.")
+describe("starpilot.navigation.runtime", "Route guidance", "Maintains destination routes and guidance from location.")
+describe("starpilot.navigation.navtilesd", "Map tiles", "Serves map tiles used by navigation.")
+describe("system.qcomgpsd.qcomgpsd|system.ubloxd.ubloxd|system.ubloxd.pigeond", "GPS service", "Works with the device GPS receiver and its location data.")
+describe("selfdrive.ui.ui", "Comma display", "Runs the device's on-screen interface.")
+describe("selfdrive.ui.soundd", "Alert sounds", "Plays driving-assistance alert sounds.")
+describe("system.micd", "Microphone input", "Reads microphone audio for device features.")
+describe("starpilot.soloist.supervisor", "Music service supervisor", "Supervises the configured music playback service.")
+describe("starpilot.galaxy.managed", "Galaxy web interface", "Serves Galaxy pages and device APIs, including this monitor.")
+describe("starpilot.galaxy_bluetooth.bootstrap", "Galaxy phone connection", "Starts the Galaxy Bluetooth phone connection.")
+describe("starpilot.galaxy.hotspot_daemon", "Galaxy hotspot", "Manages the Galaxy device hotspot.")
+describe("starpilot.galaxy.companion_uplink_daemon", "Companion connection", "Manages the companion uplink.")
+describe("starpilot.system.starport.daemon", "StarPort", "Manages the StarPort phone projection service.")
+describe("system.athena.manage_athenad", "Remote connection supervisor", "Supervises the configured remote connection service.")
+describe("system.athena.athenad", "Remote connection", "Handles requests through the configured remote connection.")
+describe("system.webrtc.webrtcd", "Live streaming", "Serves WebRTC live streaming connections.")
+describe("common.hardware.comma.modem", "Cellular modem", "Manages the device cellular modem.")
+describe("system.manager.manager|./manager.py|system/manager/manager.py|openpilot/system/manager/manager.py", "Process manager", "Starts and supervises configured device processes.")
+describe("system.hardware.hardwared", "Device hardware", "Monitors temperature and power and manages cooling.")
+describe("system.sensord.sensord", "Motion sensors", "Reads device motion sensors.")
+describe("system.timed", "Clock synchronisation", "Maintains device time using available time sources.")
+describe("system.updated.updated", "Software updates", "Checks and prepares software updates under configured rules.")
+describe("starpilot.analytics.runtime", "Usage statistics", "Maintains StarPilot usage statistics.")
 export function processInfo(process) {
   const name = process.name.replace(/^openpilot\./, "")
-  return catalogue.get(name) || { title: process.name, category: PROCESS_CATEGORIES[6],
-    description: process.kernel && process.state !== "Z" ? "Linux kernel thread; individual role not catalogued." : "Description not yet available." }
+  return catalogue.get(name) || { title: process.name, description: process.kernel && process.state !== "Z" ? "Linux kernel thread." : "" }
 }
 export const processIdentity = (p) => p.instanceId || String(p.pid) + ":" + p.name
 
@@ -183,13 +198,6 @@ export class MonitorAverage {
         memoryCoverage: memory.seconds, cpuStale: cpu.last !== null && cpu.last !== end,
         memoryStale: memory.last !== null && memory.last !== end, latestCpu: p.cpu, latestMemory: p.memoryMiB }
     })
-    result.vitals = { ...snapshot.vitals }
-    for (const [field, budget] of [["cpuTempC","onboardMaxAgeMs"], ["gpuTempC","onboardMaxAgeMs"],
-      ["hotspotTempC","maxAgeMs"], ["gpuEdgeTempC","maxAgeMs"], ["memoryUsedBytes","memoryMaxAgeMs"]]) {
-      const avg = mean(s => vital(s, field, budget))
-      result.vitals[field] = avg.value
-      result.vitals[field + "Stale"] = avg.last !== null && (avg.last !== end || !(snapshot.vitals[budget] > 0))
-    }
     return result
   }
 }

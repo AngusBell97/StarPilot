@@ -12,6 +12,8 @@ STALE_NS = 2_500_000_000
 # The host's processing time for the last big-model frame (excludes USB); jetlink's runtime record does not carry it
 LATENCY_RECORD = "/dev/shm/jetlink/starpilot_latency.json"
 LATENCY_FRESH_S = 3.
+# jetlink's own record of the host's hello (jetlink.comma.gadget.SERVER)
+SERVER_RECORD = "/dev/shm/jetlink/server.json"
 RUNNING = {'ready': 'ready', 'joining': 'connecting', 'retrying': 'connecting'}
 
 
@@ -24,9 +26,13 @@ class JetlinkStatus:
 
 
 def _write_latency(model, path) -> None:
-  timings = getattr(getattr(model, "client", None), "last_timings", None)  # the big model's client while it drives
+  client = getattr(model, "client", None)  # the big model's client while it drives
+  timings = getattr(client, "last_timings", None)
   total_us = timings[2] if isinstance(timings, (tuple, list)) and len(timings) == 3 else 0
-  record = {"at": time.monotonic(), "server_ms": total_us / 1000 if type(total_us) in (int, float) and total_us > 0 else None}
+  # The host's sensors (temperatures, power, load), which ride on a reply about once a second; for Galaxy's System Monitor
+  telemetry = getattr(client, "last_state", None)
+  record = {"at": time.monotonic(), "server_ms": total_us / 1000 if type(total_us) in (int, float) and total_us > 0 else None,
+            "telemetry": telemetry if isinstance(telemetry, dict) and not getattr(client, "dead", False) else None}
   os.makedirs(os.path.dirname(path), exist_ok=True)
   tmp = f"{path}.tmp"
   with open(tmp, "w") as f:
@@ -57,6 +63,28 @@ def read_latency(path=LATENCY_RECORD) -> float | None:
     return float(ms) if fresh and type(ms) in (int, float) and math.isfinite(ms) and ms > 0 else None
   except (OSError, ValueError, AttributeError):
     return None
+
+
+def read_host_telemetry(path=LATENCY_RECORD) -> dict | None:
+  """The host's last sensor reading from modeld's record, or None when there is no fresh one."""
+  try:
+    with open(path) as f:
+      record = json.load(f)
+    at, telemetry = record.get("at"), record.get("telemetry")
+    fresh = type(at) in (int, float) and 0 <= time.monotonic() - at < LATENCY_FRESH_S
+    return telemetry if fresh and isinstance(telemetry, dict) and telemetry else None
+  except (OSError, ValueError, AttributeError):
+    return None
+
+
+def read_server(path=SERVER_RECORD) -> dict:
+  """What the host said about itself when it joined (device, backend), kept by jetlink's owner."""
+  try:
+    with open(path) as f:
+      record = json.load(f)
+    return record if isinstance(record, dict) else {}
+  except (OSError, ValueError):
+    return {}
 
 
 def read_status() -> JetlinkStatus:

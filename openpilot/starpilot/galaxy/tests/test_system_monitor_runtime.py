@@ -147,3 +147,144 @@ class BatteryVoltageTest(unittest.TestCase):
     source.snapshot=lambda:None
     self.assertIsNone(monitor._battery_voltage())
     self.assertIsNone(SystemMonitor()._battery_voltage())
+
+
+class HardwareReadingsTest(unittest.TestCase):
+  """Comma temperatures and external GPUs (Chestnut, JetLink) on the System Monitor."""
+
+  def setUp(self):
+    self.now = 100.
+    self.device = SimpleNamespace(
+      thermalStatus='ok', cpuTempC=[55.5, 61.4], gpuTempC=[52.0], memoryTempC=50.2, maxTempC=61.4, fanSpeedPercentDesired=35,
+      chestnutPresent=True,
+      usbState=SimpleNamespace(devices=[SimpleNamespace(vendorId=0xADD1, productId=0x0001, speedMbps=10000, linkErrorCount=0)]))
+    self.chestnut = SimpleNamespace(tempC=78.0, memoryTempC=88.0, powerDrawW=71.44, powerLimitW=120., gpuUsagePercent=64,
+                                    gpuClockMhz=2410, fanSpeedRpm=1850, pcieLtssm=0x78, supplyVoltage=12100,
+                                    supplyCurrent=6420, supplyFault=False)
+    test = self
+
+    class Snapshot(SimpleNamespace):
+      def __getitem__(self, key):
+        return test.device
+
+    class ChestnutMessages(SimpleNamespace):
+      def update(self, timeout):
+        pass
+
+      def __getitem__(self, key):
+        return test.chestnut
+
+    self.snapshot = Snapshot(seen={'deviceState': True}, valid={'deviceState': True},
+                             logMonoTime={'deviceState': 99_000_000_000}, recv_time={'deviceState': 99.})
+    self.chestnut_messages = ChestnutMessages(seen={'chestnutState': True}, valid={'chestnutState': True},
+                                              recv_time={'chestnutState': 99.5})
+    self.params = {'ChestnutActive': True}
+    self.monitor = SystemMonitor(messages=SimpleNamespace(snapshot=lambda: self.snapshot), clock=lambda: self.now,
+                                 boot_clock=lambda: self.now, params=SimpleNamespace(get=lambda key: self.params.get(key)),
+                                 chestnut_messages=self.chestnut_messages, jetlink=lambda: None)
+
+  def test_comma_thermals(self):
+    comma, _ = self.monitor._hardware()
+    self.assertEqual(comma, {'cpuTempC': 61.4, 'gpuTempC': 52.0, 'memoryTempC': 50.2, 'maxTempC': 61.4,
+                             'fanPercent': 35, 'status': 'ok', 'statusText': 'Normal'})
+    self.device.thermalStatus = 'overheated'
+    self.assertIn('cannot engage', self.monitor._hardware()[0]['statusText'])
+    self.snapshot.recv_time['deviceState'] = 90.
+    self.assertIsNone(self.monitor._hardware()[0])
+
+  def test_chestnut_running(self):
+    _, gpus = self.monitor._hardware()
+    self.assertEqual(len(gpus), 1)
+    gpu = gpus[0]
+    self.assertEqual((gpu['kind'], gpu['status'], gpu['statusText']), ('chestnut', 'good', 'Running the driving model'))
+    self.assertEqual((gpu['hotspotC'], gpu['memoryTempC'], gpu['hotspotLimitC'], gpu['memoryLimitC']), (78.0, 88.0, 100., 95.))
+    self.assertEqual((gpu['loadPercent'], gpu['clockMhz'], gpu['powerW'], gpu['powerLimitW'], gpu['fanRpm']), (64, 2410, 71.4, 120., 1850))
+    self.assertEqual((gpu['supplyVolts'], gpu['supplyAmps'], gpu['link'], gpu['usbSpeedMbps']), (12.1, 6.42, 'GPU link up', 10000))
+    self.assertIsNone(gpu['readingsNote'])
+
+  def test_chestnut_states(self):
+    def status():
+      gpu = self.monitor._hardware()[1][0]
+      return gpu['status'], gpu['statusText']
+    self.chestnut.tempC = 101.
+    self.assertEqual(status(), ('danger', 'Overheated'))
+    self.chestnut.tempC = 78.
+    self.params['Offroad_ChestnutOverheated'] = {'text': 'hot'}
+    self.assertEqual(status()[0], 'danger')
+    del self.params['Offroad_ChestnutOverheated']
+    self.params['ChestnutActive'] = False
+    self.assertEqual(status(), ('idle', 'Connected · not running the driving model'))
+    self.chestnut.pcieLtssm = 0x01
+    self.assertEqual(status()[0], 'warning')
+    self.chestnut.supplyVoltage = 0
+    self.assertEqual(status()[0], 'idle')
+    self.assertIn('12 V', status()[1])
+    self.chestnut_messages.recv_time['chestnutState'] = 90.
+    self.assertEqual(status(), ('idle', 'Connected · no readings yet'))
+
+  def test_chestnut_without_gpu_readings(self):
+    # modeld leaves the GPU half at zero while the driving model is not on the Chestnut
+    for field in ('tempC', 'memoryTempC', 'powerDrawW', 'gpuUsagePercent', 'gpuClockMhz', 'fanSpeedRpm'):
+      setattr(self.chestnut, field, 0)
+    gpu = self.monitor._hardware()[1][0]
+    self.assertIsNone(gpu['hotspotC'])
+    self.assertIsNone(gpu['loadPercent'])
+    self.assertIn('appear', gpu['readingsNote'])
+    self.assertEqual(gpu['supplyVolts'], 12.1)
+
+  def test_no_chestnut(self):
+    self.device.chestnutPresent = False
+    self.device.usbState.devices = []
+    self.chestnut_messages.seen['chestnutState'] = False
+    self.assertEqual(self.monitor._hardware()[1], [])
+    self.assertEqual(SystemMonitor(jetlink=lambda: None)._hardware(), (None, []))
+
+  def test_sample_carries_hardware(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      (root / 'stat').write_text('cpu 1 0 0 1 0 0 0 0\n')
+      (root / 'meminfo').write_text('MemTotal: 4096000 kB\nMemAvailable: 1024000 kB\n')
+      (root / 'uptime').write_text('300 0\n')
+      self.monitor.root = root
+      sample = self.monitor.sample()
+    self.assertEqual(sample['commaThermals']['maxTempC'], 61.4)
+    self.assertEqual(sample['externalGpus'][0]['kind'], 'chestnut')
+    self.assertNotIn('vitals', sample)
+
+  def test_jetlink_host(self):
+    from unittest.mock import patch
+    from openpilot.starpilot.models import jetlink_status
+    status = jetlink_status.JetlinkStatus('Computer', 'active', 31.25, 'connected')
+    telemetry = {'temp_c': 64.04, 'memory_temp_c': 58.0, 'power_w': 14.2, 'power_limit_w': 25, 'gpu_load_pct': 71,
+                 'gpu_clock_mhz': 1020, 'fan_rpm': 2900, 'supply_mv': 19100, 'supply_ma': 900}
+    monitor = SystemMonitor()
+    with patch('openpilot.starpilot.models.jetlink_adapter.link_on', return_value=True), \
+         patch.object(jetlink_status, 'read_status', return_value=status), \
+         patch.object(jetlink_status, 'read_server', return_value={'device': 'Orin Nano', 'backend': 'trt'}), \
+         patch.object(jetlink_status, 'read_host_telemetry', return_value=telemetry):
+      gpu = monitor._jetlink()
+      self.assertEqual((gpu['name'], gpu['detail'], gpu['status']), ('JetLink · Orin Nano', 'Computer over USB · trt', 'good'))
+      self.assertEqual((gpu['hotspotC'], gpu['memoryTempC'], gpu['loadPercent'], gpu['powerW'], gpu['fanRpm']), (64.0, 58.0, 71, 14.2, 2900))
+      self.assertEqual((gpu['supplyVolts'], gpu['supplyAmps'], gpu['frameMs']), (19.1, 0.9, 31.2))
+      self.assertIsNone(gpu['readingsNote'])
+      with patch.object(jetlink_status, 'read_host_telemetry', return_value=None):
+        self.assertIn('does not report', monitor._jetlink()['readingsNote'])
+    with patch('openpilot.starpilot.models.jetlink_adapter.link_on', return_value=False):
+      self.assertIsNone(monitor._jetlink())
+
+
+class JetlinkTelemetryRecordTest(unittest.TestCase):
+  def test_modeld_record_carries_host_telemetry(self):
+    from openpilot.starpilot.models import jetlink_status
+    with tempfile.TemporaryDirectory() as directory:
+      path = Path(directory) / 'latency.json'
+      client = SimpleNamespace(last_timings=(1000, 0, 30000), last_state={'temp_c': 60.0}, dead=False)
+      jetlink_status._write_latency(SimpleNamespace(client=client), str(path))
+      self.assertEqual(jetlink_status.read_host_telemetry(str(path)), {'temp_c': 60.0})
+      self.assertEqual(jetlink_status.read_latency(str(path)), 30.)
+      client.dead = True
+      jetlink_status._write_latency(SimpleNamespace(client=client), str(path))
+      self.assertIsNone(jetlink_status.read_host_telemetry(str(path)))
+      jetlink_status._write_latency(SimpleNamespace(), str(path))
+      self.assertIsNone(jetlink_status.read_host_telemetry(str(path)))
+      self.assertEqual(jetlink_status.read_server(str(Path(directory) / 'missing.json')), {})

@@ -10,11 +10,36 @@ import uuid
 from pathlib import Path
 
 
+READING_FRESH_S = 5
+# chestnutState.pcieLtssm when the GPU's PCIe link is up
+CHESTNUT_LINK_UP = 0x78
+THERMAL_STATUS_TEXT = {'ok': 'Normal', 'overheated': 'Hot · cannot engage until it cools',
+                       'critical': 'Too hot · goes offroad to cool down'}
+JETLINK_STATUS_TEXT = {'active': 'Running the driving model', 'ready': 'Connected · ready', 'connected': 'Connected',
+                       'connecting': 'Connecting…', 'disconnected': 'Not connected', 'unavailable': 'Unavailable'}
+
+
+def _bounded(value, low, high, digits=None):
+  if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
+    return None
+  return round(value, digits) if digits is not None else value
+
+
+def _temp(value):
+  """A plausible temperature in °C, else None (zero is a missing reading on these sensors)."""
+  value = _bounded(value, 1, 150)
+  return round(value, 1) if value is not None else None
+
+
 class SystemMonitor:
   def __init__(self, root=Path('/proc'), *, storage=Path('/data'), clock=time.monotonic,
                wall_clock=time.time, disk_usage=shutil.disk_usage, page_size=None, messages=None,  # noqa: TID251 - Display capture date; intervals use monotonic.
-               boot_clock=lambda: time.clock_gettime(getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC))):
+               boot_clock=lambda: time.clock_gettime(getattr(time, 'CLOCK_BOOTTIME', time.CLOCK_MONOTONIC)),
+               params=None, chestnut_messages=None, jetlink=None):
     self.messages, self.boot_clock = messages, boot_clock
+    self.params, self.chestnut_messages = params, chestnut_messages
+    if jetlink is not None:
+      self._jetlink = jetlink
     self.root = Path(root)
     self.storage = Path(storage)
     self.clock, self.wall_clock, self.disk_usage = clock, wall_clock, disk_usage
@@ -50,6 +75,179 @@ class SystemMonitor:
       return round(volts, 2) if math.isfinite(volts) and 0 < volts < 60 else None
     except (OSError, RuntimeError, AttributeError, KeyError, TypeError, ValueError, OverflowError):
       return None
+
+  # ---- temperatures and external GPUs -------------------------------------
+
+  def _fresh(self, sm, name):
+    """A message from `sm` that arrived in the last few seconds, else None."""
+    try:
+      if not sm.seen[name] or not sm.valid[name]:
+        return None
+      if not 0 <= self.clock() - sm.recv_time[name] < READING_FRESH_S:
+        return None
+      return sm[name]
+    except (OSError, RuntimeError, AttributeError, KeyError, TypeError, ValueError):
+      return None
+
+  def _device_state(self):
+    if self.messages is None:
+      return None
+    try:
+      sm = self.messages.snapshot()
+      if sm is None or not sm.seen['deviceState'] or not sm.valid['deviceState']:
+        return None
+      age = self.boot_clock() - int(sm.logMonoTime['deviceState']) / 1e9
+      received_age = self.clock() - sm.recv_time['deviceState']
+      return sm['deviceState'] if 0 <= age < READING_FRESH_S and 0 <= received_age < READING_FRESH_S else None
+    except (OSError, RuntimeError, AttributeError, KeyError, TypeError, ValueError, OverflowError):
+      return None
+
+  def _comma_thermals(self, device_state):
+    if device_state is None:
+      return None
+    try:
+      status = str(device_state.thermalStatus)
+      return {
+        'cpuTempC': _temp(max(device_state.cpuTempC, default=None)),
+        'gpuTempC': _temp(max(device_state.gpuTempC, default=None)),
+        'memoryTempC': _temp(device_state.memoryTempC),
+        'maxTempC': _temp(device_state.maxTempC),
+        'fanPercent': _bounded(device_state.fanSpeedPercentDesired, 0, 100),
+        'status': status if status in THERMAL_STATUS_TEXT else None,
+        'statusText': THERMAL_STATUS_TEXT.get(status),
+      }
+    except (AttributeError, KeyError, TypeError, ValueError):
+      return None
+
+  def _get_param(self, key):
+    try:
+      if self.params is None:
+        if self.messages is None:
+          return None
+        from openpilot.common.params import Params
+        self.params = Params()
+      return self.params.get(key)
+    except Exception:
+      return None
+
+  def _chestnut_state(self):
+    try:
+      if self.chestnut_messages is None:
+        if self.messages is None:
+          return None
+        from openpilot.cereal import messaging
+        self.chestnut_messages = messaging.SubMaster(['chestnutState'])
+      self.chestnut_messages.update(0)
+      return self._fresh(self.chestnut_messages, 'chestnutState')
+    except Exception:
+      return None
+
+  def _chestnut(self, device_state):
+    from openpilot.common.hardware.usb import is_chestnut_usb_id
+    from openpilot.system.hardware.chestnut.status import CHESTNUT_POWERED_VOLTAGE, GPU_TEMP_LIMIT, MEMORY_TEMP_LIMIT
+    usb = None
+    present = False
+    if device_state is not None:
+      try:
+        present = bool(device_state.chestnutPresent)
+        usb = next((d for d in device_state.usbState.devices if is_chestnut_usb_id(d.vendorId, d.productId)), None)
+      except (AttributeError, TypeError, ValueError):
+        pass
+    state = self._chestnut_state()
+    if not present and usb is None and state is None:
+      return None
+
+    gpu = {'hotspotC': None, 'memoryTempC': None, 'loadPercent': None, 'clockMhz': None,
+           'powerW': None, 'powerLimitW': None, 'fanRpm': None}
+    power = {'supplyVolts': None, 'supplyAmps': None}
+    powered = link_up = None
+    if state is not None:
+      hotspot, memory = _temp(state.tempC), _temp(state.memoryTempC)
+      # modeld fills the GPU half only while the driving model runs on the Chestnut; zeros mean no reading yet
+      if hotspot or memory:
+        gpu = {'hotspotC': hotspot, 'memoryTempC': memory,
+               'loadPercent': _bounded(state.gpuUsagePercent, 0, 100), 'clockMhz': _bounded(state.gpuClockMhz, 1, 10000),
+               'powerW': _bounded(state.powerDrawW, 0, 2000, 1), 'powerLimitW': _bounded(state.powerLimitW, 1, 2000, 1),
+               'fanRpm': _bounded(state.fanSpeedRpm, 0, 20000)}
+      powered = not state.supplyFault and state.supplyVoltage >= CHESTNUT_POWERED_VOLTAGE
+      link_up = state.pcieLtssm == CHESTNUT_LINK_UP
+      power = {'supplyVolts': _bounded(state.supplyVoltage / 1000, 0, 30, 2), 'supplyAmps': _bounded(state.supplyCurrent / 1000, -30, 30, 2)}
+
+    running = self._get_param('ChestnutActive') is True
+    overheated = (gpu['hotspotC'] is not None and gpu['hotspotC'] >= GPU_TEMP_LIMIT or
+                  gpu['memoryTempC'] is not None and gpu['memoryTempC'] >= MEMORY_TEMP_LIMIT or
+                  self._get_param('Offroad_ChestnutOverheated') is not None)
+    if overheated:
+      status, text = 'danger', 'Overheated'
+    elif state is None:
+      status, text = 'idle', 'Connected · no readings yet'
+    elif not powered:
+      status, text = 'idle', 'No 12 V power (normal while the car is off)'
+    elif not link_up:
+      status, text = 'warning', 'Powered, but the GPU link is down'
+    elif running:
+      status, text = 'good', 'Running the driving model'
+    else:
+      status, text = 'idle', 'Connected · not running the driving model'
+
+    usb_speed = getattr(usb, 'speedMbps', None) if usb is not None else None
+    return {
+      'kind': 'chestnut', 'name': 'Chestnut', 'detail': 'AMD GPU over USB',
+      'status': status, 'statusText': text, 'runningModel': running,
+      'readingsNote': None if gpu['hotspotC'] is not None else 'GPU temperatures appear while the driving model runs on it.',
+      'hotspotLimitC': GPU_TEMP_LIMIT, 'memoryLimitC': MEMORY_TEMP_LIMIT,
+      **gpu, 'fanPercent': None, **power, 'frameMs': None,
+      'link': None if link_up is None else ('GPU link up' if link_up else 'GPU link down'),
+      'usbSpeedMbps': _bounded(usb_speed, 1, 100000),
+      'usbLinkErrors': _bounded(getattr(usb, 'linkErrorCount', None), 0, 1 << 32) if usb is not None else None,
+    }
+
+  def _jetlink(self):
+    try:
+      from openpilot.starpilot.models import jetlink_status
+      from openpilot.starpilot.models.jetlink_adapter import link_on
+      if not link_on():
+        return None
+      status = jetlink_status.read_status()
+    except Exception:
+      return None
+    if status.state == 'off':
+      return None
+    server = jetlink_status.read_server()
+    telemetry = jetlink_status.read_host_telemetry() if status.state in ('active', 'ready', 'connected') else None
+    t = telemetry or {}
+    mv, ma = t.get('supply_mv'), t.get('supply_ma')
+    status_text = JETLINK_STATUS_TEXT.get(status.state, status.state.capitalize())
+    level = 'good' if status.state == 'active' else 'warning' if status.state == 'unavailable' else 'idle'
+    device = server.get('device') if isinstance(server.get('device'), str) and server.get('device') else status.device or 'Computer'
+    backend = server.get('backend') if isinstance(server.get('backend'), str) else None
+    return {
+      'kind': 'jetlink', 'name': f'JetLink · {device}', 'detail': f'{status.device or "Computer"} over USB' + (f' · {backend}' if backend else ''),
+      'status': level, 'statusText': status_text, 'runningModel': status.state == 'active',
+      'readingsNote': None if telemetry else ('This device does not report its temperatures.' if status.state == 'active'
+                                              else 'Readings appear while the driving model runs on it.'),
+      'hotspotLimitC': None, 'memoryLimitC': None,
+      'hotspotC': _temp(t.get('temp_c')), 'memoryTempC': _temp(t.get('memory_temp_c')),
+      'loadPercent': _bounded(t.get('gpu_load_pct'), 0, 100), 'clockMhz': _bounded(t.get('gpu_clock_mhz'), 1, 10000),
+      'powerW': _bounded(t.get('power_w'), 0, 2000, 1), 'powerLimitW': _bounded(t.get('power_limit_w'), 1, 2000, 1),
+      'fanRpm': _bounded(t.get('fan_rpm'), 1, 20000), 'fanPercent': _bounded(t.get('fan_pct'), 0, 100),
+      'supplyVolts': _bounded(mv / 1000, 0, 60, 2) if type(mv) in (int, float) else None,
+      'supplyAmps': _bounded(ma / 1000, -30, 30, 2) if type(ma) in (int, float) else None,
+      'frameMs': _bounded(status.latency_ms, 0, 10000, 1),
+      'link': None, 'usbSpeedMbps': None, 'usbLinkErrors': None,
+    }
+
+  def _hardware(self):
+    device_state = self._device_state()
+    gpus = []
+    for read in (lambda: self._chestnut(device_state), self._jetlink):
+      try:
+        gpu = read()
+      except Exception:
+        gpu = None
+      if gpu is not None:
+        gpus.append(gpu)
+    return self._comma_thermals(device_state), gpus
 
   def _sample(self):
     now = self.clock()
@@ -148,5 +346,8 @@ class SystemMonitor:
       'batteryVoltage': self._battery_voltage(),
       'storage': storage, 'uptimeSeconds': uptime, 'processCount': len(rows), 'processes': rows,
     }
+    comma, gpus = self._hardware()
+    result['commaThermals'] = comma
+    result['externalGpus'] = gpus
     self.previous, self.cpu_previous, self.previous_time = process_ticks, cpu_now, now
     return result

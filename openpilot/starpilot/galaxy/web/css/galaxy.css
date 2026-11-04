@@ -961,8 +961,9 @@ background: var(--glass-bg-hover);
 .gx-monitor progress { width: 100%; height: 6px; accent-color: var(--primary); }
 .gx-monitor__cores { padding: 14px; margin: 12px 0; }
 .gx-monitor__cores summary { cursor: pointer; }
-.gx-monitor__cores > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px; padding-top: 12px; }
-.gx-monitor__cores span { font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.gx-monitor__core-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px; padding-top: 12px; }
+.gx-monitor__core-list span { font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.gx-monitor__core-list .gx-monitor__bar { flex-basis: 100%; }
 .gx-monitor__filters input { flex: 1; min-width: 180px; }
 .gx-monitor__table { overflow: auto; max-height: 65vh; }
 .gx-monitor table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -1675,7 +1676,7 @@ progress { max-width: 100%; accent-color: var(--primary); }
 .gx-flm__table td { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); padding: var(--sp-1) 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
 .gx-flm__table td:nth-child(n) { white-space: normal; }
 .gx-flm__table td::before { content: attr(data-label); color: var(--text-muted); }
-.gx-monitor table { min-width: 42rem; }
+.gx-monitor table { min-width: 30rem; }
 }
 @media (max-width: 380px) {
 .gx-flm__table td { grid-template-columns: minmax(0, 1fr); gap: 2px; }
@@ -1712,15 +1713,41 @@ progress { max-width: 100%; accent-color: var(--primary); }
 .gx-starport-checks .gx-starport-check--active::before { border-right-color: var(--secondary, var(--primary)); }
 
 /* SP-043: all-process descriptions and adjacent category column. */
-.gx-monitor__description { margin: 5px 0 8px; color: var(--text-muted); line-height: 1.45; }
-.gx-monitor__category { min-width: 120px; max-width: 170px; white-space: normal !important; }
-.gx-monitor__coverage { display: block; color: var(--text-muted); font-size: 11px; margin-top: 5px; }
-.gx-monitor__raw { padding-top: 8px; overflow-wrap: anywhere; }
+.gx-monitor__description { margin: 4px 0 6px; color: var(--text-muted); line-height: 1.45; }
+.gx-monitor__process-name { display: inline-block; font-size: 11px; color: var(--on-surface-variant); background: var(--outline); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
+.gx-monitor h3 { font-size: var(--fs-lg); margin: 0; }
+.gx-monitor h4 { font-size: var(--fs-base); margin: 0; }
+.gx-monitor__section { margin-top: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
+.gx-monitor__section > .gx-monitor__toolbar, .gx-monitor__section > .gx-monitor__filters { margin-bottom: 0; }
+.gx-monitor__chip--live { color: var(--success); }
+.gx-monitor__bar { height: 6px; border-radius: 3px; background: var(--outline); overflow: hidden; }
+.gx-monitor__bar > i { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width var(--motion-base); }
+[data-heat="warm"] .gx-monitor__bar > i { background: var(--warning); }
+[data-heat="hot"] .gx-monitor__bar > i { background: var(--error); }
+[data-heat="warm"] > strong, [data-heat="warm"] .gx-monitor__heat-text { color: var(--warning); }
+[data-heat="hot"] > strong, [data-heat="hot"] .gx-monitor__heat-text { color: var(--error); }
+.gx-monitor__empty { padding: var(--sp-4); display: flex; flex-direction: column; gap: 4px; }
+.gx-monitor__empty small { color: var(--text-muted); }
+.gx-monitor__gpu { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.gx-monitor__gpu > header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap; }
+.gx-monitor__gpu > header small { color: var(--text-muted); }
+.gx-monitor__pill { font-size: var(--fs-xs); font-weight: var(--fw-medium); padding: 4px 10px; border-radius: var(--radius-full); background: var(--outline); color: var(--on-surface-variant); }
+.gx-monitor__pill[data-level="good"] { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.gx-monitor__pill[data-level="warning"] { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.gx-monitor__pill[data-level="danger"] { background: color-mix(in srgb, var(--error) 18%, transparent); color: var(--error); }
+.gx-monitor__temps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.gx-monitor__temp { display: flex; flex-direction: column; gap: 6px; padding: var(--sp-3); border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--outline); min-width: 0; }
+.gx-monitor__temp > span, .gx-monitor__temp small { color: var(--text-muted); font-size: var(--fs-xs); }
+.gx-monitor__temp strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.gx-monitor__gpu-note { margin: 0; }
+.gx-monitor__stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3) var(--sp-4); margin: 0; }
+.gx-monitor__stats dt { color: var(--text-muted); font-size: var(--fs-xs); }
+.gx-monitor__stats dd { margin: 2px 0 0; font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
+.gx-monitor__cores > .gx-monitor__stats { padding-top: 12px; }
 .gx-monitor__table td { vertical-align: top; }
-.gx-monitor__table details summary { cursor: pointer; color: var(--primary); }
 .gx-monitor__table { overflow-anchor: none; }
 
-@media(max-width:600px) { .gx-monitor table { table-layout: fixed; min-width: 640px; } .gx-monitor th:first-child, .gx-monitor td:first-child { width: 180px; min-width: 180px; max-width: 180px; } .gx-monitor th:nth-child(2), .gx-monitor td:nth-child(2) { width: 130px; } }
+@media(max-width:600px) { .gx-monitor table { min-width: 0; } .gx-monitor td:first-child { min-width: 0; max-width: none; } .gx-monitor th button, .gx-monitor td { padding-left: 8px; padding-right: 8px; } .gx-monitor__temps { grid-template-columns: 1fr 1fr; gap: 8px; } .gx-monitor__temp strong { font-size: 22px; } .gx-monitor__stats { grid-template-columns: 1fr 1fr; } }
 /* StarPilot Tuner shares Galaxy surfaces, spacing and source-aware state colors. */
 .gx-tuner { display: grid; gap: var(--sp-5); min-width: 0; padding-bottom: var(--sp-4); }
 .gx-tuner h2, .gx-tuner h3, .gx-tuner h4, .gx-tuner p { margin: 0; }
