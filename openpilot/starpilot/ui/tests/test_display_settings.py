@@ -155,7 +155,7 @@ class DisplaySettingsTests(unittest.TestCase):
         inputs.release(800, y, root)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 10)
+        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 9)
         self.assertEqual(submenu.rows[0].key, MASTER)
         self.assertTrue(all(not row.available for row in submenu.rows[1:] if row.key not in STANDALONE_KEYS))
         self.assertTrue(submenu.rows[-1].available)
@@ -168,7 +168,7 @@ class DisplaySettingsTests(unittest.TestCase):
         self.assertTrue(read_preferences(self.params, large=True).enabled)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        # Sleep Eyes needs Turn Off Comma Screen, and Pure Black needs Sleep Eyes: both start greyed out.
+        # Sleep Eyes needs Turn Off Comma Screen, so it starts greyed out.
         self.assertTrue(all(row.available for row in submenu.rows if row.key not in EYES))
         self.assertEqual(submenu.parent_title, "System")
         session._display_ui(FeatureUiAction("open", submenu.rows[1]))

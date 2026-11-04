@@ -5,8 +5,8 @@ from types import SimpleNamespace as NS
 import pytest
 
 from openpilot.common.params import Params
-from openpilot.starpilot.ui.display_owner import DisplayOwner, EYES_OFF_BLOCKS_BLACK, SCREEN_OFF_NEEDED_FOR_EYES
-from openpilot.starpilot.ui.display_preferences import SCREEN_OFF, SLEEP_EYES, SLEEP_EYES_BLACK, read_preferences
+from openpilot.starpilot.ui.display_owner import DisplayOwner, SCREEN_OFF_NEEDED_FOR_EYES
+from openpilot.starpilot.ui.display_preferences import SCREEN_OFF, SLEEP_EYES, read_preferences
 from openpilot.starpilot.ui.feature_settings_state import FeatureSettingsRequest
 from openpilot.starpilot.ui.presentation import Profile
 from openpilot.starpilot.ui.sleep_eyes import controller as controller_module
@@ -29,21 +29,17 @@ def change(owner, key, value):
   return owner.apply(FeatureSettingsRequest(key, r.source, value, dependencies=r.dependencies))
 
 
-def test_rows_sit_next_to_turn_off_comma_screen_and_black_needs_eyes(owner):
+def test_row_sits_under_turn_off_comma_screen_and_has_no_pure_black_option(owner):
   params, display = owner
   keys = [r.key for r in display.snapshot(Profile.LARGE).rows]
-  assert keys[keys.index(SCREEN_OFF) + 1:keys.index(SCREEN_OFF) + 3] == [SLEEP_EYES, SLEEP_EYES_BLACK]
+  assert keys[keys.index(SCREEN_OFF) + 1] == SLEEP_EYES
+  assert "SleepEyesPureBlack" not in keys
   eyes = row(display, SLEEP_EYES)
   assert not eyes.available and eyes.reason == SCREEN_OFF_NEEDED_FOR_EYES
   assert change(display, SCREEN_OFF, "On")
   assert row(display, SLEEP_EYES).available
-  black = row(display, SLEEP_EYES_BLACK)
-  assert not black.available and black.reason == EYES_OFF_BLOCKS_BLACK
   assert change(display, SLEEP_EYES, "On")
-  assert row(display, SLEEP_EYES_BLACK).available
-  assert change(display, SLEEP_EYES_BLACK, "On")
-  prefs = read_preferences(params, large=True)
-  assert prefs.sleep_eyes and prefs.sleep_eyes_black
+  assert read_preferences(params, large=True).sleep_eyes
 
 
 def test_sleep_eyes_needs_turn_off_comma_screen(owner):

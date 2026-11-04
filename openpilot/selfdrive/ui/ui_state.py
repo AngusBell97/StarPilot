@@ -729,8 +729,7 @@ class Device:
       self._wake_touch_active = True  # the tap that wakes the eyes must not press anything underneath
     want = eyes.decide(started=ui_state.started, timed_out=interaction_timeout, blocked=blocked, touched=touched,
                        wake_alert=wake_alert)
-    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked,
-                pure_black=prefs.sleep_eyes_black)
+    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked)
     return eyes.visible
 
   def _set_awake(self, on: bool):

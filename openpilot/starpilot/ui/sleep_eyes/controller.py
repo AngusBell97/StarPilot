@@ -71,9 +71,8 @@ class SleepEyesController:
       self.parked_since = None
     return want
 
-  def update(self, gui_app, sm, *, started: bool, want: bool, urgent: bool, pure_black: bool) -> None:
+  def update(self, gui_app, sm, *, started: bool, want: bool, urgent: bool) -> None:
     engine, view = self.engine, self.view
-    engine.pure_black = pure_black
     urgent = urgent or self.limit_hit
     self.watcher.update(engine, time.monotonic() * 1000, sm, started)
     if want != self._logged_want:

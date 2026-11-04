@@ -1356,7 +1356,7 @@ class Engine:
     self.parked = False
     self.stopped = False
     self.engaged = False
-    self.pure_black = False
+    self.pure_black = True  # the eyes always sit on pure black; False gives the dim purple grid (tests, mock-ups)
     self.auto = True
     # Continuous context fed by the car: blinker (-1/0/1), alert (spec name or None), alert_dir, lat_hold.
     self.ctx: dict = {'blinker': 0, 'alert': None, 'alert_dir': 0, 'lat_hold': False}
