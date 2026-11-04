@@ -171,8 +171,17 @@ def test_setup_pair_reuses_the_loaded_small_model_and_never_fails_the_drive(tmp_
   primary = Catalog("lightspeed", 1.0, chestnut=True, events=events)
   small = Catalog("rdf43", 2.0, chestnut=False, events=events)
   cfg = {"enabled": True, "lateralModel": "lightspeed", "longitudinalModel": "rdf43", "mode": "shadow"}
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid, chestnut_ok=True: (tmp_path / "s.pkl", "v15", "1" * 64, False))
   model, reason = setup_pair(primary, small, 1928, 1208, config=cfg, load=lambda *a: pytest.fail("must reuse the small model"))
   assert reason == "" and isinstance(model, ModelPair) and model.partner is small and model.partner_device == "comma"
+  # with a Chestnut build of the same small model, that build loads instead of reusing the comma-GPU copy
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid, chestnut_ok=True: (tmp_path / "a.pkl", "v15", "2" * 64, chestnut_ok))
+  built = []
+  def load_chestnut(cam_w, cam_h, path, version, chestnut, mid, sha):
+    built.append((path.name, chestnut))
+    return Catalog(mid, 2.0, chestnut=chestnut, events=events), None
+  model, reason = setup_pair(primary, small, 1928, 1208, config=cfg, load=load_chestnut)
+  assert reason == "" and built == [("a.pkl", True)] and model.partner is not small and model.partner_device == "chestnut"
 
   model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "lateralModel": "resfit"})
   assert model is primary and "must include" in reason

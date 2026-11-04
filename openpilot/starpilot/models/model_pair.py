@@ -399,15 +399,16 @@ def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | N
   try:
     if not isinstance(primary, CatalogModelState):
       raise ValueError("the running model cannot be paired")
-    if small_model is not None and small_model is not primary and getattr(small_model, "model_id", None) == plan.partner_id \
-       and isinstance(small_model, CatalogModelState):
+    # a Chestnut build of the partner wins when the primary is on the Chestnut; else the loaded small model is reused
+    path, version, sha256, on_chestnut = partner_artifact(plan.partner_id, chestnut_ok=bool(primary.chestnut))
+    if on_chestnut and not primary.chestnut:
+      raise ValueError("the Chestnut is not running, so the big model cannot join the pair")
+    if (not on_chestnut and small_model is not None and small_model is not primary and
+        getattr(small_model, "model_id", None) == plan.partner_id and isinstance(small_model, CatalogModelState)):
       partner = small_model
     else:
       if load is None:
         from openpilot.starpilot.models.runner import load_verified_model as load
-      path, version, sha256, on_chestnut = partner_artifact(plan.partner_id, chestnut_ok=bool(primary.chestnut))
-      if on_chestnut and not primary.chestnut:
-        raise ValueError("the Chestnut is not running, so the big model cannot join the pair")
       partner, _ = load(cam_w, cam_h, path, version, on_chestnut, plan.partner_id, sha256)
     # the pair writes its status from its first frames, so a loader that timed out never reports a pair that is not running
     return ModelPair(primary, partner, plan, report=report), ""
