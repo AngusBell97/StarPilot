@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { LaboratoryFeed, LaboratoryPage, laboratoryModels, laboratoryReady, laboratorySelectionError, laboratoryActionAllowed, laboratoryDraft, laboratoryStatusLabel } from "../web/js/model-laboratory.js"
+import { LaboratoryFeed, ModelsPage, laboratoryModels, laboratoryReady, laboratorySelectionError, laboratoryActionAllowed, laboratoryDraft, laboratoryStatusLabel } from "../web/js/models.js"
 
 const model = (value, version = 'v9') => ({ value, label: `Model ${value}`, version, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true })
 const payload = () => ({ schemaVersion: 1, isOnroad: false, chestnutReady: true, runtimeSupported: true,
@@ -60,11 +60,18 @@ assert.equal(download.requests[1].url,'./api/models/laboratory/download');assert
 await download.reply(1,{message:'Starting download'});await download.reply(2,{...p,download:{downloading:true,jobId:'job',progress:'40%'}});await downloading
 const canceling=download.feed.action('cancel');assert.equal(download.requests[3].url,'./api/models/cancel');assert.deepEqual(JSON.parse(download.requests[3].options.body),{jobId:'job'})
 await download.reply(3,{message:'Cancelling'});await download.reply(4,p);await canceling;download.feed.stop()
-assert.ok(LaboratoryPage.template.indexOf('Available models')<LaboratoryPage.template.indexOf('Compose a pair'))
-assert.match(LaboratoryPage.template,/GalaxySelect/)
-assert.match(LaboratoryPage.template,/Catalog models/)
-assert.match(LaboratoryPage.template,/modelLabReason/)
+// Model Laboratory lives on the Model Manager page: pair controls after Controls, eGPU variants on the model cards
+const template = ModelsPage.template
+const labCard = template.indexOf('id="gx-model-laboratory"')
+assert.ok(template.indexOf('>Controls<') < labCard && labCard < template.indexOf('gx-model-card'))
+assert.match(template,/aria-label="Lateral model"/)
+assert.match(template,/aria-label="Longitudinal model"/)
+assert.match(template,/Enable model pair/)
+assert.match(template,/Verified downloads/)
+assert.match(template,/eGPU variant/)
+assert.match(template,/Pairable only/)
+assert.doesNotMatch(template,/Available models|Compose a pair|Catalog models/)
 assert.equal(laboratoryStatusLabel({modelLabStatus:"runtime-unavailable"}), "Downloaded")
 assert.equal(laboratoryStatusLabel({modelLabStatus:"unsupported"}), "Not supported")
-assert.doesNotMatch(LaboratoryPage.template,/20 Hz/)
+assert.doesNotMatch(template,/20 Hz/)
 console.log('Model Laboratory contracts passed')

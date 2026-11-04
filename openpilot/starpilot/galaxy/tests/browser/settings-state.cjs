@@ -152,12 +152,12 @@ const { execFileSync } = require('node:child_process')
         ['onroad-layout', 'OnroadLayoutPage', prepareLayout],
         ['onroad-layout', 'OnroadLayoutPage', prepareLayout, { projection: true }],
         ['models', 'ModelsPage', prepareModels],
-        ['model-laboratory', 'LaboratoryPage', vm => Object.assign(vm, { loading: false,
-          configuration: { enabled: false, lateralModel: 'one', longitudinalModel: 'two' }, status: {
+        ['models', 'ModelsPage', vm => { prepareModels(vm); Object.assign(vm, {
+          labConfig: { enabled: false, lateralModel: 'one', longitudinalModel: 'two' }, lab: {
             configuration: { enabled: false, lateralModel: 'one', longitudinalModel: 'two' },
-            isOnroad: false, runtimeSupported: true, chestnutReady: true, runtime: {}, download: { downloading: false },
+            isOnroad: false, runtimeSupported: true, chestnutReady: true, runtime: {}, download: { downloading: false }, summary: { published: 2 },
             models: ['one', 'two'].map(value => ({ value, label: value, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true })),
-            capabilities: { configure: true, download: true, delete: true, cancel: true, refresh: true } } })],
+            capabilities: { configure: true, download: true, delete: true, cancel: true, refresh: true } } }) }],
         ['sentry-notifications', 'SentryNotifications', vm => { vm.notifications = { subscriptionCount: 0, subscriptions: [],
           channels: Object.fromEntries(vm.channels.map(name => [name, { enabled: true, configured: true, pending: 0, lastState: 'idle', lastError: '' }])) } }],
         ['drive-state', 'DriveStatePanel', vm => { vm.state = { mode: 'auto', available: true, effective: 'offroad', overrideAllowed: true } }],

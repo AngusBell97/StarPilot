@@ -80,7 +80,7 @@ const listeners = new Map()
 globalThis.document = { hidden: false,
   addEventListener: (name, fn) => listeners.set(name, fn),
   removeEventListener: (name, fn) => { if (listeners.get(name) === fn) listeners.delete(name) } }
-const page = { mode: "local", finishDialog() {}, manager: { start() {}, stop() {} }, feed: { starts: 0, stops: 0, start() { this.starts++ }, stop() { this.stops++ } } }
+const page = { mode: "local", finishDialog() {}, manager: { start() {}, stop() {} }, laboratory: { starts: 0, stops: 0, start() { this.starts++ }, stop() { this.stops++ } }, feed: { starts: 0, stops: 0, start() { this.starts++ }, stop() { this.stops++ } } }
 ModelsPage.mounted.call(page)
 assert.equal(page.feed.starts, 1)
 document.hidden = true
@@ -91,6 +91,7 @@ listeners.get("visibilitychange")()
 assert.equal(page.feed.starts, 2)
 ModelsPage.beforeUnmount.call(page)
 assert.equal(page.feed.stops, 2)
+assert.deepEqual([page.laboratory.starts, page.laboratory.stops], [2, 2])
 assert.equal(listeners.size, 0)
 globalThis.document = priorDocument
 
