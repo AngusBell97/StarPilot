@@ -1340,6 +1340,7 @@ class Engine:
     self.blink_at = -1e9
     self.next_idle = 0.0
     self.next_event = 0.0
+    self.last_now: float | None = None
 
   # --- control ---------------------------------------------------------------------------------------------
   def reset_timers(self, now: float) -> None:
@@ -1462,11 +1463,14 @@ class Engine:
         self.next_blink = now + 2400 + self.rng.random() * 3800
       bf = tri(now, self.blink_at, 150)
 
+    # Easing rates were tuned per 60 Hz frame; scale them to the real step so any frame rate looks the same.
+    frames = 1.0 if self.last_now is None else clamp((now - self.last_now) / (1000 / 60), 0.0, 12.0)
+    self.last_now = now
     S = self.S
     for k, base in BASE.items():
       target = T.get(k, base)
       rate = 0.45 if k == 'stick' and target > S[k] else RATE.get(k, 0.15)
-      S[k] += (target - S[k]) * rate
+      S[k] += (target - S[k]) * (1 - (1 - rate) ** frames)
     if o.set_jx is not None:
       S['jx'] = o.set_jx
 

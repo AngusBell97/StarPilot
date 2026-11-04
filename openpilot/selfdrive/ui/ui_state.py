@@ -533,6 +533,7 @@ class Device:
     self._screen_off = False
     self._screen_off_started = False
     self._wake_touch_active = False
+    self._sleep_eyes = None
 
   def invalidate_display_preferences(self) -> None:
     self._display_refresh_time = None
@@ -550,6 +551,11 @@ class Device:
   @property
   def awake(self) -> bool:
     return self._awake
+
+  @property
+  def sleep_eyes_visible(self) -> bool:
+    eyes = getattr(self, "_sleep_eyes", None)
+    return eyes is not None and eyes.visible
 
   def toggle_screen_off(self) -> bool:
     if ui_state.projection_read_only or not ui_state.started:
@@ -649,6 +655,8 @@ class Device:
       if saved != AUTO:
         clipped_brightness = saved
     brightness = round(self._brightness_filter.update(clipped_brightness))
+    if self.sleep_eyes_visible:
+      brightness = min(brightness, self._sleep_eyes.brightness_cap(ui_state.started))
     if not self._awake:
       brightness = 0
 
@@ -688,13 +696,39 @@ class Device:
     self._prev_timed_out = interaction_timeout
 
     auto_screen_off = ui_state.started and self._display_preferences.turn_off_screen and interaction_timeout and not critical and not gpu_loading
-    self._set_awake(not self._screen_off and not auto_screen_off and (ui_state.started or not interaction_timeout or PC))
+    awake = not self._screen_off and not auto_screen_off and (ui_state.started or not interaction_timeout or PC)
+    if self._update_sleep_eyes(touched, critical or gpu_loading or self._screen_off, interaction_timeout):
+      awake = True
+    self._set_awake(awake)
     # The entire wake gesture belongs to the display, including its release.
     # Widgets were not rendered while asleep, so their touch state can be stale.
     if self._wake_touch_active:
       if any(ev.left_released for ev in gui_app.mouse_events):
         self._wake_touch_active = False
       gui_app.mouse_events.clear()
+
+  def _update_sleep_eyes(self, touched: bool, blocked: bool, interaction_timeout: bool) -> bool:
+    """Sleep Eyes replace the sleeping screen. Returns True while the eyes keep the display on."""
+    prefs = self._display_preferences
+    if not getattr(prefs, "sleep_eyes", False) or ui_state.projection_read_only:
+      if getattr(self, "_sleep_eyes", None) is not None:
+        self._sleep_eyes.shutdown(gui_app)
+        self._sleep_eyes = None
+      return False
+    if getattr(self, "_sleep_eyes", None) is None:
+      from openpilot.starpilot.ui.sleep_eyes.controller import SleepEyesController
+      self._sleep_eyes = SleepEyesController()
+    eyes = self._sleep_eyes
+    wake_alert = eyes.wake_alert(ui_state.sm, ui_state.started)
+    if wake_alert:
+      self._reset_interactive_timeout()
+    if touched and eyes.visible:
+      self._wake_touch_active = True  # the tap that wakes the eyes must not press anything underneath
+    want = eyes.decide(started=ui_state.started, timed_out=interaction_timeout, blocked=blocked, touched=touched,
+                       wake_alert=wake_alert)
+    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked,
+                pure_black=prefs.sleep_eyes_black)
+    return eyes.visible
 
   def _set_awake(self, on: bool):
     if on != self._awake:
