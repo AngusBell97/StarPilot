@@ -345,7 +345,23 @@ input[type="range"].gx-slider:active::-moz-range-thumb {
 
 .gx-model-reason { margin: var(--sp-3) 0; color: var(--text-muted); font-size: var(--fs-sm); }
 .gx-model-card__reason { margin: 0 var(--panel-padding) var(--sp-3); }
-/* Model Laboratory: the pair card (kept clear of the app bar when linked to) and each Small card's eGPU variant line */
+/* Choose models: single model and Laboratory pair side by side, stacked on narrow screens */
+.gx-model-choose__groups { display: grid; grid-template-columns: 1fr; }
+.gx-model-choose__group { min-width: 0; align-content: start; }
+.gx-model-choose__group + .gx-model-choose__group { border-top: 1px solid var(--glass-border); }
+@media (min-width: 900px) {
+  .gx-model-choose__groups { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .gx-model-choose__group + .gx-model-choose__group { border-top: 0; border-left: 1px solid var(--glass-border); }
+}
+.gx-model-choose__heading { display: grid; gap: var(--sp-1); }
+.gx-model-choose__heading h3 { margin: 0; font-size: var(--fs-md, 1.05rem); }
+.gx-model-choose__heading small, .gx-model-control small { color: var(--text-muted); font-weight: normal; }
+.gx-model-control label small { display: block; margin-top: 2px; font-size: var(--fs-sm); }
+.gx-model-choose__heading .gx-tags { margin-top: var(--sp-1); }
+.gx-model-search { width: 100%; }
+.gx-model-browse { scroll-margin-top: 100px; }
+.gx-empty.gx-actions { align-items: center; }
+/* Model Laboratory: the pair group (kept clear of the app bar when linked to) and each Small card's eGPU variant line */
 .gx-model-laboratory { scroll-margin-top: 100px; }
 .gx-model-lab { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); min-width: 0; }
 .gx-model-lab__label { color: var(--text-muted); font-size: var(--fs-sm); white-space: nowrap; }

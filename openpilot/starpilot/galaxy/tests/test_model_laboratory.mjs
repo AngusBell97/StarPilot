@@ -63,7 +63,9 @@ await download.reply(3,{message:'Cancelling'});await download.reply(4,p);await c
 // Model Laboratory lives on the Model Manager page: pair controls after Controls, eGPU variants on the model cards
 const template = ModelsPage.template
 const labCard = template.indexOf('id="gx-model-laboratory"')
-assert.ok(template.indexOf('>Controls<') < labCard && labCard < template.indexOf('gx-model-card'))
+// one Choose models card: single model first, then the Laboratory pair, then the model list
+assert.ok(template.indexOf('>Choose models<') < template.indexOf('Single model') && template.indexOf('Single model') < labCard && labCard < template.indexOf('gx-model-card'))
+assert.doesNotMatch(template, />Controls</)
 assert.match(template,/aria-label="Lateral model"/)
 assert.match(template,/aria-label="Longitudinal model"/)
 assert.match(template,/Enable model pair/)
@@ -74,4 +76,9 @@ assert.doesNotMatch(template,/Available models|Compose a pair|Catalog models/)
 assert.equal(laboratoryStatusLabel({modelLabStatus:"runtime-unavailable"}), "Downloaded")
 assert.equal(laboratoryStatusLabel({modelLabStatus:"unsupported"}), "Not supported")
 assert.doesNotMatch(template,/20 Hz/)
+const save=fixture();save.feed.start();await save.reply(0,p)
+const saving=save.feed.action('save',null,{enabled:true,lateralModel:'b',longitudinalModel:'a'})
+assert.equal(save.requests[1].url,'./api/models/laboratory')
+assert.deepEqual(JSON.parse(save.requests[1].options.body),{enabled:false,lateralModel:'b',longitudinalModel:'a'})
+await save.reply(1,{...p,message:'saved'});await save.reply(2,p);await saving;save.feed.stop()
 console.log('Model Laboratory contracts passed')

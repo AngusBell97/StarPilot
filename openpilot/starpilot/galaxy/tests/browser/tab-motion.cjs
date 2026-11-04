@@ -62,13 +62,13 @@ const assert = require('node:assert/strict')
     const layout = await page.evaluate(() => {
       const title = [...document.querySelectorAll('.gx-section__title')].find(element => element.textContent === 'Models')
       const summary = title.closest('.gx-card').querySelector('.gx-summary')
-      const lab = document.querySelector('#gx-model-laboratory .gx-section__header')
+      const lab = document.querySelector('#gx-model-laboratory .gx-model-choose__heading')
       return { headerHeight: title.parentElement.getBoundingClientRect().height,
         labHeaderHeight: lab.getBoundingClientRect().height,
         summaryHeight: summary.getBoundingClientRect().height,
         overflow: document.documentElement.scrollWidth > innerWidth }
     })
-    assert.ok(layout.headerHeight < 100 && layout.labHeaderHeight < 100 && layout.summaryHeight < 160, 'model headers and summary stay compact')
+    assert.ok(layout.headerHeight < 100 && layout.labHeaderHeight < 260 && layout.summaryHeight < 160, 'model headers and summary stay compact')
     assert.equal(layout.overflow, false)
   }
   await page.setViewportSize({ width: 390, height: 900 })

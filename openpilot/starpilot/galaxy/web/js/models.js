@@ -202,6 +202,7 @@ export class ModelManagerFeed {
     this.expiry = null
     this.data = null
     this.saving = false
+    this.loaded = false
     this.publish({ loading: false, data: null, error: "" })
   }
   start() {
@@ -255,7 +256,8 @@ export class ModelManagerFeed {
   }
   async load() {
     if (!this.active || this.saving) return null
-    if (!this.data && !this.lastError) this.publish({ loading: true, data: null, error: "" })
+    // only the first read shows the loading screen; a re-read after an action keeps the page in place
+    if (!this.data && !this.lastError && !this.loaded) this.publish({ loading: true, data: null, error: "" })
     const data = await this.requestJson("manager")
     if (!this.active) return null
     if (data) {
@@ -266,6 +268,7 @@ export class ModelManagerFeed {
         this.publish({ loading: false, data: null, error: "Invalid Model Manager response" })
       } else {
         this.data = data
+        this.loaded = true
         this.lastError = ""
         if (this.expiry !== null) this.cancel(this.expiry)
         this.expiry = null
@@ -343,7 +346,7 @@ export function laboratorySelectionError(data, configuration) {
 }
 
 export function laboratoryActionAllowed(data, action, model, configuration = data?.configuration) {
-  if (!data || data.capabilities?.[action === "enable" || action === "disable" ? "configure" : action] !== true) return false
+  if (!data || data.capabilities?.[["enable", "disable", "save"].includes(action) ? "configure" : action] !== true) return false
   if (action === "cancel") return data.download?.downloading === true && typeof data.download.jobId === "string"
   if (data.isOnroad !== false || data.download?.downloading) return false
   if (action === "enable") return !laboratorySelectionError(data, configuration)
@@ -351,6 +354,13 @@ export function laboratoryActionAllowed(data, action, model, configuration = dat
   if (action === "download") return laboratoryModels(data).some(m => m.value === model?.value && m.small === true && m.modelLabEligible === true && m.modelLabArtifactAvailable === true && !m.modelLabArtifactInstalled)
   if (action === "delete") return laboratoryReady(data).some(m => m.value === model?.value) &&
     !(data.configuration.enabled && [data.configuration.lateralModel, data.configuration.longitudinalModel].includes(model.value))
+  if (action === "save") {
+    // keep the pair's state, change only its models; an enabled pair must stay valid
+    if (data.configuration.enabled) return !laboratorySelectionError(data, configuration)
+    const ready = laboratoryReady(data)
+    const picks = [configuration?.lateralModel, configuration?.longitudinalModel]
+    return picks.every(id => id === "" || ready.some(m => m.value === id)) && (picks[0] === "" || picks[0] !== picks[1])
+  }
   return action === "refresh"
 }
 
@@ -398,8 +408,10 @@ export class LaboratoryFeed extends ModelManagerFeed {
   }
   async action(action, model = null, configuration) {
     if (!this.active || this.saving || !laboratoryActionAllowed(this.data, action, model, configuration)) return null
-    const paths = { enable: "laboratory", disable: "laboratory", download: "laboratory/download", delete: "laboratory/delete", cancel: "cancel", refresh: "refresh_manifest" }
-    const payload = action === "enable" || action === "disable" ? { ...configuration, enabled: action === "enable" } :
+    const paths = { enable: "laboratory", disable: "laboratory", save: "laboratory", download: "laboratory/download", delete: "laboratory/delete", cancel: "cancel", refresh: "refresh_manifest" }
+    const pair = { lateralModel: configuration?.lateralModel, longitudinalModel: configuration?.longitudinalModel }
+    const payload = action === "enable" || action === "disable" ? { ...pair, enabled: action === "enable" } :
+      action === "save" ? { ...pair, enabled: this.data.configuration.enabled } :
       action === "cancel" ? { jobId: this.data.download.jobId } : model ? { model: model.value } : {}
     this.saving = true
     const result = await this.requestJson(paths[action], payload)
@@ -410,6 +422,16 @@ export class LaboratoryFeed extends ModelManagerFeed {
     if (error && this.active) this.publish({ loading: false, data: this.data, error })
     return result
   }
+}
+
+// Selection errors that come from the chosen pair; the others are things the device or build still needs.
+const LAB_CHOICE_PROBLEMS = new Set(["Choose two different models", "Both models must have downloaded eGPU variants", "Choose two downloaded eGPU variants"])
+
+export function matchesSearch(model, query) {
+  const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const text = [model?.label, model?.value, model?.series, model?.version, model?.released].filter(Boolean).join(" ").toLowerCase()
+  return words.every(word => text.includes(word))
 }
 
 // Per-model reasons worth showing on a card; the common states are covered by the chip and the Laboratory card.
@@ -423,7 +445,7 @@ export const ModelsPage = {
     focus: { type: String, default: "" } },
   data() {
     return { polarisAbout: false, loading: true, error: "", message: "", trackingProgress: false, busy: "", selectionUncertain: true, disposed: false,
-      sortMode: "release_date", userFilter: "all", communityFilter: "all", hardwareFilter: readHardwareFilter(), pairableFilter: false,
+      sortMode: "release_date", userFilter: "all", communityFilter: "all", hardwareFilter: readHardwareFilter(), pairableFilter: false, installedFilter: false, search: "",
       models: [], currentModel: "", activeSmallModel: "", activeBigModel: "", capabilities: {},
       summary: { installed: 0, missing: 0, total: 0 }, status: { isOnroad: true },
       runtime: { status: "idle", data: null, error: "" }, dialog: null, pendingChoice: null,
@@ -449,10 +471,13 @@ export const ModelsPage = {
         .filter(m => this.userFilter === "all" || !!m.userFavorite === (this.userFilter === "yes"))
         .filter(m => this.communityFilter === "all" || !!m.communityFavorite === (this.communityFilter === "yes"))
         .filter(m => !this.pairableFilter || this.labRow(m)?.modelLabArtifactAvailable === true)
+        .filter(m => !this.installedFilter || m.installed === true)
+        .filter(m => matchesSearch(m, this.search))
         .sort((a, b) => (this.sortMode === "release_date" ? (Date.parse(b.released) || 0) - (Date.parse(a.released) || 0) : 0) ||
           (a.label || a.value).localeCompare(b.label || b.value, undefined, { sensitivity: "base", numeric: true }))
     },
     downloadTargetLabel() {
+      if (this.status.refreshing) return "model catalog"
       if (this.status.downloadAll) return "all missing models"
       const label = this.models.find(m => m.value === this.status.modelToDownload)?.label || "a model"
       return this.status.downloadVariant === "amd" ? `${label} · eGPU variant` : label
@@ -462,6 +487,8 @@ export const ModelsPage = {
     labCandidates() { return this.labReady.filter(m => m.value !== this.labConfig.lateralModel) },
     labSelectionError() { return laboratorySelectionError(this.lab, this.labConfig) },
     labRuntimeState() { return !this.lab ? "Status unavailable" : !this.lab.runtimeSupported ? "Unavailable" : this.lab.runtime.active ? "Pair active" : this.lab.runtime.requested ? "Pair requested" : "Inactive" },
+    labChoiceProblem() { return LAB_CHOICE_PROBLEMS.has(this.labSelectionError) },
+    missingDownloads() { return this.models.filter(m => !m.installed && m.downloadAvailable === true) },
     labLocked() { return !this.lab || this.lab.isOnroad || this.lab.download.downloading },
   },
   watch: {
@@ -483,9 +510,12 @@ export const ModelsPage = {
         this.activeBigModel = p.activeBigModel || ""
         this.summary = p.summary || { installed: 0, missing: 0, total: 0 }
         this.status = p
-        if (this.trackingProgress && p.progress) {
-          this.message = p.progress
-          if (!p.downloading) this.trackingProgress = false
+        if (this.trackingProgress) {
+          if (p.downloading) this.message = ""
+          else {
+            if (p.progress) this.message = p.progress
+            this.trackingProgress = false
+          }
         }
       }
     }, unauthorized: this.unauthorized })
@@ -530,10 +560,43 @@ export const ModelsPage = {
       this.labConfig.lateralModel = value
       if (this.labConfig.longitudinalModel === value) this.labConfig.longitudinalModel = this.labCandidates[0]?.value || ""
       this.labDirty = true
+      return this.saveLabPair()
     },
     changeLongitudinal(value) {
       this.labConfig.longitudinalModel = value
       this.labDirty = true
+      return this.saveLabPair()
+    },
+    // Saves the pair's models; a choice the device refuses goes back to the saved pair.
+    async saveLabPair() {
+      if (!this.labActionAvailable("save")) return null
+      const result = await reportSave(() => this.runLabAction("save"))
+      if (!result && !this.disposed) {
+        this.labDirty = false
+        if (this.lab) this.labConfig = laboratoryDraft(this.lab, this.labConfig, false)
+      }
+      return result
+    },
+    activeRoles(model) {
+      const roles = []
+      if (model.value === this.activeSmallModel) roles.push("Active Small")
+      if (model.value === this.activeBigModel) roles.push("Active Big")
+      if (!roles.length && model.value === this.currentModel) roles.push("Selected")
+      return roles
+    },
+    pairRoles(model) {
+      const pair = this.lab?.configuration
+      if (!pair) return []
+      return [[pair.lateralModel, "Pair · lateral"], [pair.longitudinalModel, "Pair · longitudinal"]]
+        .filter(([id]) => id && id === model.value).map(([, role]) => role)
+    },
+    showPairable() {
+      this.pairableFilter = true
+      this.$nextTick(() => this.$refs.browse?.scrollIntoView({ block: "start" }))
+    },
+    clearFilters() {
+      Object.assign(this, { search: "", installedFilter: false, pairableFilter: false, userFilter: "all", communityFilter: "all" })
+      this.setHardwareFilter("both")
     },
     toggleLabPair(event) {
       const enabled = this.lab?.configuration.enabled === true
@@ -550,9 +613,9 @@ export const ModelsPage = {
         if (this.disposed) return
         const result = await this.laboratory.action(action, model, this.labConfig)
         if (!this.disposed && result) {
-          this.message = result.message || "Updated"
+          this.message = action === "save" ? "Model pair saved for the next start." : result.message || "Updated"
           this.trackingProgress = action === "download"
-          if (["enable", "disable", "delete"].includes(action)) {
+          if (["enable", "disable", "delete", "save"].includes(action)) {
             this.labDirty = false
             if (this.lab) this.labConfig = laboratoryDraft(this.lab, this.labConfig, false)
           }
@@ -628,7 +691,15 @@ export const ModelsPage = {
         if (action === "delete" && !await this.confirmAction({ title: "Delete Model", message: `Delete local files for "${model.label}"?`, confirmLabel: "Delete", danger: true })) return
         const needsGpu = action === "download" ? model.requiresGpu && !model.gpuAvailable : action === "downloadAll" &&
           this.models.some(m => !m.installed && m.requiresGpu && !m.gpuAvailable && m.downloadAvailable === true)
-        if (needsGpu) {
+        if (action === "downloadAll") {
+          // one confirmation: how much will download, and the GPU caveat when it applies
+          const missing = this.missingDownloads
+          const size = missing.reduce((total, m) => total + (bytes(m.declaredSizeBytes || m.artifactSize) || 0), 0)
+          if (!await this.confirmAction({ title: "Download Missing Models", confirmLabel: needsGpu ? "Download Anyway" : "Download",
+            message: `Download ${missing.length} model${missing.length === 1 ? "" : "s"}${size ? ` (about ${formatBytes(size)})` : ""}? Keep the device connected until the download finishes. Downloading does not change the active model.` +
+              (needsGpu ? " Some of these need an external GPU, which is not detected; they cannot run until a compatible GPU is connected." : "") })) return
+          allowGpuWithoutGpu = needsGpu
+        } else if (needsGpu) {
           allowGpuWithoutGpu = await this.confirmAction({ title: "No External GPU Detected", confirmLabel: "Download Anyway",
             message: "These model files require an external GPU. You can download them now, but they cannot run until a compatible GPU is connected and detected. GPU model files can be large. Downloading does not activate a model." })
           if (!allowGpuWithoutGpu) return
@@ -638,7 +709,7 @@ export const ModelsPage = {
         const result = await (["enable-randomizer", "disable-randomizer", "include", "exclude"].includes(action) ? reportSave(perform) : perform())
         if (!this.disposed && result) {
           this.trackingProgress = ["download", "downloadAll", "refresh"].includes(action)
-          this.message = (this.trackingProgress && this.status.progress) || result.message ||
+          this.message = this.trackingProgress && this.status.downloading ? "" : (this.trackingProgress && this.status.progress) || result.message ||
             (action.startsWith("select-") ? "Selection saved for the next start." : "Saved.")
           if (["download", "downloadAll", "cancel", "delete", "refresh"].includes(action)) this.laboratory.load()
         }
@@ -657,7 +728,7 @@ export const ModelsPage = {
         <GxNotice v-if="message" tone="info">{{ message }}</GxNotice>
         <GxNotice v-if="error" tone="danger" title="Model Manager">{{ error }}</GxNotice>
         <GxNotice v-if="status.isOnroad" tone="warn">Park the vehicle before changing or downloading models.</GxNotice>
-        <GxNotice v-if="status.downloading" :title="'Downloading ' + downloadTargetLabel">{{ status.progress || 'Keep the device connected until the download finishes.' }}</GxNotice>
+        <GxNotice v-if="status.downloading" :title="(status.refreshing ? 'Checking ' : 'Downloading ') + downloadTargetLabel">{{ status.progress || 'Keep the device connected until the download finishes.' }}</GxNotice>
         <section class="gx-card gx-model-overview">
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-cpu"></i>
@@ -665,6 +736,88 @@ export const ModelsPage = {
             <span v-if="currentLabel" class="gx-section__count">Selected: {{ currentLabel }}</span>
           </div>
           <GxSummary :items="[{label: 'Installed', value: summary.installed}, {label: 'Missing', value: summary.missing}, {label: 'Total', value: summary.total}, {label: 'Running model', value: runningModelLabel}]" />
+        </section>
+
+        <section class="gx-card gx-model-choose">
+          <div class="gx-section__header">
+            <i aria-hidden="true" class="bi bi-sliders"></i>
+            <span class="gx-section__title">Choose models</span>
+            <span class="gx-section__count">Applies at the next start</span>
+          </div>
+          <div class="gx-model-choose__groups">
+            <div class="gx-panel gx-stack gx-model-choose__group">
+              <div class="gx-model-choose__heading"><h3>Single model</h3><small>One model steers and sets the speed.</small></div>
+              <div class="gx-model-control">
+                <label class="gx-row__label" for="gx-model-small">Active Small · On-device</label>
+                <GalaxySelect id="gx-model-small" class="gx-field" :value="pendingChoice?.action === 'select-small' ? pendingChoice.value : activeSmallModel" :disabled="selectionUncertain || capabilities.select !== true || status.isOnroad || status.randomizer" @change="runAction('select-small', installedSmallModels.find(m => m.value === $event.target.value))">
+                  <option v-for="m in installedSmallModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
+                </GalaxySelect>
+              </div>
+              <div class="gx-model-control">
+                <label class="gx-row__label" for="gx-model-big">Active Big · GPU</label>
+                <GalaxySelect id="gx-model-big" class="gx-field" :value="pendingChoice?.action === 'select-big' ? pendingChoice.value : activeBigModel" :disabled="selectionUncertain || capabilities.select !== true || status.isOnroad || status.randomizer" @change="$event.target.value ? runAction('select-big', installedBigModels.find(m => m.value === $event.target.value)) : runAction('select-big')">
+                  <option value="">{{ bigNoneLabel }}</option>
+                  <option v-for="m in installedBigModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
+                </GalaxySelect>
+              </div>
+              <p v-if="status.jetlinkBig === true" class="gx-model-reason">Jetlink runs Active Big on its host, which downloads the model itself. A model chosen in the Jetlink app shows here once the comma connects.</p>
+              <p v-else-if="!status.gpuAvailable" class="gx-model-reason">An external GPU is not detected. Active Small is used; your Big selection is saved for later.</p>
+              <div class="gx-row gx-row--borderless" :class="{disabled: !actionAvailable(status.randomizer ? 'disable-randomizer' : 'enable-randomizer')}">
+                <span class="gx-row__info gx-row__label">Model Randomizer</span>
+                <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Model Randomizer" :checked="status.randomizer === true" :disabled="!actionAvailable(status.randomizer ? 'disable-randomizer' : 'enable-randomizer')" @change="toggleRandomizer($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
+              </div>
+              <p v-if="status.randomizer" class="gx-model-reason">A different verified model is chosen each start. {{ status.gpuAvailable && activeBigModel ? 'Big GPU' : 'Small on-device' }} models are used. {{ (status.blacklistedModels || []).length }} excluded. Favorites only mark your preferred models.</p>
+            </div>
+
+            <div id="gx-model-laboratory" ref="laboratory" class="gx-panel gx-stack gx-model-choose__group gx-model-laboratory">
+              <div class="gx-model-choose__heading">
+                <h3><i aria-hidden="true" class="bi bi-bezier2"></i> Model pair · Laboratory</h3>
+                <small>Pair lateral judgment from one model with longitudinal judgment from another. Enabling applies when modeld next starts, when it loads and verifies the model weights, input tensors and GPU state.</small>
+                <div class="gx-actions gx-tags">
+                  <span class="gx-chip">{{ lab ? (lab.chestnutReady ? 'Chestnut ready' : 'Chestnut required') : 'Waiting for device status' }}</span>
+                  <span v-if="lab" class="gx-chip" :class="{'gx-chip--selected': labRuntimeState === 'Pair active'}">{{ labRuntimeState }}</span>
+                </div>
+              </div>
+              <GxNotice v-if="labError" tone="danger" title="Model Laboratory">{{ labError }}</GxNotice>
+              <GxNotice v-if="lab?.configurationError" tone="danger">{{ lab.configurationError }}</GxNotice>
+              <p v-if="!lab && !labError" class="gx-note">Loading Model Laboratory…</p>
+              <template v-if="lab">
+                <div class="gx-model-control">
+                  <label class="gx-row__label" for="gx-lab-lateral">Lateral model<small>Path shape, curvature, lane geometry, and driving desire</small></label>
+                  <GalaxySelect id="gx-lab-lateral" class="gx-field" aria-label="Lateral model" :disabled="labLocked" :value="labConfig.lateralModel" @change="changeLateral($event.target.value)">
+                    <option value="">Choose a model</option>
+                    <option v-for="m in labReady" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
+                  </GalaxySelect>
+                </div>
+                <div class="gx-model-control">
+                  <label class="gx-row__label" for="gx-lab-longitudinal">Longitudinal model<small>Speed, acceleration, stopping, leads, and scene confidence</small></label>
+                  <GalaxySelect id="gx-lab-longitudinal" class="gx-field" aria-label="Longitudinal model" :disabled="labLocked" :value="labConfig.longitudinalModel" @change="changeLongitudinal($event.target.value)">
+                    <option value="">Choose a model</option>
+                    <option v-for="m in labCandidates" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
+                  </GalaxySelect>
+                </div>
+                <p class="gx-row__desc">{{ labModelLabel(labConfig.lateralModel) }} steers · {{ labModelLabel(labConfig.longitudinalModel) }} paces</p>
+                <GxNotice v-if="labSelectionError" :tone="labChoiceProblem ? 'danger' : 'info'">{{ labSelectionError }}</GxNotice>
+                <div class="gx-row gx-row--borderless" :class="{disabled: !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')}">
+                  <span class="gx-row__info gx-row__label">Enable model pair</span>
+                  <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Enable model pair" :checked="lab.configuration.enabled === true"
+                    :disabled="!!busy || !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')" @change="toggleLabPair($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
+                </div>
+                <div class="gx-row gx-row--borderless">
+                  <div class="gx-row__info">
+                    <span class="gx-row__label">Running pair</span>
+                    <span class="gx-row__desc">Lateral: {{ labModelLabel(lab.runtime.lateralModel) }} · Longitudinal: {{ labModelLabel(lab.runtime.longitudinalModel) }}</span>
+                    <span v-if="!lab.runtimeSupported && labSelectionError !== lab.runtimeUnavailableReason" class="gx-row__desc">{{ lab.runtimeUnavailableReason || 'Pair runtime is unavailable.' }}</span>
+                  </div>
+                </div>
+                <GxNotice v-if="lab.runtime.error" tone="danger">{{ lab.runtime.error }}</GxNotice>
+                <div class="gx-row gx-row--borderless gx-row--wrap">
+                  <div class="gx-row__info"><span class="gx-row__desc">Verified downloads: {{ labReady.length }} of {{ lab.summary?.published || 0 }} published eGPU variants. Download them from the Small model cards.</span></div>
+                  <button type="button" class="gx-btn gx-btn--tonal" @click="showPairable"><i aria-hidden="true" class="bi bi-funnel"></i> Show pairable models</button>
+                </div>
+              </template>
+            </div>
+          </div>
         </section>
 
         <section v-if="status.jetlink" class="gx-card">
@@ -692,42 +845,19 @@ export const ModelsPage = {
           </div>
         </section>
 
-        <section class="gx-card">
+        <section ref="browse" class="gx-card gx-model-browse">
           <div class="gx-section__header">
-            <i aria-hidden="true" class="bi bi-sliders"></i>
-            <span class="gx-section__title">Controls</span>
+            <i aria-hidden="true" class="bi bi-grid"></i>
+            <span class="gx-section__title">Browse models</span>
+            <span class="gx-section__count">Showing {{ sorted.length }} of {{ models.length }}</span>
           </div>
           <div class="gx-panel gx-stack">
-            <p class="gx-note">Selections take effect the next time the driving model starts.</p>
+            <input class="gx-field gx-model-search" type="search" v-model.trim="search" placeholder="Search by name, ID, series or version" aria-label="Search models">
             <div class="gx-actions">
-              <button v-if="status.downloading" type="button" class="gx-btn gx-btn--danger" :disabled="!actionAvailable('cancel')" @click="runAction('cancel')"><i aria-hidden="true" class="bi bi-stop-circle"></i> Cancel Download</button>
+              <button v-if="status.downloading" type="button" class="gx-btn gx-btn--danger" :disabled="!actionAvailable('cancel')" @click="runAction('cancel')"><i aria-hidden="true" class="bi bi-stop-circle"></i> {{ status.refreshing ? 'Stop catalog check' : 'Cancel Download' }}</button>
               <button v-else type="button" class="gx-btn" :disabled="!actionAvailable('downloadAll')" @click="runAction('downloadAll')"><i aria-hidden="true" class="bi bi-download"></i> Download Missing Models</button>
-              <button type="button" class="gx-btn gx-btn--tonal" :disabled="!actionAvailable('refresh')" @click="runAction('refresh')"><i aria-hidden="true" v-if="busy === 'refresh:'" class="bi bi-arrow-repeat gx-spin"></i><i aria-hidden="true" v-else class="bi bi-arrow-clockwise"></i> Check model catalog</button>
+              <button type="button" class="gx-btn gx-btn--tonal" :disabled="!actionAvailable('refresh')" @click="runAction('refresh')"><i aria-hidden="true" v-if="busy === 'refresh:' || status.refreshing" class="bi bi-arrow-repeat gx-spin"></i><i aria-hidden="true" v-else class="bi bi-arrow-clockwise"></i> Check model catalog</button>
             </div>
-
-            <div class="gx-row gx-row--borderless" :class="{disabled: !actionAvailable(status.randomizer ? 'disable-randomizer' : 'enable-randomizer')}">
-              <span class="gx-row__info gx-row__label">Model Randomizer</span>
-              <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Model Randomizer" :checked="status.randomizer === true" :disabled="!actionAvailable(status.randomizer ? 'disable-randomizer' : 'enable-randomizer')" @change="toggleRandomizer($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
-            </div>
-            <p v-if="status.randomizer" class="gx-model-reason">A different verified model is chosen each start. {{ status.gpuAvailable && activeBigModel ? 'Big GPU' : 'Small on-device' }} models are used. {{ (status.blacklistedModels || []).length }} excluded. Favorites only mark your preferred models.</p>
-            <p v-if="status.jetlinkBig === true" class="gx-model-reason">Jetlink runs Active Big on its host, which downloads the model itself. A model chosen in the Jetlink app shows here once the comma connects.</p>
-            <p v-else-if="!status.gpuAvailable" class="gx-model-reason">An external GPU is not detected. Active Small is used; your Big selection is saved for later.</p>
-
-            <div class="gx-model-control">
-              <label class="gx-row__label" for="gx-model-small">Active Small · On-device</label>
-              <GalaxySelect id="gx-model-small" class="gx-field" :value="pendingChoice?.action === 'select-small' ? pendingChoice.value : activeSmallModel" :disabled="selectionUncertain || capabilities.select !== true || status.isOnroad || status.randomizer" @change="runAction('select-small', installedSmallModels.find(m => m.value === $event.target.value))">
-                <option v-for="m in installedSmallModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
-              </GalaxySelect>
-            </div>
-
-            <div class="gx-model-control">
-              <label class="gx-row__label" for="gx-model-big">Active Big · GPU</label>
-              <GalaxySelect id="gx-model-big" class="gx-field" :value="pendingChoice?.action === 'select-big' ? pendingChoice.value : activeBigModel" :disabled="selectionUncertain || capabilities.select !== true || status.isOnroad || status.randomizer" @change="$event.target.value ? runAction('select-big', installedBigModels.find(m => m.value === $event.target.value)) : runAction('select-big')">
-                <option value="">{{ bigNoneLabel }}</option>
-                <option v-for="m in installedBigModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
-              </GalaxySelect>
-            </div>
-
             <div class="gx-model-filter-bar" role="group" aria-label="Sort models">
               <span class="gx-row__label">Sort</span>
               <div class="gx-actions">
@@ -735,12 +865,12 @@ export const ModelsPage = {
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="sortMode === 'alphabetical'" @click="sortMode = 'alphabetical'">Name</button>
               </div>
             </div>
-
             <div class="gx-model-filter-bar" role="group" aria-label="Show models">
               <span class="gx-row__label">Show models</span>
               <div class="gx-actions">
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="['both', 'comma'].includes(hardwareFilter)" @click="toggleHardware('comma', !['both', 'comma'].includes(hardwareFilter))">Small · On-device</button>
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="['both', 'gpu'].includes(hardwareFilter)" @click="toggleHardware('gpu', !['both', 'gpu'].includes(hardwareFilter))">Big · GPU</button>
+                <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="installedFilter" @click="installedFilter = !installedFilter">Installed only</button>
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="userFilter === 'yes'" @click="userFilter = userFilter === 'yes' ? 'all' : 'yes'">Your favorites only</button>
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="communityFilter === 'yes'" @click="communityFilter = communityFilter === 'yes' ? 'all' : 'yes'">Community favorites only</button>
                 <button type="button" class="gx-btn gx-btn--tonal" :aria-pressed="pairableFilter" @click="pairableFilter = !pairableFilter">Pairable only</button>
@@ -749,52 +879,8 @@ export const ModelsPage = {
           </div>
         </section>
 
-        <section id="gx-model-laboratory" ref="laboratory" class="gx-card gx-model-laboratory">
-          <div class="gx-section__header">
-            <i aria-hidden="true" class="bi bi-bezier2"></i>
-            <span class="gx-section__title">Model Laboratory</span>
-            <span class="gx-chip">{{ lab ? (lab.chestnutReady ? 'Chestnut ready' : 'Chestnut required') : 'Waiting for device status' }}</span>
-          </div>
-          <div class="gx-panel gx-stack">
-            <p class="gx-note">Pair lateral judgment from one model with longitudinal judgment from another. Enabling applies when modeld next starts, when it loads and verifies the model weights, input tensors and GPU state.</p>
-            <GxNotice v-if="labError" tone="danger" title="Model Laboratory">{{ labError }}</GxNotice>
-            <GxNotice v-if="lab?.configurationError" tone="danger">{{ lab.configurationError }}</GxNotice>
-            <p v-if="!lab && !labError" class="gx-note">Loading Model Laboratory…</p>
-            <template v-if="lab">
-              <p class="gx-model-reason">Verified downloads: {{ labReady.length }} of {{ lab.summary?.published || 0 }} published eGPU variants. Download them from the Small model cards below.</p>
-              <label class="gx-field-group"><strong>Lateral model</strong><small>Path shape, curvature, lane geometry, and driving desire</small>
-                <GalaxySelect class="gx-field" aria-label="Lateral model" :disabled="labLocked" :value="labConfig.lateralModel" @change="changeLateral($event.target.value)">
-                  <option value="">Choose a model</option>
-                  <option v-for="m in labReady" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
-                </GalaxySelect></label>
-              <label class="gx-field-group"><strong>Longitudinal model</strong><small>Speed, acceleration, stopping, leads, and scene confidence</small>
-                <GalaxySelect class="gx-field" aria-label="Longitudinal model" :disabled="labLocked" :value="labConfig.longitudinalModel" @change="changeLongitudinal($event.target.value)">
-                  <option value="">Choose a model</option>
-                  <option v-for="m in labCandidates" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
-                </GalaxySelect></label>
-              <p class="gx-row__desc">{{ labModelLabel(labConfig.lateralModel) }} steers · {{ labModelLabel(labConfig.longitudinalModel) }} paces</p>
-              <GxNotice v-if="labSelectionError" tone="danger">{{ labSelectionError }}</GxNotice>
-              <div class="gx-row gx-row--borderless" :class="{disabled: !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')}">
-                <span class="gx-row__info gx-row__label">Enable model pair</span>
-                <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Enable model pair" :checked="lab.configuration.enabled === true"
-                  :disabled="!!busy || !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')" @change="toggleLabPair($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
-              </div>
-              <div class="gx-row gx-row--borderless">
-                <div class="gx-row__info">
-                  <span class="gx-row__label">Runtime</span>
-                  <span class="gx-row__desc">Lateral: {{ labModelLabel(lab.runtime.lateralModel) }}</span>
-                  <span class="gx-row__desc">Longitudinal: {{ labModelLabel(lab.runtime.longitudinalModel) }}</span>
-                  <span v-if="!lab.runtimeSupported && labSelectionError !== lab.runtimeUnavailableReason" class="gx-row__desc">{{ lab.runtimeUnavailableReason || 'Pair runtime is unavailable.' }}</span>
-                </div>
-                <span class="gx-chip">{{ labRuntimeState }}</span>
-              </div>
-              <GxNotice v-if="lab.runtime.error" tone="danger">{{ lab.runtime.error }}</GxNotice>
-            </template>
-          </div>
-        </section>
-
         <template v-if="!sorted.length">
-          <div class="gx-card"><div class="gx-empty">No models match these filters. Select a model type or clear the favorite filters.</div></div>
+          <div class="gx-card"><div class="gx-empty gx-actions">No models match these filters. <button type="button" class="gx-btn gx-btn--tonal" @click="clearFilters">Clear search and filters</button></div></div>
         </template>
         <template v-else>
           <div class="gx-card-grid">
@@ -814,7 +900,8 @@ export const ModelsPage = {
                   <span v-if="isPolaris(m)" class="gx-chip gx-polaris-badge"><span class="gx-polaris-badge__star" aria-hidden="true">✦</span> StarPilot Custom</span>
                   <button v-if="isPolaris(m)" type="button" class="gx-icon-btn" aria-label="About Polaris models" title="About Polaris models" @click="polarisAbout = true"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
                   <span v-if="m.communityFavorite" class="gx-chip">Community Favorite</span>
-                  <span v-if="rowState(m) === 'active'" class="gx-chip gx-chip--selected">Selected</span>
+                  <span v-for="role in activeRoles(m)" :key="role" class="gx-chip gx-chip--selected">{{ role }}</span>
+                  <span v-for="role in pairRoles(m)" :key="role" class="gx-chip">{{ role }}</span>
                   <span class="gx-chip">{{ m.value }}</span>
                   <span v-if="m.builtin" class="gx-chip">Built-in</span>
                   <span class="gx-chip">{{ hardwareLabel(m) }}</span>
