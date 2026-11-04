@@ -185,7 +185,7 @@ class V8Controller:
       "weight": rd(r.weight, 3), "trust": rd(r.trust, 3), "e_y": rd(r.e_y, 3), "e_psi": rd(r.e_psi, 4),
       "kappa_road": rd(r.kappa_road, 7), "kappa_lane": rd(r.kappa_lane, 7), "bias": rd(r.bias, 7), "width": rd(r.width, 2),
       "mode": r.mode, "gap_s": rd(r.diagnostics.get("gap_s", 0.), 2), "residual": rd(r.diagnostics.get("residual"), 3),
-      "conf": rd(r.diagnostics.get("conf"), 2), "sigma": rd(r.diagnostics.get("bandwidth_scale"), 2),
+      "conf": rd(r.diagnostics.get("conf"), 2), "sigma": rd(r.diagnostics.get("bandwidth_scale"), 2), "bridge": rd(r.diagnostics.get("bridge_s", 0.), 2),
       "lim_a": bool(fl.get("accel_limited", False)), "lim_j": bool(fl.get("jerk_limited", False)), "lim_t": bool(fl.get("total_limited", False)),
       "lever": rd(r.diagnostics.get("lever"), 3), "lever_n": int(r.diagnostics.get("lever_n", 0) or 0),
       "guard_l": rd(r.diagnostics.get("guard_l"), 2), "guard_r": rd(r.diagnostics.get("guard_r"), 2), "guard": bool(r.diagnostics.get("guard_active", False)),

@@ -38,11 +38,17 @@ _LOST_HEADING = math.radians(30.0)                         # a tracked lane skew
 _SNAP_INNOVATION = 1.0                                     # m: an innovation this large is a lost track, so snap instead of limiting
 _MEAS_TAU = 0.1                                            # s, filter on the measured (steering-angle) curvature
 _FRESH_CONF = 0.05
+_CURV_INNOVATION = 0.0                                     # extra share of each frame's innovation taken by the curvature coefficients (0: none, 1: all)
+_TRACK_INNOVATION_DIV = 5.0                                # settled tracker gain = w / (w + this * conf): 5 takes a sixth of each frame (tau 0.3 s), 2 a third (0.15 s)
 _RESIDUAL_FULL, _RESIDUAL_ZERO = 0.08, 0.20                # m rms fit residual on the near half of the horizon: full trust below, none above
 # (heading innovation is now the heading_innovation setting; 0.5 lagged the lane heading and hurt closed-loop centring)
 _CONFIDENCE_FULL = 0.5                                     # line probability at which trust from confidence is full
 ROAD_JERK = 2.0                                            # m/s^3 rate bound on the feedforward (host ISO limit is 5)
 _EDGE_CONFIDENCE = 0.7                                     # an edge has no probability; a line+edge pair is a trusted pair
+_LINE_BRIDGE_S = 2.0                                       # s a two-line track carries on from one line plus the last width when the other line drops (change 32; 0 off; 1.5 on the first road day, 2.0 from 4 Nov)
+_RECOVERY_FLOOR = 2.8                                      # s: the Recovery slider is floored here (change 33): 1.5 rang at 2 Hz on the road (3 Nov), 2.0-2.5 ring in replay, 2.8 is road-proven
+_CURV_AGREE_FRAMES = 0                                     # probe: frames of same-sign curvature innovation before _CURV_INNOVATION applies (0: never)
+_HEADING_SCHEDULE = (99.0, 99.0, 1.0)                      # probe: (v_full, v_min, share_at_v_min): heading innovation share falls linearly from 1 at v_full to share at v_min
 
 
 # ----------------------------------------------------------------------------- inputs and outputs
@@ -221,12 +227,15 @@ class CentreTracker:
     self.conf = 0.0             # 0 fresh .. 1 settled
     self.width = 3.5            # observed two-line width, filtered (2 s): never a centre source, only a CAP on guard pushes
     self.width_age_s = math.inf # observed frames since two lines were last seen
+    self.bridge_s = 0.0         # s spent bridging a dropped second line with the last width (change 32)
     self.residual = 0.0         # filtered (0.5 s) rms fit residual: fit quality, not frame noise
     self.innovation_limited = False
     self.mode = "none"          # last usable observation's mode; "none" until one arrives
     self.boundary_confidence = 0.0
     self._pending = np.zeros(self.DEGREE + 1)  # innovation still to be applied, spread over the frame period
     self._pending_s = 0.0
+    self._agree = 0; self._agree_sign = 0   # sign-agreement run of the curvature innovation (probe _CURV_AGREE_FRAMES)
+    self.speed = 0.0                       # set by set_horizon; the heading schedule probe reads it
 
   @property
   def stations(self) -> np.ndarray:
@@ -234,6 +243,7 @@ class CentreTracker:
 
   # -- horizon follows speed; coefficients are re-expressed so the curve itself does not change
   def set_horizon(self, speed: float):
+    self.speed = speed
     H = float(np.clip(self.HORIZON_S * speed, self.H_MIN, self.H_MAX))
     if H != self.H:
       scale = (H / self.H) ** np.arange(self.DEGREE + 1)
@@ -303,6 +313,23 @@ class CentreTracker:
         else:
           left = None
         width_obs = None
+    if (mode == "none" and (left is not None) != (right is not None) and self.mode == "two" and _LINE_BRIDGE_S > 0.0
+        and self.bridge_s < _LINE_BRIDGE_S and self.width_age_s <= _LINE_BRIDGE_S + 2.0 and s.min_width <= self.width <= s.max_width):
+      # Bridge (change 32): a two-line track whose second line has just dropped keeps the two-line centre from the
+      # remaining line and the width seen a moment ago, for _LINE_BRIDGE_S at most. Falling straight into one-line
+      # mode moves the tracked curve from the centre to that line's guard, half a metre or more, and the fit
+      # residual that jump leaves takes the trust to zero: on the fifth drive two thirds of the hand-over cycles were
+      # a line gone for under two seconds (65 of 66 such episodes came back). A lane does not change width in a
+      # second, so the last width is a better centre than the guard for that long; after it the one-line rules apply.
+      one = left if left is not None else right
+      y1, c1 = _sample(one, xs)
+      sign = 1.0 if one.side == 0 else -1.0
+      centre = y1 + sign * 0.5 * self.width
+      weight = c1.astype(float) * self._std_weight(one, s)
+      mode = "two"
+      self.bridge_s += dt_frame
+    elif mode == "two":
+      self.bridge_s = 0.0
     if mode == "none" and (left is not None) != (right is not None):
       # One line: track its guard boundary, the nearest position the car may hold (car half width plus clearance
       # toward +y for the left line at -y, toward -y for the right line). The controller holds its lateral position
@@ -328,14 +355,29 @@ class CentreTracker:
     # A settled tracker takes about a sixth of each frame's innovation (tau about 0.3 s). This filters the
     # reference, not the loop: the car's own motion is carried exactly by predict(), so only real changes in
     # the lane geometry see the lag. A fresh tracker snaps to the first observation.
-    gain = weight / (weight + 5.0 * self.conf) if not fresh else (weight > 0).astype(float)
+    gain = weight / (weight + _TRACK_INNOVATION_DIV * self.conf) if not fresh else (weight > 0).astype(float)
     y_new = y_pred + gain * (centre - y_pred)
     c_new = self.PINV @ y_new
     dc = c_new - self.c
+    if not fresh and _CURV_INNOVATION > 0.0:
+      # The curvature coefficients may take more of the frame's innovation than the offset and heading: the bend
+      # ahead is what the feedforward and the delay predictor read, and a lagged bend makes the feedback fight the
+      # turn-in for the tracker's time constant, while the offset and heading at the car are what the model's lines
+      # wobble in. 0 keeps the single gain; 1 snaps the curvature to each frame. Taken unconditionally it passed the
+      # model's frame noise (3 Nov replay); with _CURV_AGREE_FRAMES it applies only while the full innovation of the
+      # quadratic term has kept one sign for that many frames, which noise (alternating) does not and a bend does.
+      dc_full = self.PINV @ (y_pred + np.where(weight > 0, centre - y_pred, 0.0)) - self.c
+      sgn = 1 if dc_full[2] > 0 else -1 if dc_full[2] < 0 else 0
+      self._agree = self._agree + 1 if sgn != 0 and sgn == self._agree_sign else (1 if sgn != 0 else 0)
+      self._agree_sign = sgn
+      if _CURV_AGREE_FRAMES <= 0 or self._agree >= _CURV_AGREE_FRAMES:
+        dc[2:] += (dc_full[2:] - dc[2:]) * _CURV_INNOVATION
     if not fresh:
       # Real model lines wobble in heading frame to frame far more than in offset; the heading term is the
       # damping and the dominant source of request jerk, so its innovation is taken more slowly (reference side).
-      dc[1] *= s.heading_innovation * (1.0 if mode == "two" else _ONE_LINE_INNOVATION)
+      v_full, v_min, share_min = _HEADING_SCHEDULE
+      sched = 1.0 if self.speed <= v_full else share_min if self.speed >= v_min else 1.0 + (share_min - 1.0) * (self.speed - v_full) / max(v_min - v_full, 1e-6)
+      dc[1] *= s.heading_innovation * sched * (1.0 if mode == "two" else _ONE_LINE_INNOVATION)
       d0 = abs(dc[0])
       d1 = abs(math.atan(c_new[1] / self.H) - math.atan(self.c[1] / self.H))
       scale = min(1.0, s.innovation_limit_m / d0 if d0 > 0 else 1.0,
@@ -589,9 +631,11 @@ class LeverLearner:
       return False
     if A.shape != (3, 3) or b.shape != (3,) or not np.isfinite(A).all() or not np.isfinite(b).all() or not math.isfinite(n):
       return False
-    if n < 0.0 or n > self.MEMORY * 1.01 or (np.diag(A) < 0.0).any() or not np.allclose(A, A.T, rtol=1e-6, atol=1e-9):
+    if n < 0.0 or (np.diag(A) < 0.0).any() or not np.allclose(A, A.T, rtol=1e-6, atol=1e-9):
       return False
-    self.A, self.b, self.n, self.accepted = A, b, n, max(accepted, 0)
+    # n counts accepted frames less what bends forgot; straights forget nothing, so after a long day it passes MEMORY.
+    # The old upper bound (MEMORY * 1.01) threw a whole day's learning away at the next drive (3 November, 85,000 frames).
+    self.A, self.b, self.n, self.accepted = A, b, min(n, 4.0 * self.MEMORY), max(accepted, 0)
     self._theta = None
     return True
 
@@ -615,7 +659,7 @@ class LaneController:
   @staticmethod
   def omega(s: LaneLedSettings) -> float:
     # Critically damped: a 30 cm step is within 10 cm after about 3.3/omega seconds.
-    return 3.3 / max(s.recovery_time, 1e-3)
+    return 3.3 / max(s.recovery_time, _RECOVERY_FLOOR, 1e-3)
 
   def follow(self, kappa: float):
     """While not driving, track the given request so a hand-over starts from it with nothing added."""
@@ -1006,7 +1050,7 @@ class LaneLedController:
     return LaneLedResult(candidate, kappa_lane, kappa_model, weight, state, reason, e_y, e_psi, kappa_ff,
                          self.controller.bias, trust, self.tracker.width, self.tracker.mode, limited,
                          {"e_y_hat": e_y_hat, "e_psi_hat": e_psi_hat, "gap_s": self._gap_s, "residual": self.tracker.residual,
-                          "innovation_limited": self.tracker.innovation_limited, "conf": self.tracker.conf,
+                          "innovation_limited": self.tracker.innovation_limited, "conf": self.tracker.conf, "bridge_s": self.tracker.bridge_s,
                           "guard_l": self._guard_l, "guard_r": self._guard_r, "guard_active": guard_active, "discontinuity": discontinuity,
                           "e_psi_line": e_psi_line, "ff_clamped": kappa_ff != curvature_at(x_p),
                           "boundary_confidence": self.tracker.boundary_confidence,
