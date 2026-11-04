@@ -49,6 +49,15 @@ from openpilot.selfdrive.controls.lib.longitudinal_mpc_lib.long_mpc import STOP_
 from openpilot.starpilot.longitudinal.lead_approach import LeadApproach, LeadApproachKey, project as project_approach
 from openpilot.starpilot.lateral.lane_change_preferences import LaneChangePolicy
 
+# End-to-end admission hold (3 Nov 2026 review): the published mode flips to Experimental for one to three model
+# cycles when the conditional policy briefly proposes it. Letting the model's request win the arbitration for those
+# cycles produced the recorded dips and ramp restarts. Experimental must now be published for E2E_ADMIT_CYCLES
+# consecutive cycles before the model candidate joins the minimum, unless the model is stopping, braking hard, or the
+# car is at launch speed, where it passes at once.
+E2E_ADMIT_CYCLES = 4
+E2E_IMMEDIATE_BRAKE = -1.5
+E2E_IMMEDIATE_SPEED = 2.5
+
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
 A_CRUISE_MAX_BP = [0., 10.0, 25., 40.]
 J_CRUISE_VALS = [1.6, 1.2, 0.8, 0.6]
@@ -59,8 +68,11 @@ NATIVE_ALLOW_THROTTLE_PROBABILITY = 0.4
 NATIVE_PLAN_INPUTS = ('carControl', 'carState', 'controlsState', 'vehicleParameters',
                       'radarState', 'modelV2', 'selfdriveState')
 
-# Lookup table for turns
-_A_TOTAL_MAX_V = [1.7, 3.2]
+# Lookup table for turns: total (lateral + longitudinal) acceleration budget, lateral taken from the steering angle.
+# Stock openpilot used [1.7, 3.2]: below 45 mph that left no throttle at all in any bend above 1.7 m/s2 lateral
+# (route 00000034 at 215 s, 4 Nov 2026: 2.5 s at zero request while the curve ceiling was already asking for more).
+# Raised so throttle returns once a bend is below about 2.5 m/s2; the curve-speed ceiling still owns the speed.
+_A_TOTAL_MAX_V = [2.8, 3.4]
 _A_TOTAL_MAX_BP = [20., 40.]
 _TAKEOFF_TOTAL_BP = [0., 2., 5., 20., 40.]
 _TAKEOFF_TOTAL_MAX = [3.5, 3.5, 1.7, 1.7, 3.2]
@@ -165,6 +177,9 @@ class LongitudinalPlanner:
     self.experimental_release = ExperimentalRelease()
     self.mode_recovery = ModeRecovery()
     self.lead_approach = LeadApproach(dt, CP.longitudinalActuatorDelay)
+    self.e2e_admitted: bool | None = None  # None: no mode history yet, adopt the published mode without a hold
+    self.e2e_proposal_cycles = 0
+    self.e2e_blip_log_ns = 0
 
     self.v_desired_filter = FirstOrderFilter(init_v, 2.0, self.dt)
     self.a_cruise = init_a
@@ -415,6 +430,9 @@ class LongitudinalPlanner:
         not any(lead.present for lead in (sm['radarState'].leadOne, sm['radarState'].leadTwo))):
       output_a_target_e2e = max(output_a_target_e2e, 0.2)
       output_should_stop_e2e = False
+    e2e_admitted = self.admit_e2e(bool(sm['selfdriveState'].experimentalMode), reset_state=reset_state, v_ego=float(v_ego),
+                                  model_accel=float(output_a_target_e2e), model_stop=bool(output_should_stop_e2e),
+                                  now_ns=sample_now_ns)
 
     relevant_lead = any(braking_lead_relevant(lead, v_ego) for lead in
                         (sm['radarState'].leadOne, sm['radarState'].leadTwo))
@@ -532,7 +550,7 @@ class LongitudinalPlanner:
                           if curve.effective_mps is not None and not reset_state and profile_eligible and
                           (coast_plan is None or coast_plan.brake_floor is None and not coast_plan.force_decel) and
                           not self.force_stop_plan.forcing else None)
-    self.a_cruise = get_cruise_accel(sm['selfdriveState'].experimentalMode, v_cruise, v_ego,
+    self.a_cruise = get_cruise_accel(e2e_admitted, v_cruise, v_ego,
                                      self.a_cruise, steer_angle_without_offset, self.CP, self.dt,
                                      accel_coast, self.allow_throttle, cruise_profile, slc_floor,
                                      base_brake_floor=global_floor, selected_acceleration_max=selected_acceleration, faster_takeoffs=faster_takeoffs,
@@ -542,7 +560,7 @@ class LongitudinalPlanner:
                                      curve_deceleration=curve_deceleration,
                                      curve_response=self.curve_response,
                                      curve_other_accel=min(float(output_a_target_mpc), float(output_a_target_e2e) if
-                                       sm['selfdriveState'].experimentalMode else math.inf),
+                                       e2e_admitted else math.inf),
                                      curve_active=bool(curve.effective_mps is not None and v_cruise == curve.effective_mps and
                                        curve_ceiling is not None and curve_ceiling.apex_speed_mps is not None),
                                      curve_response_enabled=bool(profile_eligible and not reset_state and
@@ -586,11 +604,11 @@ class LongitudinalPlanner:
     gap_mpc_target = self.lane_change_gap.comfort_target(
       float(output_a_target_mpc), cruise=float(self.a_cruise), previous=float(a_prev),
       positive_jerk=float(np.interp(v_ego, A_CRUISE_MAX_BP, J_CRUISE_VALS)),
-      experimental=bool(sm['selfdriveState'].experimentalMode and output_a_target_e2e < 0.),
+      experimental=bool(e2e_admitted and output_a_target_e2e < 0.),
       blocked=bool(gap_vetoes), block_reasons=gap_vetoes)
     candidates = [(gap_mpc_target, self.mpc.source, output_should_stop_mpc),
                   (self.a_cruise, LongitudinalPlanSource.cruise, cruise_should_stop)]
-    if sm['selfdriveState'].experimentalMode:
+    if e2e_admitted:
       candidates.append((output_a_target_e2e, LongitudinalPlanSource.e2e, output_should_stop_e2e))
 
     mpc_source = self.mpc.source
@@ -603,7 +621,7 @@ class LongitudinalPlanner:
     # an equal or lower SLC ceiling retain their own attribution.
     self.last_curve_ceiling_applied = (curve.effective_mps is not None and v_cruise == curve.effective_mps and
                                       not self.force_stop_plan.forcing and not sm["controlsState"].forceDecel and self.a_cruise < output_a_target_mpc and
-                                      (not sm['selfdriveState'].experimentalMode or self.a_cruise < output_a_target_e2e))
+                                      (not e2e_admitted or self.a_cruise < output_a_target_e2e))
     self.output_should_stop = self.force_stop_plan.should_stop or any(should_stop for _, _, should_stop in candidates)
     if conditional_handoff is None:
       self.experimental_release.reset()
@@ -707,6 +725,29 @@ class LongitudinalPlanner:
       cloudlog.event('lane_change_gap', **lane_gap_diagnostic)
 
     self.v_desired_filter.x = self.v_desired_filter.x + self.dt * (self.output_a_target + a_prev) / 2.0
+
+  def admit_e2e(self, experimental: bool, *, reset_state: bool, v_ego: float, model_accel: float, model_stop: bool,
+                now_ns: int) -> bool:
+    """Decide whether the end-to-end request may join this cycle's arbitration (see E2E_ADMIT_CYCLES)."""
+    if reset_state or self.e2e_admitted is None:
+      # The driver owns the speed, or this is the first cycle: adopt the published mode as it is.
+      self.e2e_admitted = experimental
+      self.e2e_proposal_cycles = 0
+    elif not experimental:
+      if self.e2e_proposal_cycles and now_ns - self.e2e_blip_log_ns >= 1_000_000_000:
+        self.e2e_blip_log_ns = now_ns
+        cloudlog.event('longitudinal.e2e_blip_held', cycles=int(self.e2e_proposal_cycles), v_ego=round(v_ego, 2),
+                       model_accel=round(model_accel, 3))
+      self.e2e_admitted = False
+      self.e2e_proposal_cycles = 0
+    elif not self.e2e_admitted:
+      self.e2e_proposal_cycles += 1
+      immediate = (model_stop or self.fcw or self.force_stop_plan.forcing or v_ego <= E2E_IMMEDIATE_SPEED or
+                   model_accel <= E2E_IMMEDIATE_BRAKE)
+      if immediate or self.e2e_proposal_cycles >= E2E_ADMIT_CYCLES:
+        self.e2e_admitted = True
+        self.e2e_proposal_cycles = 0
+    return bool(self.e2e_admitted)
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')

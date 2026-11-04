@@ -56,6 +56,9 @@ class CruiseTransition:
   UP_RATE = .35
   DOWN_RATE = .4
   RATE_CHANGE = .7
+  # A lower final request (model blip, radar track swap, MPC step) must persist this long before it replaces our
+  # trajectory. Shorter dips keep the ramp state so acceleration resumes where it was instead of restarting at zero.
+  DIP_HOLD_NS = 300_000_000
 
   def __init__(self):
     self.reset()
@@ -65,6 +68,7 @@ class CruiseTransition:
     self.output = None
     self.rate = 0.
     self.recovering = False
+    self.dip_since_ns = None
 
   def shape(self, *, selected, speed, desired, previous, now_ns, enabled,
             protected=False, response_time=.5, release_rate=1.):
@@ -76,23 +80,37 @@ class CruiseTransition:
       self.recovering = True
       return desired
     dt = (now_ns-self.time_ns)/1e9 if self.time_ns is not None else .05
+    base = previous
     if self.time_ns is None or not .01 <= dt <= .15:
       dt, self.rate = .05, 0.
-    elif self.output is not None and abs(previous-self.output) > .02:
-      # Lower final model/lead/stop output is authoritative. No stale ramp on
-      # its release; restart from that actual request without storing a deficit.
+      self.dip_since_ns = None
+    elif self.output is not None and previous < self.output-.02:
+      # A lower final model/lead/stop output replaced ours. Only once it has persisted for DIP_HOLD_NS is it
+      # authoritative: then restart from that actual request without storing a deficit. A shorter dip keeps our own
+      # trajectory (the planner still publishes the lower minimum meanwhile).
+      if self.dip_since_ns is None:
+        self.dip_since_ns = now_ns
+      if now_ns - self.dip_since_ns < self.DIP_HOLD_NS:
+        base = self.output
+      else:
+        self.rate = 0.
+        self.recovering = True
+        self.dip_since_ns = None
+    elif self.output is not None and previous > self.output+.02:
       self.rate = 0.
-      self.recovering |= previous < self.output-.02
+      self.dip_since_ns = None
+    else:
+      self.dip_since_ns = None
     self.time_ns = now_ns
-    if self.recovering and previous < 0.:
+    if self.recovering and base < 0.:
       # This braking came from another authority (or re-engagement), not an
       # ordinary cruise target. Retain the native release rate to avoid holding
       # the brakes after a lead/stop/model constraint has cleared. Stronger
       # requested braking is still immediate; positive build-up restarts at zero.
-      release_time = min(dt, -previous/release_rate)
+      release_time = min(dt, -base/release_rate)
       remaining = dt-release_time
       self.rate = min(self.UP_RATE, self.RATE_CHANGE*remaining)
-      ceiling = previous + release_rate*release_time + .5*self.rate*remaining
+      ceiling = base + release_rate*release_time + .5*self.rate*remaining
       self.output = min(desired, ceiling)
       if self.output >= 0.:
         self.recovering = False
@@ -108,17 +126,17 @@ class CruiseTransition:
       horizon = response_time + 1.25
       arrival = max(0., -j*horizon + math.sqrt((j*horizon)**2+2*j*abs(error)))
       target = math.copysign(min(abs(target), arrival), target)
-    goal = min(max((target-previous)/.5, -self.DOWN_RATE), self.UP_RATE)
+    goal = min(max((target-base)/.5, -self.DOWN_RATE), self.UP_RATE)
     # Do not keep increasing acceleration after the target asks for less (or
     # keep deepening braking after it asks for release). Preserve acceleration,
     # restart only the opposing trend at zero, then build the new rate gently.
     if goal*self.rate <= 0.:
       self.rate = 0.
     rate = min(max(goal, self.rate-self.RATE_CHANGE*dt), self.rate+self.RATE_CHANGE*dt)
-    result = previous + (self.rate+rate)*.5*dt
+    result = base + (self.rate+rate)*.5*dt
     # Avoid numerical overshoot of an acceleration target. This small final
     # convergence is not a promise of a globally bounded acceleration derivative.
-    if (target-previous)*(target-result) < 0.:
+    if (target-base)*(target-result) < 0.:
       result, rate = target, 0.
     self.output, self.rate = result, rate
     return result

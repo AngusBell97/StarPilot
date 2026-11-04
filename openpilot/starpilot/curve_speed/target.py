@@ -9,9 +9,19 @@ from openpilot.starpilot.model_geometry import normalized_origin
 
 MIN_SPEED = 25 * 0.44704
 APPROACH_DECEL = 0.3
-TARGET_UP_RATE = 3.0
-TARGET_DOWN_RATE = 2.5
-FILTER_RC = 0.4
+# 3 Nov 2026 review: the model's predicted path curvature jitters frame to frame, and with a 0.4 s filter and
+# 3.0/2.5 m/s per second rate limits the ceiling swung 5 to 7 mph within a bend, reversing the acceleration request
+# several times. The target now follows the envelope more slowly, slower still when easing, and may not rise above
+# the car's own speed for RISE_HOLD_SECONDS after it has fallen.
+TARGET_UP_RATE = 1.0
+TARGET_DOWN_RATE = 1.5
+FILTER_RC = 1.2
+FILTER_RC_DOWN = 0.8
+RISE_HOLD_SECONDS = 2.0
+# 4 Nov 2026: the learned comfort gave a 32 mph apex in a 40 mph S-bend (about 2.0 m/s2 lateral) and the driver
+# wanted 3 to 5 mph more. The envelope uses the learned comfort scaled by this factor (1.25 -> apex speed +12 %,
+# 32 -> 36 mph); learning, nudges and the 4.0 m/s2 physical cap are unchanged.
+COMFORT_SCALE = 1.25
 EGO_HEADROOM = 2.0
 RELEASE_DEBOUNCE = 0.25
 MAX_LATERAL_ACCEL = 4.0
@@ -74,7 +84,7 @@ def evaluate(profile: CurveProfile, comfort: LearnedCurve, cruise_mps: float, *,
       magnitude *= 1.23
     magnitude = min(magnitude, MAX_CURVATURE)
     denominator = max(magnitude, 1e-4)
-    lateral = comfort.comfort(magnitude) * (1 - weather_reduction)
+    lateral = comfort.comfort(magnitude) * COMFORT_SCALE * (1 - weather_reduction)
     apex_speed = min(max(math.sqrt(lateral / denominator), MIN_SPEED), math.sqrt(MAX_LATERAL_ACCEL / denominator))
     allowed = math.sqrt(apex_speed**2 + (2 * APPROACH_DECEL) * distance)
     if allowed < result.speed_mps:
@@ -92,6 +102,7 @@ class TargetFilter:
     self._opening_samples: list[float] = []
     self._opening_active = False
     self._nominal_target: float | None = None
+    self._since_fall = math.inf
 
   def clear_opening(self) -> None:
     self._opening_samples.clear()
@@ -103,6 +114,7 @@ class TargetFilter:
     self._release_seconds = 0.0
     self.clear_opening()
     self._nominal_target = None
+    self._since_fall = math.inf
 
   def step(self, envelope: Envelope, *, ego_mps: float, cruise_mps: float, dt: float) -> float:
     if (not finite_number(ego_mps) or ego_mps < 0 or not finite_number(cruise_mps) or cruise_mps <= 0 or
@@ -124,8 +136,10 @@ class TargetFilter:
     if self.target is None:
       self.target = min(cruise_mps, max(raw, ego_mps + EGO_HEADROOM))
       self._filtered = self.target
+      self._since_fall = math.inf
+    previous_target = self.target
     self._release_seconds = self._release_seconds + dt if raw >= ego_mps else 0.0
-    alpha = dt / (FILTER_RC + dt)
+    alpha = dt / ((FILTER_RC_DOWN if raw < self._filtered else FILTER_RC) + dt)
     self._filtered = (1 - alpha) * self._filtered + alpha * raw
     desired = max(self._filtered, min(raw, ego_mps + EGO_HEADROOM))
     self.target = min(max(desired, self.target - TARGET_DOWN_RATE * dt), self.target + TARGET_UP_RATE * dt)
@@ -138,6 +152,15 @@ class TargetFilter:
     self._nominal_target = min(self.target, cruise_mps)
     if self._opening_active:
       self.target = max(self.target, min(raw, ego_mps + EGO_HEADROOM))
+    # Rise hold: once the target has fallen it may rise back up to the car's current speed at once (never hold the
+    # ceiling below the speed the envelope allows), but not above it until RISE_HOLD_SECONDS have passed without a
+    # further fall. This stops one bend producing brake, accelerate, brake again as the prediction wobbles.
+    if self.target < previous_target - OPENING_NOISE:
+      self._since_fall = 0.0
+    else:
+      self._since_fall += dt
+      if self._since_fall < RISE_HOLD_SECONDS:
+        self.target = min(self.target, max(previous_target, min(raw, ego_mps)))
     # Driver lowering cruise is an immediate cap, independent of filter history.
     self.target = min(self.target, cruise_mps)
     return self.target

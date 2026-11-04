@@ -216,6 +216,13 @@ def _owner_float(source: ObservedFloat | None, now_ns: int, barrier_ns: int, *, 
 
 
 def _horizon(model) -> float | None:
+  """Length of the model's predicted path.
+
+  4 Nov 2026: this used to be the path's final longitudinal x. In a bend the path curves away, so its x extent is
+  much shorter than the distance the car will actually travel, and the stop detector read every tightening bend as
+  the model planning to stop (false CEM stop triggers at 35 to 61 mph on 3 and 4 Nov). The horizon is now the arc
+  length along x and y. On a straight path the two are identical. The monotonic-x check is kept as the validity test.
+  """
   try:
     distances = normalized_origin(tuple(model.position.x))
     if len(distances) != ModelConstants.IDX_N:
@@ -226,7 +233,13 @@ def _horizon(model) -> float | None:
     finite = tuple(value for value in parsed if value is not None)
     if any(b < a for a, b in zip(finite, finite[1:], strict=False)):
       return None
-    return finite[-1]
+    lateral = tuple(_number(value, low=-500.0, high=500.0) for value in model.position.y)
+    if len(lateral) != len(finite) or any(value is None for value in lateral):
+      return finite[-1]
+    length = 0.0
+    for (x0, y0), (x1, y1) in zip(zip(finite, lateral), zip(finite[1:], lateral[1:]), strict=False):
+      length += math.hypot(x1 - x0, (y1 or 0.0) - (y0 or 0.0))
+    return min(length, 500.0)
   except (AttributeError, TypeError, ValueError, OverflowError):
     return None
 

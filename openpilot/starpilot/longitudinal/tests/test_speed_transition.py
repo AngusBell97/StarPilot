@@ -27,7 +27,8 @@ def test_long_clear_road_step_reaches_selected_profile(cap):
    selected_acceleration_max=cap,a_target_prev=a,transition=h,
    transition_now_ns=NOW+i*50_000_000,transition_enabled=True)
   assert a<=cap+1e-8 and -.400001<=(a-old)/.05<=.350001
- assert a==pytest.approx(min(cap,1.7),abs=1e-5)
+ from openpilot.selfdrive.controls.lib.longitudinal_planner import _A_TOTAL_MAX_V
+ assert a==pytest.approx(min(cap,_A_TOTAL_MAX_V[0]),abs=1e-5)  # the total-acceleration budget below 20 m/s bounds the step
 
 @pytest.mark.parametrize('targets',[[20.,30.,25.,30.]*30,[15.1,14.9,15.05,14.99]*30,[30.]*20+[10.]*100])
 def test_repeated_and_near_target_changes_retain_continuity(targets):
@@ -44,10 +45,27 @@ def test_protected_braking_and_fresh_recovery(protection):
   direct=get_cruise_accel(False,5.,15.,a,0.,CP,.05,0.,True,selected_acceleration_max=1.6,base_brake_floor=-1.2,a_target_prev=a)
   assert request(h,a,5.,15.,100,transition_protected=True)==pytest.approx(direct)
  # Model/lead final arbitration lowered the actual request, even though our
- # cruise output was high. First release must start from that lower value.
- out=request(h,-1.,30.,15.,101)
+ # cruise output was high. Once that lower request has persisted for the dip
+ # hold (0.3 s), release must start from that lower value.
+ for i in range(101,107):request(h,-1.,30.,15.,i)
+ out=request(h,-1.,30.,15.,107)
  assert -1.<out<=-.89+1e-9
  assert .05<=out+1.<=.054 # Native nominal50ms slew remains the outer bound.
+
+
+def test_short_dip_keeps_the_ramp_instead_of_restarting():
+ h=CruiseTransition();a=0.
+ for i in range(40):a=request(h,a,30.,15.,i)
+ before=a
+ # A two-cycle lower final request (model blip, radar swap) must not restart the ramp.
+ for i in (40,41):request(h,-.3,30.,15.,i)
+ resumed=request(h,before,30.,15.,42)
+ assert resumed>before and resumed-before<=3*.35*.05+1e-9
+ # The same dip held for longer than the hold does restart from the lower request.
+ h=CruiseTransition();a=0.
+ for i in range(40):a=request(h,a,30.,15.,i)
+ for i in range(40,47):out=request(h,-.3,30.,15.,i)
+ assert out<0.
 
 @pytest.mark.parametrize('delta_ns',[0,-50_000_000,1_000_000_000])
 def test_clock_discontinuity_cannot_reuse_a_large_elapsed_step(delta_ns):
@@ -106,8 +124,11 @@ def test_pulse_glide_cruise_ceiling_uses_same_transition():
   sm['carState'].vEgo=sm['carState'].vEgoCluster=15.;sm['carState'].vCruise=108.
   planner.update(sm,now_ns=now,drive_id=1,wheel_coast=(Owner(),None))
   assert planner.cruise_transition.time_ns==now
+  # The cruise candidate keeps its own comfort rate; a lower final output
+  # (lead/model/coast) only re-anchors it after the 0.3 s dip hold.
   assert -.400001<=(planner.a_cruise-previous)/.05<=.350001
-  previous=planner.output_a_target
+  assert planner.output_a_target<=planner.a_cruise+1e-9
+  previous=planner.a_cruise
 
 
 def test_drive_boundary_resets_transition_history():

@@ -17,8 +17,11 @@ def frame(n: int, **kwargs) -> Frame:
                        0.01, False, False, False, False, 1, False), **kwargs)
 
 
+ARM = 50  # frames needed for the (slower, 3 Nov 2026) curve target to fall below ego speed
+
+
 def arm_selected(rt: Runtime) -> None:
-  for n in range(1, 27):
+  for n in range(1, ARM + 1):
     item = frame(n)
     rt.step(item)
     rt.confirm_applied(item.now_ns, applied=True)
@@ -42,7 +45,7 @@ class TestCurveRuntime(unittest.TestCase):
     rt = Runtime(enabled=True)
     arm_selected(rt)
     before = rt.filter.target
-    item = frame(27, cruise_mps=35., ego_mps=15., measured_curvature=0.)
+    item = frame(51, cruise_mps=35., ego_mps=15., measured_curvature=0.)
     item = replace(item, profile=CurveProfile((0.,), (0.,), item.now_ns))
     result = rt.step(item)
     self.assertIsNotNone(result.ceiling_mps)
@@ -65,8 +68,8 @@ class TestCurveRuntime(unittest.TestCase):
   def test_manual_gas_releases_cap_even_when_long_active_stays_true(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    self.assertIsNone(rt.step(frame(27, gas_pressed=True)).ceiling_mps)
-    self.assertIsNone(rt.step(frame(28, gas_pressed=False)).ceiling_mps)
+    self.assertIsNone(rt.step(frame(51, gas_pressed=True)).ceiling_mps)
+    self.assertIsNone(rt.step(frame(52, gas_pressed=False)).ceiling_mps)
     self.assertTrue(rt.override)
 
   def test_candidate_loses_to_other_cap_and_cannot_claim_feedback(self):
@@ -76,22 +79,22 @@ class TestCurveRuntime(unittest.TestCase):
       self.assertIsNotNone(rt.step(item).ceiling_mps)
       self.assertTrue(rt.confirm_applied(item.now_ns, applied=False))
     self.assertFalse(rt.was_controlling)
-    rt.step(frame(27, brake_pressed=True, long_active=False))
+    rt.step(frame(51, brake_pressed=True, long_active=False))
     self.assertEqual(rt.curve.revision, 0)
     self.assertFalse(rt.glow)
 
   def test_accel_press_latches_override_and_confirmation_does_not(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    press = DriverEvent('card-a', 1, BASE + 26 * 50_000_000, 'curveAccelPress', 'accel', BASE + 26 * 50_000_000)
-    self.assertIsNone(rt.step(frame(27), event=press).ceiling_mps)
-    self.assertIsNone(rt.step(frame(28)).ceiling_mps)
+    press = DriverEvent('card-a', 1, BASE + 50 * 50_000_000, 'curveAccelPress', 'accel', BASE + 50 * 50_000_000)
+    self.assertIsNone(rt.step(frame(51), event=press).ceiling_mps)
+    self.assertIsNone(rt.step(frame(52)).ceiling_mps)
     self.assertTrue(rt.override)
     # An old producer session cannot reset the high-water mark.
-    replay = DriverEvent('card-old', 3, BASE + 26 * 50_000_000, 'curveAccelPress', 'accel', BASE + 26 * 50_000_000)
-    rt.step(frame(29), event=replay)
+    replay = DriverEvent('card-old', 3, BASE + 50 * 50_000_000, 'curveAccelPress', 'accel', BASE + 50 * 50_000_000)
+    rt.step(frame(53), event=replay)
     self.assertEqual(rt.event_session, 'card-a')
-    rt.step(frame(30, measured_curvature=0.0, profile=CurveProfile((0.0,), (0.0,), BASE + 30 * 50_000_000)))
+    rt.step(frame(54, measured_curvature=0.0, profile=CurveProfile((0.0,), (0.0,), BASE + 54 * 50_000_000)))
     self.assertFalse(rt.override)
 
   def test_blinker_only_suppresses_outside_curve(self):
@@ -113,25 +116,25 @@ class TestCurveRuntime(unittest.TestCase):
     arm_selected(rt)
     held = rt.filter.target
     assert held is not None
-    stale = frame(27, inputs_fresh=False)
+    stale = frame(51, inputs_fresh=False)
     self.assertIsNone(rt.step(stale).ceiling_mps)
     rt.confirm_applied(stale.now_ns, applied=False)
     self.assertTrue(rt.was_controlling)
     self.assertTrue(rt.glow)
     self.assertEqual(rt.filter.target, held)
-    resumed = rt.step(frame(28)).ceiling_mps
+    resumed = rt.step(frame(52)).ceiling_mps
     assert resumed is not None
     self.assertLessEqual(resumed, held)
 
   def test_stale_hold_publishes_valid_glowing_status(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    stale = frame(27, inputs_fresh=False)
+    stale = frame(51, inputs_fresh=False)
     result = rt.step(stale)
     rt.confirm_applied(stale.now_ns, applied=False)
     planner = NS(last_curve_ceiling_applied=False, last_curve_ceiling_status='absent')
     event = StatusPublisher().attach(None, NS(runtime=rt), result, planner, now_ns=stale.now_ns,
-                                     model_ns=frame(26).now_ns, persistence_status='idle')
+                                     model_ns=frame(50).now_ns, persistence_status='idle')
     status = observation(event.slcState, stale.now_ns)
     assert status is not None
     self.assertTrue(status.glow)
@@ -140,12 +143,12 @@ class TestCurveRuntime(unittest.TestCase):
   def test_stale_hold_expires_after_recovery_anchor(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    for n in range(27, 47):
+    for n in range(51, 71):
       item = frame(n, inputs_fresh=False)
       self.assertIsNone(rt.step(item).ceiling_mps)
       rt.confirm_applied(item.now_ns, applied=False)
     self.assertIsNotNone(rt.filter.target)
-    item = frame(47, inputs_fresh=False)
+    item = frame(71, inputs_fresh=False)
     rt.step(item)
     rt.confirm_applied(item.now_ns, applied=False)
     self.assertIsNone(rt.filter.target)
@@ -155,10 +158,10 @@ class TestCurveRuntime(unittest.TestCase):
   def test_gas_override_during_stale_hold_still_latches(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    stale = frame(27, inputs_fresh=False, gas_pressed=True)
+    stale = frame(51, inputs_fresh=False, gas_pressed=True)
     rt.step(stale)
     rt.confirm_applied(stale.now_ns, applied=False)
-    self.assertIsNone(rt.step(frame(28, gas_pressed=True)).ceiling_mps)
+    self.assertIsNone(rt.step(frame(52, gas_pressed=True)).ceiling_mps)
     self.assertTrue(rt.override)
 
   def test_invalid_document_never_learns_or_persists(self):
@@ -175,7 +178,7 @@ class TestCurveRuntime(unittest.TestCase):
     for n in range(1, 35):
       rt.step(frame(n, long_active=False))
     self.assertEqual(rt.curve.revision, 0)
-    rt.step(frame(35, inputs_fresh=False, long_active=False))
+    rt.step(frame(59, inputs_fresh=False, long_active=False))
     for n in range(36, 68):
       rt.step(frame(n, long_active=False))
     self.assertEqual(rt.curve.revision, 0)
@@ -187,7 +190,7 @@ class TestCurveRuntime(unittest.TestCase):
     rt = Runtime(enabled=True)
     arm_selected(rt)
     rt.enabled = False
-    result = rt.step(frame(27, brake_pressed=True, long_active=False))
+    result = rt.step(frame(51, brake_pressed=True, long_active=False))
     self.assertIsNone(result.ceiling_mps)
     self.assertEqual(rt.curve.revision, 0)
     self.assertFalse(rt.override)
@@ -203,13 +206,13 @@ class TestCurveRuntime(unittest.TestCase):
   def test_brake_edge_nudges_once_but_transport_loss_does_not(self):
     rt = Runtime(enabled=True)
     arm_selected(rt)
-    rt.step(frame(27, brake_pressed=True, long_active=False))
+    rt.step(frame(51, brake_pressed=True, long_active=False))
     self.assertEqual(rt.curve.revision, 1)
-    rt.step(frame(28, brake_pressed=True, long_active=False))
+    rt.step(frame(52, brake_pressed=True, long_active=False))
     self.assertEqual(rt.curve.revision, 1)
     rt2 = Runtime(enabled=True)
     arm_selected(rt2)
-    rt2.step(frame(27, inputs_fresh=False, long_active=False, brake_pressed=True))
+    rt2.step(frame(51, inputs_fresh=False, long_active=False, brake_pressed=True))
     self.assertEqual(rt2.curve.revision, 0)
 
   def test_training_requires_driver_ownership_no_lead_and_quiet(self):
