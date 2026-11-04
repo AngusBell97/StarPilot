@@ -8,7 +8,7 @@ from openpilot.starpilot.ui.sleep_eyes.car import CarWatcher, wakes_screen
 from openpilot.starpilot.ui.sleep_eyes.engine import Engine
 
 BOOT_WINDOW_S = 30        # Sleep Eyes switched on within this long of the UI starting means the comma just booted
-PARKED_LIMIT_S = 600       # parked eyes doze for up to 10 minutes, then the screen switches off as before
+ASLEEP_LIMIT_S = 600       # after 10 minutes asleep (in Park or offroad) the screen goes fully black
 BRIGHTNESS_DRIVING = 50    # caps while the eyes show (percent)
 BRIGHTNESS_PARKED = 25
 EYES_FPS = 20              # the whole UI loop runs at this rate while the eyes show
@@ -21,7 +21,8 @@ class SleepEyesController:
     self.watcher = CarWatcher()
     self.view = SleepEyesView(self.engine)
     self.sticky = False
-    self.parked_since: float | None = None
+    self.asleep_since: float | None = None
+    self.slept_black = False   # the screen went black after the limit: come back with the power-on animation
     self.limit_hit = False
     self._started_prev: bool | None = None
     self._logged_want: bool | None = None
@@ -55,20 +56,20 @@ class SleepEyesController:
     if self._started_prev is not None and started != self._started_prev and not started and self.visible:
       self.sticky = True  # offroad while the eyes show: keep them (only seen if the comma stays powered)
     self._started_prev = started
+    # The sleep timer runs while the eyes are asleep (in Park, or offroad); a tap or waking up restarts it.
+    if touched or not self.engine.parked:
+      self.asleep_since = None
+    elif self.asleep_since is None:
+      self.asleep_since = now
     if touched or wake_alert or blocked:
       self.sticky = False
-      self.parked_since = None
       return False
     want = timed_out or self.sticky
-    if want and not started:
-      if self.parked_since is None:
-        self.parked_since = now
-      elif now - self.parked_since > PARKED_LIMIT_S:
-        self.sticky = False
-        self.limit_hit = True  # switch straight off, no animation back to the home screen
-        return False
-    elif started:
-      self.parked_since = None
+    if want and self.asleep_since is not None and now - self.asleep_since > ASLEEP_LIMIT_S:
+      self.sticky = False
+      self.limit_hit = True  # straight to a black screen, no animation
+      self.slept_black = True
+      return False
     return want
 
   def update(self, gui_app, sm, *, started: bool, want: bool, urgent: bool) -> None:
@@ -81,8 +82,8 @@ class SleepEyesController:
     if want:
       if not view.visible or view.phase in ('capture_out', 'morph_out', 'pix_out'):
         engine.reset_timers(time.monotonic() * 1000)
-        view.enter(boot=self.boot_pending)
-        self.boot_pending = False
+        view.enter(boot=self.boot_pending or self.slept_black)
+        self.boot_pending = self.slept_black = False
       gui_app.set_screen_override(view)
     elif view.visible:
       # Let a wake-up finish before switching to the driving view, unless it was a tap.

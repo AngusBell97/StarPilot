@@ -93,7 +93,8 @@ def ctl(monkeypatch):
   monkeypatch.setattr(controller_module.time, "monotonic", lambda: clock[0])
   c = controller_module.SleepEyesController.__new__(controller_module.SleepEyesController)
   c.view = FakeView()
-  c.sticky, c.parked_since, c.limit_hit, c._started_prev = False, None, False, None
+  c.engine = NS(parked=False)
+  c.sticky, c.asleep_since, c.slept_black, c.limit_hit, c._started_prev = False, None, False, False, None
   c.boot_pending, c._touched = False, False
   return c, clock
 
@@ -114,13 +115,32 @@ def test_alerts_and_blockers_beat_the_eyes(ctl):
   assert not c.decide(started=True, timed_out=True, blocked=True, touched=False, wake_alert=False)
 
 
-def test_parked_eyes_stop_after_ten_minutes(ctl):
+def test_asleep_eyes_go_black_after_ten_minutes_even_in_park(ctl):
   c, clock = ctl
-  c._started_prev = False
-  assert c.decide(started=False, timed_out=True, blocked=False, touched=False, wake_alert=False)
-  clock[0] += controller_module.PARKED_LIMIT_S + 1
-  assert not c.decide(started=False, timed_out=True, blocked=False, touched=False, wake_alert=False)
-  assert c.limit_hit
+  c.engine.parked = True  # in Park with the car awake
+  assert c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  clock[0] += controller_module.ASLEEP_LIMIT_S - 5
+  assert c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  clock[0] += 10
+  assert not c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  assert c.limit_hit and c.slept_black
+  assert not c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)  # stays black
+
+
+def test_a_tap_or_leaving_park_restarts_the_sleep_timer(ctl):
+  c, clock = ctl
+  c.engine.parked = True
+  c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  clock[0] += controller_module.ASLEEP_LIMIT_S + 1
+  assert not c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  c.decide(started=True, timed_out=False, blocked=False, touched=True, wake_alert=False)  # tap
+  assert c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  clock[0] += controller_module.ASLEEP_LIMIT_S + 1
+  assert not c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  c.engine.parked = False  # shifted out of Park: awake, eyes come back (with the power-on animation)
+  assert c.decide(started=True, timed_out=True, blocked=False, touched=False, wake_alert=False)
+  assert c.slept_black
+
 
 
 def test_boot_shows_the_eyes_until_a_tap_even_through_the_drive_starting(ctl):
