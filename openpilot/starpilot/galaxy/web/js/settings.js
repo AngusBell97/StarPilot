@@ -10,6 +10,7 @@ import { SoundPacks } from "./sound-packs.js"
 import { CloudProviderPage } from "./cloud-provider.js"
 import { GxNotice } from "./notice.js"
 import { route } from "./route-state.js"
+import { GxTrail } from "./trail.js"
 
 const post = (fetcher, path, body, signal) => fetcher(path, {
   method: "POST", credentials: "same-origin", cache: "no-store", signal,
@@ -272,12 +273,14 @@ const SETTINGS_PAGE_INTRO = `
 
 export const SettingsPage = {
   emits: ["nested"],
-  components: { GxDialog, GxState, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
+  components: { GxDialog, GxState, GxTrail, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
   props: {
     mode: { type: String, required: true }, unauthorized: { type: Function, required: true },
     initialPage: { type: String, default: "hub" }, title: { type: String, default: "Toggles" },
     initialSection: { type: String, default: null }, returnTo: { type: Function, default: null },
     navigationPath: { type: Boolean, default: false },
+    // Label of the page that opened this one (e.g. "Driving"); shows the navigation tree with that page as its root.
+    trailRoot: { type: String, default: "" },
   },
   setup(props) {
     const navigation = route.view
@@ -323,6 +326,18 @@ export const SettingsPage = {
       return [...items, ...pages.map(id => ({ id, label: id === page ? this.state.data.title :
         this.state.pageTitles[id] || id.split("/").at(-1).replaceAll("_", " ") }))]
     },
+    trailEnabled() { return this.navigationPath || (!!this.trailRoot && !!this.returnTo) },
+    // The navigation tree shown in the first card's header (Toggles: section › page › sub-page;
+    // pages opened from elsewhere: that page › page › sub-page).
+    trailItems() {
+      if (this.navigationPath) return this.navigationItems
+      if (!this.trailEnabled || !this.state.data) return []
+      const page = this.state.data.page
+      const pages = settingsTrailPages(page)
+      const start = pages.indexOf(this.initialPage)
+      return [{ id: "root", label: this.trailRoot }, ...(start < 0 ? [page] : pages.slice(start)).map(id => ({ id, label: id === page ? this.state.data.title :
+        this.state.pageTitles[id] || id.split("/").at(-1).replaceAll("_", " ") }))]
+    },
     activeSection() {
       if (this.state.developerOpen) return this.sections.at(-1)
       const page = (this.state.data?.page || "hub").split("/")[0]
@@ -362,7 +377,7 @@ export const SettingsPage = {
   },
   watch: {
     "state.data"(data) {
-      if (!this.navigationPath || !data) return
+      if (!this.trailEnabled || !data) return
       this.rememberPathPage(data)
       this.loadPathTitles()
     },
@@ -422,12 +437,14 @@ export const SettingsPage = {
       }
     },
     jumpToPage(page) {
-      if (this.busy || this.state.status === "loading" || !this.navigationItems.some(item => item.id === page)) return
+      if (this.busy || this.state.status === "loading" || !this.trailItems.some(item => item.id === page)) return
       if (page === this.state.data?.page) return
+      if (page === "root") { this.returnTo?.(); return }
       this.state.panelDirection = -1
       this.state.query = ""
       if (page === "hub" || page === "section") { this.selectSection(this.activeSection); return }
-      this.state.parents = ["hub", ...settingsTrailPages(page).slice(0, -1)]
+      const above = settingsTrailPages(page).slice(0, -1)
+      this.state.parents = this.navigationPath ? ["hub", ...above] : above.slice(Math.max(0, above.indexOf(this.initialPage)))
       this.feed.load(page)
     },
     open(page) {
@@ -538,12 +555,12 @@ export const SettingsPage = {
       </template>
     <OnroadLayoutPage ref="layoutEditor" v-if="state.layoutOpen" :mode="mode" :unauthorized="unauthorized" :initial-panel="state.layoutPanel" @target="openLayoutTarget" @close="closeLayout" />
     <FavoritesPage ref="favoritesEditor" v-else-if="state.favoritesOpen" :mode="mode" :unauthorized="unauthorized" @close="closeFavorites" />
-    <section v-else class="gx-settings" :class="{ 'gx-settings--path': navigationPath }" :aria-label="title" :inert="busy" :aria-busy="busy || undefined">
+    <section v-else class="gx-settings" :class="{ 'gx-settings--path': trailEnabled }" :aria-label="title" :inert="busy" :aria-busy="busy || undefined">
       <div v-if="!navigationPath && title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
         <div v-if="!navigationPath && mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs" aria-label="Settings sections">
           <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :aria-pressed="section.id === activeSection.id" @click="selectSection(section)">{{ section.label }}</button>
         </div>
-      <div v-if="!navigationPath && pageDescription" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
+      <div v-if="pageDescription" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
       <GxState v-if="mode !== 'local'">Local settings are unavailable in preview.</GxState>
       <template v-else>
         <GxNotice v-if="state.data && state.data.vehicleIdentified === false" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
@@ -561,7 +578,8 @@ export const SettingsPage = {
             </div>
             <section v-for="(card, cardIndex) in rowCards" :key="card.title || 'main'" class="gx-card gx-settings__section">
               <div v-if="cardIndex" class="gx-section__header"><i class="bi bi-car-front" aria-hidden="true"></i><span class="gx-section__title">{{ card.title }}</span></div>
-              <div v-else class="gx-section__header"><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span>
+              <div v-else class="gx-section__header"><GxTrail v-if="trailItems.length" :items="trailItems" :disabled="busy" label="Toggle hierarchy" @select="jumpToPage" />
+                <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
                 <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
               <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>

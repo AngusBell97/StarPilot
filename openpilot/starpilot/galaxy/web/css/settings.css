@@ -43,6 +43,8 @@ input[type="range"].gx-slider:disabled { cursor: default; opacity: .4; }
 .gx-settings-path__current { color: var(--on-primary-container); background: var(--primary-container); font-weight: var(--fw-medium); }
 .gx-settings-path__parent:focus-visible { outline: 2px solid var(--secondary); outline-offset: -2px; }
 .gx-settings-path__parent:disabled { cursor: default; }
+/* The same tree above pages opened from Tools: its own line, a little air before the page heading. */
+.gx-page-trail { display: block; margin: 0 0 var(--sp-3); }
 @media (pointer: coarse) {
   .gx-settings-path__parent, .gx-settings-path__current { min-height: 44px; }
   .gx-settings-path__parent { min-width: 44px; }
