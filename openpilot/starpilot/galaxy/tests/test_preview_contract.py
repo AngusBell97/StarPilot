@@ -28,7 +28,7 @@ class PreviewContractTest(unittest.TestCase):
     scripts = "\n".join(path.read_text() for path in (WEB / "js").glob("*.js"))
     self.assertEqual(sorted(re.findall(r"\bfetch\s*\(\s*[\"']([^\"']+)", scripts)),
                      ['./api/auth/session', './api/drive-state/action', './api/drive-state/status',
-                      '/_gateway/devices'])
+                      './api/system/monitor/reset-peaks', '/_gateway/devices'])
     config = json.loads((WEB / 'data/runtime.json').read_text())
     self.assertEqual(config, {'schemaVersion': 1, 'monitor': 'sample'})
     self.assertIn('./api/ui/layout', scripts)
