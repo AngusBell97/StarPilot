@@ -264,9 +264,5 @@ class SpeedLimitWidget:
       ax, ay = ((x + 82 * scale, top + 41 * scale) if state.appearance.use_vienna_sign else (x + 99 * scale, top + 26 * scale))
       arrow_color = color if state.appearance.use_vienna_sign else white
       self.shapes.arrow('compact' if state.appearance.use_vienna_sign else 'large', ax, ay, arrow_direction, arrow_color)
-    if obs.driver_override_active:
-      color = rl.Color(197, 163, 255, 240)
-      left, top, right, bottom = number
-      draw_line(self.profile, rl.Vector2(left - 3 * scale, top - 2 * scale), rl.Vector2(right + 3 * scale, bottom + 2 * scale), 2.5 * scale, color)
-      draw_line(self.profile, rl.Vector2(right + 3 * scale, top - 2 * scale), rl.Vector2(left - 3 * scale, bottom + 2 * scale), 2.5 * scale, color)
+    # No cross over the limit when the set speed overrides it (removed 4 Nov 2026 at the driver's request).
 

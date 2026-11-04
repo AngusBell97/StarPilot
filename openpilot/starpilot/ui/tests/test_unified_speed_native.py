@@ -150,14 +150,14 @@ def test_compact_us_heading_stays_centered_without_an_arrow(reason, drawing):
 
 
 @pytest.mark.parametrize('profile', list(Profile))
-def test_only_set_speed_override_draws_cross(profile, drawing):
+def test_set_speed_override_draws_no_cross(profile, drawing):
   sign = SpeedLimitWidget(fonts(profile), profile)
   current = state()
   current = replace(current, speed_limit=replace(current.speed_limit, pending_speed_limit_mps=None))
   sign.render(replace(current, longitudinal_overridden=True))
   assert drawing['draw_line_ex'].call_count == 0
   sign.render(replace(current, speed_limit=replace(current.speed_limit, driver_override_active=True)))
-  assert len(foreground_calls(drawing['draw_line_ex'])) == 2
+  assert drawing['draw_line_ex'].call_count == 0
 
 
 @pytest.mark.parametrize('profile', list(Profile))
