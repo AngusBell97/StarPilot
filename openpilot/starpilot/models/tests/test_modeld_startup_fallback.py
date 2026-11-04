@@ -226,7 +226,8 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
          "CP": SimpleNamespace(brand="mock"), "demo": False,
          "wait_for_chestnut_power": lambda CP, timeout: events.append("power"),
          "jetlink_adapter": SimpleNamespace(hooks=lambda: hooks, coherent_warp=lambda: None), "drop_chestnut": Mock(),
-         "release_compile_pool": Mock(), "gc": Mock()}
+         "release_compile_pool": Mock(), "gc": Mock(),
+         "LaneObstacleDetector": SimpleNamespace(create=Mock(return_value=None))}
   wrapper = ast.parse("def startup():\n  pass").body[0]
   wrapper.body = body[start:end] + [ast.Return(value=ast.Call(func=ast.Name(id="locals", ctx=ast.Load()), args=[], keywords=[]))]
   execute([wrapper], env)
@@ -260,6 +261,13 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
   params.put_bool.assert_any_call("ChestnutLoading", False)
   assert receipt.loaded.call_args.args[1] == (ModelVariant.SMALL if timeout else ModelVariant.CHESTNUT)
   assert receipt.loaded.call_args.args[2] == ("chestnut-load-failed" if timeout else None)
+  # Change 37: the lane obstacle detector is offered only the loaded Chestnut model, once
+  create = env["LaneObstacleDetector"].create
+  if env["model"].chestnut:
+    create.assert_called_once_with(env["model"])
+  else:
+    create.assert_not_called()
+  assert env["lane_obstacle"] is None
 
 
 def test_wait_for_enumeration_succeeds_without_real_sleep(monkeypatch):
