@@ -65,7 +65,7 @@ class ModelLaboratory:
         artifact = artifact_entry(mid, entries, "amd") if eligible else {}
         published = "artifact_sha256" in artifact
         amd_installed, checking = owner._snapshot_installed(mid, row, "amd") if published else (False, False)
-        installed, _ = owner._snapshot_installed(mid, row)
+        installed, verifying = owner._snapshot_installed(mid, row)
         if not small:
           state, reason = "unsupported", "Big models run on the Chestnut already and need no eGPU variant."
         elif not eligible:
@@ -82,7 +82,7 @@ class ModelLaboratory:
                        "small": small, "modelSize": "small" if small else "big", "modelLabEligible": eligible,
                        "modelLabArtifactAvailable": published, "modelLabArtifactInstalled": amd_installed, "checking": checking,
                        "modelLabStatus": state, "modelLabReason": reason,
-                       "installed": installed, "pairable": installed or amd_installed,
+                       "installed": installed, "pairable": installed or verifying or amd_installed,
                        "placement": "chestnut" if not small or amd_installed else "comma",
                        "artifactSize": artifact.get("artifact_size", 0)})
       status = read_status()
