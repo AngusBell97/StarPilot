@@ -544,7 +544,7 @@ def r_al_steer(a, e, u, t, o, now, E0):
   T = o.T
   d = e.ctx.get('alert_dir') or 1
   alert_frame(o, t)
-  T.update(worry=1, scale=0.88, jy=-1.6)
+  T.update(worry=1, scale=0.88, jy=-2.4)  # raised so the eyes clear the bar
   f = eo(lin(t, 0, 900))
   x = 6.0
   while x <= 34:
@@ -564,7 +564,7 @@ def r_al_steer(a, e, u, t, o, now, E0):
   else:
     follow(T, xe, torque_bar_y(xe))
     T['gy'] = 1
-    T['jy'] = -1.6 + (1.2 if (ph - 600) % 380 < 130 else 0)
+    T['jy'] = -2.4 + (1.0 if (ph - 600) % 380 < 130 else 0)
     if ph > 700:
       o.lg(GLYPHS['spark'], xe, torque_bar_y(xe) - 2, '#ffe08a', 0.9 if math.sin(t / 90) > 0 else 0.3, 0.2)
 
