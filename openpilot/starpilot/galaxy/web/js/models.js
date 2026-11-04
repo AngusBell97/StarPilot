@@ -122,7 +122,7 @@ function matchesHardware(model, filter) {
 }
 
 function hardwareLabel(model) {
-  if (model?.requiresGpu === true) return "GPU · External";
+  if (model?.requiresGpu === true) return "eGPU";
   if (model?.requiresGpu === false) return "Comma · On-device";
   return "Hardware unknown";
 }
@@ -904,7 +904,7 @@ export const ModelsPage = {
                   <span v-for="role in pairRoles(m)" :key="role" class="gx-chip">{{ role }}</span>
                   <span class="gx-chip">{{ m.value }}</span>
                   <span v-if="m.builtin" class="gx-chip">Built-in</span>
-                  <span class="gx-chip">{{ hardwareLabel(m) }}</span>
+                  <span class="gx-chip" :class="{'gx-chip--egpu': m.requiresGpu === true}" :title="m.requiresGpu === true ? 'Runs on an external GPU' : null">{{ hardwareLabel(m) }}</span>
                   <span v-if="m.version" class="gx-chip" :aria-label="'Version '+ m.version">{{ m.version }}</span>
                   <span v-if="m.released" class="gx-chip" :aria-label="'Released '+ m.released">{{ m.released }}</span>
                   <span v-if="m.partial" class="gx-chip">Partial Files</span>

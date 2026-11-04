@@ -345,6 +345,9 @@ input[type="range"].gx-slider:active::-moz-range-thumb {
 
 .gx-model-reason { margin: var(--sp-3) 0; color: var(--text-muted); font-size: var(--fs-sm); }
 .gx-model-card__reason { margin: 0 var(--panel-padding) var(--sp-3); }
+/* External GPU models get a green chip */
+.gx-chip--egpu { --egpu: #3ddc84; background: color-mix(in srgb, var(--egpu) 30%, transparent); color: color-mix(in srgb, var(--egpu) 70%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--egpu) 55%, transparent); font-weight: 600; }
+[data-theme="light"] .gx-chip--egpu { --egpu: #1b8a3f; background: color-mix(in srgb, var(--egpu) 18%, transparent); color: #14632d; }
 /* Choose models: single model and Laboratory pair side by side, stacked on narrow screens */
 .gx-model-choose__groups { display: grid; grid-template-columns: 1fr; }
 .gx-model-choose__group { min-width: 0; align-content: start; }
