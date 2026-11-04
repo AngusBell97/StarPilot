@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 
+from openpilot.common.swaglog import cloudlog
 from openpilot.starpilot.ui.sleep_eyes.car import CarWatcher, wakes_screen
 from openpilot.starpilot.ui.sleep_eyes.engine import Engine
 
@@ -21,6 +22,7 @@ class SleepEyesController:
     self.parked_since: float | None = None
     self.limit_hit = False
     self._started_prev: bool | None = None
+    self._logged_want: bool | None = None
 
   @property
   def visible(self) -> bool:
@@ -67,6 +69,9 @@ class SleepEyesController:
     engine.pure_black = pure_black
     urgent = urgent or self.limit_hit
     self.watcher.update(engine, time.monotonic() * 1000, sm, started)
+    if want != self._logged_want:
+      self._logged_want = want
+      cloudlog.info(f"sleep eyes: {'show' if want else 'hide'} (started={started}, urgent={urgent}, phase={view.phase})")
     if want:
       if not view.visible or view.phase in ('capture_out', 'morph_out', 'pix_out'):
         engine.reset_timers(time.monotonic() * 1000)
