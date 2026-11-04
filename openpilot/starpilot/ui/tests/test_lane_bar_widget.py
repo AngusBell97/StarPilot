@@ -174,11 +174,11 @@ def test_complete_native_sprite_sheet_stays_within_transport_bounds(viewport):
   def crop(image,rect):image.data=bytes(int(rect.width*rect.height)*4)
   def resize(image,width,height):image.data=bytes(width*height*4)
   fake=NS(Rectangle=rl.Rectangle,BLANK=None,PixelFormat=NS(PIXELFORMAT_UNCOMPRESSED_R8G8B8A8=0),
-    BlendMode=NS(BLEND_CUSTOM_SEPARATE=0),rl=NS(rlSetBlendFactorsSeparate=lambda *args:None),
+    BlendMode=NS(BLEND_CUSTOM_SEPARATE=0),rl_set_blend_factors_separate=lambda *args:None,
     begin_texture_mode=lambda *args:None,end_texture_mode=lambda:None,clear_background=lambda *args:None,
     begin_blend_mode=lambda *args:None,end_blend_mode=lambda:None,load_image_from_texture=lambda *args:NS(data=b''),
     image_format=lambda *args:None,image_flip_vertical=lambda *args:None,image_crop=crop,image_resize=resize,
-    unload_image=lambda *args:None,ffi=NS(buffer=lambda data,length:data[:length]))
+    unload_image=lambda *args:None)
   with patch.object(renderer,'rl',fake):png=canvas.render_widget_art(sample_state('engaged',native),positions)
   assert validate_png(png)==png
   width,height=struct.unpack('!II',png[16:24]);assert width<=1024 and height<=1440

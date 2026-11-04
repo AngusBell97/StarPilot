@@ -219,7 +219,9 @@ class ConditionalModePolicyTest(unittest.TestCase):
 
   def test_cem_unknown_standstill_scene_keeps_existing_stop_hold(self):
     policy = ConditionalModePolicy()
-    settings = replace(ModeSettings(), cem_speed_mps=15.0)
+    # Dom's rule on its own: this build's CEM speed trigger also holds experimental below its limit at a
+    # standstill, so test the stop hold with the speed trigger off (as on Angus's car, speed_mps 0).
+    settings = replace(ModeSettings(), cem_speed_mps=0.0)
     cold = policy.step(9.95, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(9.95, speed=0.0, standstill=True), settings)
     self.assertEqual((cold.reason, cold.requested_experimental), (Reason.SCENE_UNAVAILABLE, False))
     policy.step(10.0, ModeChoice.CEM, ManualIntent.NONE, AUTHORITY, scene(10.0, speed=0.0, standstill=True, standstill_stop_hold=True), settings)
