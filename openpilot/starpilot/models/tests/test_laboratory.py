@@ -69,12 +69,13 @@ class LaboratoryTest(unittest.TestCase):
     self.assertEqual(set(rows), {row['id'] for row in self.manifest['models']})
     self.assertEqual(result['summary']['catalog'], len(self.manifest['models']))
     self.assertEqual(result['summary']['published'], 2)
-    self.assertFalse(result['runtimeSupported'])
+    self.assertTrue(result['runtimeSupported'])
     big = rows['cinquev3']
     self.assertFalse(big['small'])
     self.assertFalse(big['modelLabEligible'])
     self.assertEqual(big['modelLabStatus'], 'unsupported')
-    self.assertEqual(big['modelLabReason'], 'Big models cannot be combined in this build.')
+    self.assertEqual(big['modelLabReason'], 'Big models run on the Chestnut already and need no eGPU variant.')
+    self.assertEqual(big['placement'], 'chestnut')
     unpublished = next(row for row in rows.values() if row['modelLabStatus'] == 'unpublished')
     self.assertFalse(unpublished['modelLabArtifactAvailable'])
     self.assertFalse(unpublished['modelLabArtifactInstalled'])
@@ -82,7 +83,9 @@ class LaboratoryTest(unittest.TestCase):
     self.assertEqual(rows['gwm8223']['modelLabStatus'], 'missing')
     self.download()
     verified = next(row for row in self.ready_snapshot()['models'] if row['value'] == 'gwm8223')
-    self.assertEqual(verified['modelLabStatus'], 'runtime-unavailable')
+    self.assertEqual(verified['modelLabStatus'], 'installed')
+    self.assertTrue(verified['pairable'])
+    self.assertEqual(verified['placement'], 'chestnut')
     self.assertFalse(self.lab.snapshot()['runtime']['active'])
 
   def test_amd_download_and_delete_preserve_normal_small_artifact(self):
@@ -125,42 +128,47 @@ class LaboratoryTest(unittest.TestCase):
     with self.assertRaises(ModelError):
       validate_manifest(bad)
 
-  def test_normal_models_and_old_amd_bytes_do_not_satisfy_pair_admission(self):
-    self.gpu = True
-    ready_runtime = ModelLaboratory(self.manager, runtime_supported=True)
+  def test_normal_downloads_pair_on_the_comma_gpu_and_the_pair_includes_an_active_model(self):
     for mid in ('gwm8223', 'sc23'):
       self.download(mid, 'standard')
-    with self.assertRaisesRegex(ModelError, 'verify both eGPU'):
-      ready_runtime.action('configure', self.config)
-    self.download()
-    self.download('sc23')
-    artifact_path('sc23', self.root, 'amd').write_bytes(b'old compiled bytes')
-    with self.assertRaisesRegex(ModelError, 'verify both eGPU'):
-      ready_runtime.action('configure', self.config)
-    self.assertFalse(configuration(self.root)['enabled'])
-
-  def test_enable_requires_runtime_hardware_distinct_models_and_verified_variants(self):
-    self.download()
-    self.download('sc23')
-    self.gpu = True
-    with self.assertRaisesRegex(ModelError, 'not available in this build'):
+    rows = {row['value']: row for row in self.ready_snapshot()['models']}
+    self.assertTrue(rows['gwm8223']['pairable'])
+    self.assertEqual(rows['gwm8223']['placement'], 'comma')
+    with self.assertRaisesRegex(ModelError, 'Active Small or Active Big'):
       self.lab.action('configure', self.config)
-    ready_runtime = ModelLaboratory(self.manager, runtime_supported=True)
-    for invalid in ({**self.config, 'longitudinalModel': 'gwm8223'},
-                    {**self.config, 'lateralModel': 'cinquev3'}, {**self.config, 'enabled': 'true'}):
-      with self.assertRaises(ModelError):
-        ready_runtime.action('configure', invalid)
-    self.gpu = False
-    with self.assertRaisesRegex(ModelError, 'Chestnut'):
-      ready_runtime.action('configure', self.config)
-    self.gpu = True
-    saved = ready_runtime.action('configure', self.config)
+    self.manager.action('active', {'profile': 'small', 'model': 'gwm8223'})
+    saved = self.lab.action('configure', self.config)
     self.assertTrue(saved['configuration']['enabled'])
+    self.assertEqual(saved['configuration']['mode'], 'shadow')
+    self.assertEqual(saved['runningModel'], 'gwm8223')
     self.assertFalse(saved['runtime']['active'])
+    saved = self.lab.action('configure', {**self.config, 'mode': 'drive'})
+    self.assertEqual(configuration(self.root)['mode'], 'drive')
+
+  def test_enable_requires_distinct_downloaded_models(self):
+    self.download()
+    self.download('sc23')
+    for invalid in ({**self.config, 'longitudinalModel': 'gwm8223'}, {**self.config, 'enabled': 'true'},
+                    {**self.config, 'mode': 'fast'}, {**self.config, 'extra': 1}):
+      with self.assertRaises(ModelError):
+        self.lab.action('configure', invalid)
+    with self.assertRaisesRegex(ModelError, 'Download'):
+      self.lab.action('configure', {**self.config, 'lateralModel': 'cinquev3'})
+    saved = self.lab.action('configure', {**self.config, 'enabled': False})
+    self.assertFalse(saved['configuration']['enabled'])
+    blocked = ModelLaboratory(self.manager, runtime_supported=False)
+    with self.assertRaisesRegex(ModelError, 'not available in this build'):
+      blocked.action('configure', self.config)
+
+  def test_an_enabled_pair_protects_its_egpu_variants(self):
+    self.download()
+    self.download('sc23')
+    self.download('gwm8223', 'standard')
+    self.manager.action('active', {'profile': 'small', 'model': 'gwm8223'})
+    self.lab.action('configure', self.config)
     with self.assertRaisesRegex(ModelError, 'Disable'):
-      ready_runtime.action('delete', {'model': 'sc23'})
-    self.gpu = False
-    ready_runtime.action('configure', {**self.config, 'enabled': False})
+      self.lab.action('delete', {'model': 'sc23'})
+    self.lab.action('configure', {**self.config, 'enabled': False})
     self.assertFalse(configuration(self.root)['enabled'])
 
   def test_parked_state_and_independent_progress_are_preserved(self):
@@ -177,7 +185,7 @@ class LaboratoryTest(unittest.TestCase):
     self.assertEqual(snapshot['download']['variant'], 'amd')
     self.assertEqual(snapshot['download']['progress'], 'Downloaded!')
     self.assertEqual(snapshot['download']['jobId'], self.manager.job_id)
-    self.assertFalse(snapshot['runtimeSupported'])
+    self.assertTrue(snapshot['runtimeSupported'])
 
 
 if __name__ == '__main__':

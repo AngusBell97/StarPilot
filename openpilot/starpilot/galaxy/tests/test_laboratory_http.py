@@ -72,7 +72,7 @@ class LaboratoryHttpTest(unittest.TestCase):
       status, view, _ = self.request('/api/models/laboratory', remote=remote, cookie=cookie)
       self.assertEqual(status, 200)
       self.assertEqual({r['value'] for r in view['models']}, {r['id'] for r in self.manifest['models']})
-      self.assertFalse(view['runtimeSupported'])
+      self.assertTrue(view['runtimeSupported'])
       self.assertFalse(view['runtime']['active'])
       self.assertTrue(any(r['modelLabStatus'] == 'unsupported' and not r['small'] for r in view['models']))
       views.append(view)

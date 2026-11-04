@@ -1,0 +1,183 @@
+import json
+import time
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from openpilot.cereal import log
+from openpilot.starpilot.models import model_pair
+from openpilot.starpilot.models.laboratory_outputs import LATERAL_PLAN_COLUMNS
+from openpilot.starpilot.models.model_pair import ModelPair, PairGuard, PairPlan, plan_pair, read_status, setup_pair, write_status
+
+
+def outputs(value: float) -> dict:
+  return {"plan": np.full((33, 15), value, dtype=np.float32), "lane_lines": np.full((4, 33, 2), value, dtype=np.float32),
+          "lead": np.full((3, 6, 4), value, dtype=np.float32), "desire_state": np.full((1, 8), value, dtype=np.float32),
+          "pose": np.full((1, 12), value, dtype=np.float32), "meta": np.full((1, 55), value, dtype=np.float32)}
+
+
+class FakeModel:
+  def __init__(self, model_id, value, *, chestnut, events, descriptor="warp", cost=0.0, clock=None, fail=False):
+    self.model_id, self.value, self.chestnut, self.events = model_id, value, chestnut, events
+    self.camera_warp_descriptor = descriptor
+    self.cost, self.clock, self.fail = cost, clock, fail
+    self.npy = {"desire": np.zeros(8)}
+    self.last_warp = None
+    self.shared = []
+
+  def run(self, bufs, transforms, inputs, after_enqueue=None, *, shared_warp=None):
+    self.events.append(f"{self.model_id}:start")
+    if self.fail:
+      raise RuntimeError("boom")
+    self.shared.append(shared_warp)
+    if after_enqueue is not None:
+      after_enqueue()
+    if self.clock is not None:
+      self.clock.t += self.cost
+    self.last_warp = object()
+    self.events.append(f"{self.model_id}:end")
+    return outputs(self.value)
+
+  def get_action_from_model(self, out, prev, lat_t, long_t, v_ego):
+    v = float(out["plan"][0, 0])
+    return log.ModelDataV2.Action(desiredCurvature=v, desiredAcceleration=10 * v, shouldStop=False)
+
+
+class Clock:
+  def __init__(self):
+    self.t = 0.0
+
+  def __call__(self):
+    return self.t
+
+
+def make_pair(tmp_path, *, mode="shadow", partner_chestnut=False, role="longitudinal", **partner_kwargs):
+  events, clock = [], Clock()
+  primary = FakeModel("lightspeed", 1.0, chestnut=True, events=events, cost=0.040, clock=clock)
+  partner = FakeModel("rdf43", 2.0, chestnut=partner_chestnut, events=events, clock=clock, **partner_kwargs)
+  lateral, longitudinal = ("lightspeed", "rdf43") if role == "longitudinal" else ("rdf43", "lightspeed")
+  plan = PairPlan(mode, lateral, longitudinal, "rdf43", role)
+  return ModelPair(primary, partner, plan, now=clock, status_path=tmp_path / "pair.json"), primary, partner, events, clock
+
+
+def step(pair, drop=0.0):
+  pair.frame_drop_ratio = drop
+  out = pair.run({}, {}, {}, None)
+  return out, pair.get_action_from_model(out, log.ModelDataV2.Action(), 0.3, 0.5, 20.0)
+
+
+def test_plan_pair_needs_the_running_model():
+  assert plan_pair({"enabled": False}, "lightspeed") == (None, "off")
+  cfg = {"enabled": True, "lateralModel": "lightspeed", "longitudinalModel": "rdf43", "mode": "drive"}
+  plan, reason = plan_pair(cfg, "lightspeed")
+  assert reason == "" and plan.partner_id == "rdf43" and plan.partner_role == "longitudinal" and plan.mode == "drive"
+  plan, _ = plan_pair({**cfg, "lateralModel": "rdf43", "longitudinalModel": "lightspeed"}, "lightspeed")
+  assert plan.partner_role == "lateral"
+  assert plan_pair({**cfg, "longitudinalModel": "lightspeed"}, "lightspeed")[0] is None
+  plan, reason = plan_pair({**cfg, "lateralModel": "resfit"}, "lightspeed")
+  assert plan is None and "must include the model that is running (lightspeed)" in reason
+  assert plan_pair({**cfg, "mode": "fast"}, "lightspeed")[0] is None
+  assert plan_pair({k: v for k, v in cfg.items() if k != "mode"}, "lightspeed")[0].mode == "shadow"
+
+
+def test_shadow_drives_with_the_primary_and_runs_a_comma_partner_while_the_chestnut_computes(tmp_path):
+  pair, primary, partner, events, _ = make_pair(tmp_path)
+  out, action = step(pair)
+  assert events == ["lightspeed:start", "rdf43:start", "rdf43:end", "lightspeed:end"]
+  assert float(out["plan"][0, 0]) == 1.0 and action.desiredCurvature == 1.0
+  assert pair.summary()["curvatureDiffP50"] == 1.0 and pair.summary()["accelDiffP50"] == 10.0
+  assert pair.chestnut and pair.model_id == "lightspeed" and pair.npy is primary.npy
+
+
+def test_chestnut_partner_runs_after_the_primary_and_shares_its_warp(tmp_path):
+  pair, primary, partner, events, _ = make_pair(tmp_path, partner_chestnut=True)
+  step(pair)
+  assert events == ["lightspeed:start", "lightspeed:end", "rdf43:start", "rdf43:end"]
+  assert pair.share_warp and partner.shared[-1] is primary.last_warp
+  other, *_ = make_pair(tmp_path, partner_chestnut=True, descriptor="other")
+  assert not other.share_warp
+
+
+def test_drive_mode_combines_lateral_and_longitudinal(tmp_path):
+  pair, *_ = make_pair(tmp_path, mode="drive", role="longitudinal")
+  out, action = step(pair)
+  cols = list(LATERAL_PLAN_COLUMNS)
+  assert np.all(out["plan"][:, cols] == 1.0) and np.all(np.delete(out["plan"], cols, axis=1) == 2.0)
+  assert np.all(out["lane_lines"] == 1.0) and np.all(out["lead"] == 2.0)
+  assert action.desiredCurvature == 1.0 and action.desiredAcceleration == 20.0
+  pair, *_ = make_pair(tmp_path, mode="drive", role="lateral")
+  out, action = step(pair)
+  assert action.desiredCurvature == 2.0 and action.desiredAcceleration == 10.0 and np.all(out["lead"] == 1.0)
+
+
+def test_partner_failure_leaves_the_primary_driving(tmp_path):
+  pair, *_ = make_pair(tmp_path, mode="drive", fail=True)
+  out, action = step(pair)
+  assert not pair.partner_active and "partner failed" in pair.stop_reason
+  assert float(out["plan"][0, 0]) == 1.0 and action.desiredAcceleration == 10.0
+  status = json.loads((tmp_path / "pair.json").read_text())
+  assert status["state"] == "stopped" and "boom" in status["reason"]
+
+
+def test_guard_stops_a_slow_partner(tmp_path):
+  pair, _, partner, _, clock = make_pair(tmp_path, partner_chestnut=True, mode="drive", cost=0.012)
+  for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
+    step(pair)
+  assert not pair.partner_active and "too slow" in pair.stop_reason
+  out, action = step(pair)
+  assert float(out["plan"][0, 0]) == 1.0 and action.desiredAcceleration == 10.0
+
+
+def test_guard_stops_on_dropped_frames_after_warmup():
+  guard = PairGuard()
+  assert all(guard.check(0.040, 0.5) == "" for _ in range(model_pair.WARMUP_FRAMES))
+  assert "frames dropped" in guard.check(0.040, 0.05)
+  assert PairGuard().check(0.040, 0.0) == ""
+
+
+def test_status_round_trip_and_staleness(tmp_path):
+  path = tmp_path / "status.json"
+  write_status({"state": "testing"}, path)
+  assert read_status(path)["fresh"] is True
+  data = json.loads(path.read_text())
+  data["wallTime"] = time.time() - 60
+  path.write_text(json.dumps(data))
+  assert read_status(path)["fresh"] is False
+  assert read_status(tmp_path / "missing.json") is None
+
+
+def test_setup_pair_reuses_the_loaded_small_model_and_never_fails_the_drive(tmp_path, monkeypatch):
+  from openpilot.starpilot.models import runner
+  monkeypatch.setattr(model_pair, "STATUS_PATH", tmp_path / "status.json")
+
+  class Catalog(FakeModel, runner.CatalogModelState):
+    def __init__(self, *args, **kwargs):
+      FakeModel.__init__(self, *args, **kwargs)
+
+  events = []
+  primary = Catalog("lightspeed", 1.0, chestnut=True, events=events)
+  small = Catalog("rdf43", 2.0, chestnut=False, events=events)
+  cfg = {"enabled": True, "lateralModel": "lightspeed", "longitudinalModel": "rdf43", "mode": "shadow"}
+  model, reason = setup_pair(primary, small, 1928, 1208, config=cfg, load=lambda *a: pytest.fail("must reuse the small model"))
+  assert reason == "" and isinstance(model, ModelPair) and model.partner is small and model.partner_device == "comma"
+
+  model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "lateralModel": "resfit"})
+  assert model is primary and "must include" in reason
+  assert read_status(tmp_path / "status.json")["state"] == "refused"
+
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid: (tmp_path / "x.pkl", "v16", "0" * 64, True))
+  def broken(*args):
+    raise RuntimeError("no memory")
+  model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "longitudinalModel": "resfit"}, load=broken)
+  assert model is primary and "no memory" in reason
+
+  loaded = SimpleNamespace()
+  def load(cam_w, cam_h, path, version, chestnut, mid, sha):
+    loaded.args = (version, chestnut, mid)
+    return Catalog(mid, 3.0, chestnut=chestnut, events=events), None
+  model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "longitudinalModel": "resfit"}, load=load)
+  assert reason == "" and model.partner.model_id == "resfit" and loaded.args == ("v16", True, "resfit") and model.partner_device == "chestnut"
+
+  model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "enabled": False})
+  assert model is primary and reason == "off"

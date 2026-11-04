@@ -142,7 +142,7 @@ class LocalModelManagerHttpTest(unittest.TestCase):
         self.assertEqual(snapshot['activeBigModel'], '')
         status, laboratory = request('/api/models/laboratory')
         self.assertEqual(status, 200)
-        self.assertFalse(laboratory['runtimeSupported'])
+        self.assertTrue(laboratory['runtimeSupported'])
         self.assertFalse(laboratory['runtime']['active'])
         self.assertEqual(laboratory['summary']['published'], 0)
         pair = {'enabled': False, 'lateralModel': 'gwm8223', 'longitudinalModel': 'sc23'}

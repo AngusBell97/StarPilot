@@ -52,6 +52,7 @@ from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
 from openpilot.starpilot.navigation.intent import TurnIntent, matching_turn_signal
 from openpilot.starpilot.models.catalog import BUNDLED_CURRENT, BY_ID, DEFAULT_SMALL, DEFAULT_SMALL_SHA256
 from openpilot.starpilot.models.runner import CatalogModelState, load_verified_model
+from openpilot.starpilot.models.model_pair import ModelPair, setup_pair, write_status as write_pair_status
 from openpilot.starpilot.models.lane_obstacle import LaneObstacleDetector
 from openpilot.starpilot.models import jetlink_adapter
 import uuid
@@ -454,6 +455,20 @@ def main(demo=False):
   # Change 37: the lane obstacle detector shares the Chestnut model's GPU context and its warped road image.
   lane_obstacle = (LaneObstacleDetector.create(model)
                    if getattr(model, "chestnut", False) and model is not jetlink_model else None)
+  # Model Laboratory: the running model plus one partner, log-only test or driving; never with Jetlink
+  if jetlink_model is None:
+    pair_result = []
+    pair_loader = threading.Thread(target=lambda: pair_result.append(setup_pair(
+      model, small_model, cam_w, cam_h, report=lambda event, data: cloudlog.event(event, **data))), daemon=True)
+    pair_loader.start()
+    pair_loader.join(BIG_MODEL_TIMEOUT)
+    if pair_result:
+      model, pair_reason = pair_result[0]
+      if pair_reason not in ("", "off"):
+        cloudlog.warning(f"model pair not running: {pair_reason}")
+    else:
+      cloudlog.error("model pair partner load timed out; driving without the pair")
+      write_pair_status({"state": "refused", "primary": getattr(model, "model_id", ""), "reason": "partner load timed out"})
   cloudlog.warning(f"models loaded in {time.monotonic() - st:.1f}s, modeld starting")
   release_compile_pool()
   # gc stays off for the realtime loop, so drop the load's cyclic garbage once now
@@ -589,7 +604,7 @@ def main(demo=False):
     if not sm['carControl'].latActive:
       prev_action.desiredCurvature = sm['controlsState'].curvature
 
-    if isinstance(model, CatalogModelState) or model is jetlink_model:
+    if isinstance(model, (CatalogModelState, ModelPair)) or model is jetlink_model:
       inputs['prev_action'] = np.array([prev_action.desiredCurvature * max(1.0, v_ego) ** 2,
                                         prev_action.desiredAcceleration], dtype=np.float32)
       inputs['lateral_control_params'] = np.array([v_ego, lat_delay], dtype=np.float32)
@@ -693,7 +708,7 @@ def main(demo=False):
       pm.send('cameraOdometry', posenet_send)
       # After everything the driving model publishes: queue the detector (even frames) or read its result (odd).
       if lane_obstacle is not None:
-        if model is not lane_obstacle.model:
+        if getattr(model, "primary", model) is not lane_obstacle.model:
           lane_obstacle = None
         else:
           obstacle_wire = lane_obstacle.step(run_count, modelv2_send.modelV2, v_ego)

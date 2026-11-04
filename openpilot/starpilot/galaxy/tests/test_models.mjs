@@ -242,8 +242,8 @@ console.log('Randomizer and exclusion interactions passed')
 
 assert.match(ModelsPage.template, /Park the vehicle before changing or downloading models/)
 assert.doesNotMatch(ModelsPage.template, /Onroad: switching/)
-// Active Small, Active Big, and the Laboratory pair's lateral and longitudinal pickers
-assert.equal((ModelsPage.template.match(/class="gx-model-control"/g) || []).length, 4)
+// Active Small, Active Big, and the Laboratory pair's lateral, longitudinal and mode pickers
+assert.equal((ModelsPage.template.match(/class="gx-model-control"/g) || []).length, 5)
 assert.equal(ModelsPage.data().hardwareFilter, 'both')
 const hardware = { hardwareFilter: 'both', setHardwareFilter(value) { this.hardwareFilter = value } }
 ModelsPage.methods.toggleHardware.call(hardware, 'gpu', false)
@@ -384,8 +384,8 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
 
   const lab = { schemaVersion: 1, isOnroad: false, chestnutReady: false, runtimeSupported: false,
     configuration: { enabled: false, lateralModel: '', longitudinalModel: '' }, download: { downloading: false },
-    capabilities: { configure: true }, models: ['a', 'b'].map(value => ({ value, label: value, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true })) }
-  // a disabled pair saves its picks even while pairing cannot run in this build
+    capabilities: { configure: true }, models: ['a', 'b'].map(value => ({ value, label: value, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true, pairable: true })) }
+  // a disabled pair saves its picks
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'b' }), true)
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'a' }), false)
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'missing' }), false)
