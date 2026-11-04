@@ -42,6 +42,7 @@ BASE = dict(gx=0.0, gy=0.0, open=1.0, openL=1.0, openR=1.0, scale=1.0, sx=1.0, s
 RATE = dict(open=0.55, openL=0.45, openR=0.45, jx=0.35, jy=0.35, gx=0.18, gy=0.18)
 NEIGHBOURS = ((1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0), (1, 1, .5), (1, -1, .5), (-1, 1, .5), (-1, -1, .5))
 TAU = 2 * math.pi
+_ZEROS = [0.0] * (N * 3)
 
 
 def clamp(v: float, a: float = -1.0, b: float = 1.0) -> float:
@@ -1443,9 +1444,8 @@ class Engine:
         lids(T, 0.3)
 
     bk, fr = self.bk, self.fr
-    for k in range(N * 3):
-      bk[k] = 0.0
-      fr[k] = 0.0
+    bk[:] = _ZEROS
+    fr[:] = _ZEROS
     col_now = self.colour_now()
     o = Frame(self, T, col_now)
     E0 = eyes_of(self.S, self.stick_dir, self.daze_ph)

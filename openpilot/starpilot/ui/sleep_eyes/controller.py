@@ -10,6 +10,7 @@ from openpilot.starpilot.ui.sleep_eyes.engine import Engine
 PARKED_LIMIT_S = 600       # parked eyes doze for up to 10 minutes, then the screen switches off as before
 BRIGHTNESS_DRIVING = 50    # caps while the eyes show (percent)
 BRIGHTNESS_PARKED = 25
+EYES_FPS = 20              # the whole UI loop runs at this rate while the eyes show
 
 
 class SleepEyesController:
@@ -23,6 +24,7 @@ class SleepEyesController:
     self.limit_hit = False
     self._started_prev: bool | None = None
     self._logged_want: bool | None = None
+    self._slow = False
 
   @property
   def visible(self) -> bool:
@@ -77,17 +79,22 @@ class SleepEyesController:
         engine.reset_timers(time.monotonic() * 1000)
         view.enter()
       gui_app.set_screen_override(view)
-      return
-    if view.visible:
-      if not urgent and engine.current == 'ignOn':
-        return  # let the wake-up finish before switching to the driving view
-      view.leave(animate=not urgent)
-    if view.finished or not view.visible:
+    elif view.visible:
+      if urgent or engine.current != 'ignOn':  # let a wake-up finish before switching to the driving view
+        view.leave(animate=not urgent)
+    if not want and (view.finished or not view.visible):
       if gui_app.screen_override is view:
         gui_app.set_screen_override(None)
       view.reset()
+    self._set_slow(gui_app, view.visible)
+
+  def _set_slow(self, gui_app, slow: bool) -> None:
+    if slow != self._slow:
+      self._slow = slow
+      gui_app.set_render_fps(EYES_FPS if slow else None)
 
   def shutdown(self, gui_app) -> None:
     if gui_app.screen_override is self.view:
       gui_app.set_screen_override(None)
     self.view.reset()
+    self._set_slow(gui_app, False)

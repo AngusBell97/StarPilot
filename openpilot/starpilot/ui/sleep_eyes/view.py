@@ -5,10 +5,10 @@ import time
 
 from openpilot.common.swaglog import cloudlog
 from openpilot.starpilot.ui.raylib import rl
-from openpilot.starpilot.ui.sleep_eyes.engine import C, R, Engine
+from openpilot.starpilot.ui.sleep_eyes.engine import BG_PURPLE, C, R, Engine
 from openpilot.system.ui.lib.application import gui_app
 
-STEP_MS = 33          # engine updates (about 30 Hz); drawing repeats the last frame in between
+STEP_MS = 45          # engine updates at most ~20 Hz (the UI runs at 20 fps while the eyes show)
 PIXELATE_IN_MS = 800
 PIXELATE_OUT_MS = 500
 COLOR_CACHE_LIMIT = 4096
@@ -134,8 +134,16 @@ class SleepEyesView:
     cell, gap, ox, oy = self._grid(rect)
     size = cell - gap
     color = self._color
+    background = None if self.engine.pure_black else BG_PURPLE
+    if background is not None:
+      # One fill plus black gap lines draws every unlit square; only lit squares are drawn one by one.
+      rl.draw_rectangle(ox, oy, cell * C, cell * R, color(background))
+      for i in range(1, C + 1):
+        rl.draw_rectangle(ox + i * cell - gap, oy, gap, cell * R, rl.BLACK)
+      for j in range(1, R + 1):
+        rl.draw_rectangle(ox, oy + j * cell - gap, cell * C, gap, rl.BLACK)
     for k, c in enumerate(self._cells):
-      if c[0] or c[1] or c[2]:
+      if c != background and (c[0] or c[1] or c[2]):
         rl.draw_rectangle(ox + (k % C) * cell, oy + (k // C) * cell, size, size, color(c))
 
   def _step(self, now: float) -> None:

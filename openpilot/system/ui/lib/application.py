@@ -406,9 +406,11 @@ class GuiApplication:
 
       # four display runs slightly faster than 60 FPS, let it dictate rate so we don't drift and drop frames
       vblank_control = HARDWARE.get_device_type() == 'mici'
-      rl.set_target_fps(0 if OFFSCREEN or vblank_control else fps)
+      self._base_fps_setting = 0 if OFFSCREEN or vblank_control else fps
+      rl.set_target_fps(self._base_fps_setting)
 
       self._target_fps = fps
+      self._base_target_fps = fps
       self._load_fonts()
       self._patch_text_functions()
       self._patch_scissor_mode()
@@ -537,6 +539,18 @@ class GuiApplication:
 
   def set_should_render(self, should_render: bool):
     self._should_render = should_render
+
+  def set_render_fps(self, fps: int | None) -> None:
+    """Temporarily lower the frame rate (Sleep Eyes); None restores the normal rate."""
+    base = getattr(self, "_base_target_fps", None)
+    if base is None:
+      return
+    if fps is None:
+      rl.set_target_fps(self._base_fps_setting)
+      self._target_fps = base
+    elif not OFFSCREEN:
+      rl.set_target_fps(fps)
+      self._target_fps = fps
 
   def set_screen_override(self, override) -> None:
     self._screen_override = override
