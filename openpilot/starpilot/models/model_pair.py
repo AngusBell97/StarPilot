@@ -39,7 +39,7 @@ SLOW_FRAME_S = 0.047        # a pair frame slower than this risks the next camer
 SLOW_WINDOW = 40            # frames (2 s)
 SLOW_LIMIT = 4              # slow frames allowed in the window before the partner stops
 DROP_LIMIT = 0.02           # modeld's filtered frame-drop ratio that stops the partner
-WARMUP_FRAMES = 20          # frames before the guard judges (first runs are slower)
+WARMUP_FRAMES = 10          # frames before the guard judges (modeld also ignores its first 10 frames' drops)
 STATUS_PERIOD_S = 1.0
 LOG_PERIOD_S = 10.0
 
@@ -89,6 +89,37 @@ def plan_pair(config: dict, primary_id: str) -> tuple[PairPlan | None, str]:
   return PairPlan(mode, lateral, longitudinal, partner, "lateral" if partner == lateral else "longitudinal"), ""
 
 
+LOCAL_VARIANTS = "local_variants.json"
+
+
+def local_variant_ids(root: Path) -> set[str]:
+  """Models with a Chestnut build made on this comma."""
+  try:
+    return {mid for mid, row in json.loads((root / LOCAL_VARIANTS).read_text()).items() if isinstance(row, dict) and "amd" in row}
+  except (OSError, ValueError, AttributeError):
+    return set()
+
+
+def local_variant(model_id: str, root: Path, *, verify: bool = True) -> dict | None:
+  """A Chestnut (AMD) build of a small model made on this comma (not published in the catalog):
+  {"artifact_sha256", "artifact_size", "behavior_version", ...} from <root>/local_variants.json when its file
+  is present (and, with verify, its digest matches)."""
+  import hashlib
+  from openpilot.starpilot.models.manager import artifact_path
+  try:
+    entry = json.loads((root / LOCAL_VARIANTS).read_text())[model_id]["amd"]
+    path = artifact_path(model_id, root, "amd")
+    if path.is_symlink() or not path.is_file() or path.stat().st_size != entry["artifact_size"]:
+      return None
+    if verify:
+      with path.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != entry["artifact_sha256"]:
+          return None
+    return {**entry, "path": path}
+  except (OSError, ValueError, KeyError, TypeError):
+    return None
+
+
 def partner_artifact(partner_id: str, *, root: Path | None = None, chestnut_ok: bool = True) -> tuple[Path, str, str, bool]:
   """(path, behavior version, sha256, on_chestnut) for the partner; raises when it is not installed and verified."""
   from openpilot.starpilot.models import manager
@@ -106,6 +137,9 @@ def partner_artifact(partner_id: str, *, root: Path | None = None, chestnut_ok: 
   amd = manager.verified_artifact(partner_id, entries, base, "amd") if chestnut_ok else None
   if amd is not None:
     return amd, row["version"], manager.artifact_entry(partner_id, entries, "amd")["artifact_sha256"], True
+  local = local_variant(partner_id, base) if chestnut_ok else None
+  if local is not None and local.get("behavior_version") == row["version"]:
+    return local["path"], row["version"], local["artifact_sha256"], True
   path = manager.verified_artifact(partner_id, entries, base)
   if path is not None:
     return path, row["version"], row["artifact_sha256"], False

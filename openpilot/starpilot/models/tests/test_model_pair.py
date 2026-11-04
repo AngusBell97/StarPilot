@@ -224,3 +224,31 @@ def test_last_run_summary_survives_power_off(tmp_path, monkeypatch):
   monkeypatch.setattr(model_pair, "LAST_RUN_PATH", tmp_path / "last_run.json")
   saved = read_status()
   assert saved["state"] == "testing" and saved["frames"] == 1 and saved["fresh"] is True
+
+
+def test_a_chestnut_build_made_on_this_comma_is_used_only_when_its_digest_matches(tmp_path, monkeypatch):
+  import hashlib
+  from openpilot.starpilot.models import manager
+  from openpilot.starpilot.models.model_pair import local_variant, local_variant_ids, partner_artifact
+  amd = tmp_path / "polaris" / "polaris_driving_amd_tinygrad.pkl"
+  amd.parent.mkdir()
+  amd.write_bytes(b"chestnut build")
+  monkeypatch.setattr(manager, "artifact_path", lambda mid, root, variant="standard": amd if variant == "amd" else tmp_path / "x")
+  entry = {"artifact_sha256": hashlib.sha256(b"chestnut build").hexdigest(), "artifact_size": 14, "behavior_version": "v15"}
+  (tmp_path / "local_variants.json").write_text(json.dumps({"polaris": {"amd": entry}}))
+  assert local_variant_ids(tmp_path) == {"polaris"}
+  assert local_variant("polaris", tmp_path)["path"] == amd
+
+  rows = {"polaris": {"name": "Polaris", "version": "v15", "artifact_sha256": "s" * 64}}
+  monkeypatch.setattr(manager, "catalog", lambda root: rows)
+  monkeypatch.setattr(manager, "verified_artifact", lambda *a, **k: tmp_path / "standard.pkl" if len(a) < 4 else None)
+  assert partner_artifact("polaris", root=tmp_path) == (amd, "v15", entry["artifact_sha256"], True)
+  # without the Chestnut running, or with a changed file, the comma-GPU model is used instead
+  assert partner_artifact("polaris", root=tmp_path, chestnut_ok=False)[3] is False
+  amd.write_bytes(b"chestnut BUILD")
+  assert local_variant("polaris", tmp_path) is None and local_variant("polaris", tmp_path, verify=False) is not None
+  assert partner_artifact("polaris", root=tmp_path)[3] is False
+  # a build for another model version is never used
+  amd.write_bytes(b"chestnut build")
+  (tmp_path / "local_variants.json").write_text(json.dumps({"polaris": {"amd": {**entry, "behavior_version": "v16"}}}))
+  assert partner_artifact("polaris", root=tmp_path)[3] is False

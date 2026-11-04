@@ -4,7 +4,7 @@ from openpilot.starpilot.models.catalog import model_entries, BUNDLED_CURRENT, G
 from openpilot.starpilot.models.manager import (
   ModelError, ModelManager, artifact_entry, artifact_path, atomic_json, catalog, preferences, read_json, state_lock,
 )
-from openpilot.starpilot.models.model_pair import MODES, pair_kind_error, read_status
+from openpilot.starpilot.models.model_pair import MODES, local_variant, local_variant_ids, pair_kind_error, read_status
 
 KEYS = {"enabled", "lateralModel", "longitudinalModel"}
 
@@ -61,6 +61,7 @@ class ModelLaboratory:
       parked, gpu = owner.parked(), owner.gpu_present()
       job = owner._job_status()
       running, active_small, active_big = running_models(owner)
+      local_ids = local_variant_ids(owner.root)
       models = []
       for mid, row in entries.items():
         small = not row.get("uses_external_gpu", False)
@@ -69,8 +70,13 @@ class ModelLaboratory:
         published = "artifact_sha256" in artifact
         amd_installed, checking = owner._snapshot_installed(mid, row, "amd") if published else (False, False)
         installed, verifying = owner._snapshot_installed(mid, row)
+        # a Chestnut build made on this comma (size checked here; modeld checks its digest before loading)
+        local_amd = (small and mid in local_ids and not amd_installed and
+                     local_variant(mid, owner.root, verify=False) is not None)
         if not small:
           state, reason = "unsupported", "Big models run on the Chestnut already and need no eGPU variant."
+        elif local_amd:
+          state, reason = "installed", "A Chestnut version built on this comma. In a pair this model runs on the Chestnut."
         elif not eligible:
           state, reason = "unsupported", "This model is not available for combining."
         elif not published:
@@ -85,8 +91,8 @@ class ModelLaboratory:
                        "small": small, "modelSize": "small" if small else "big", "modelLabEligible": eligible,
                        "modelLabArtifactAvailable": published, "modelLabArtifactInstalled": amd_installed, "checking": checking,
                        "modelLabStatus": state, "modelLabReason": reason,
-                       "installed": installed, "pairable": installed or verifying or amd_installed,
-                       "placement": "chestnut" if not small or amd_installed else "comma",
+                       "installed": installed, "pairable": installed or verifying or amd_installed or local_amd,
+                       "placement": "chestnut" if not small or amd_installed or local_amd else "comma", "localBuild": local_amd,
                        "artifactSize": artifact.get("artifact_size", 0)})
       status = read_status()
       live = status is not None and status.get("fresh") and status.get("state") in ("testing", "driving")
