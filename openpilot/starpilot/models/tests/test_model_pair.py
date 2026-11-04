@@ -78,7 +78,19 @@ def test_plan_pair_needs_the_running_model():
   plan, reason = plan_pair({**cfg, "lateralModel": "resfit"}, "lightspeed")
   assert plan is None and "must include the model that is running (lightspeed)" in reason
   assert plan_pair({**cfg, "mode": "fast"}, "lightspeed")[0] is None
-  assert plan_pair({k: v for k, v in cfg.items() if k != "mode"}, "lightspeed")[0].mode == "shadow"
+  assert plan_pair({k: v for k, v in cfg.items() if k != "mode"}, "lightspeed")[0].mode == "drive"
+
+
+def test_pair_selection_loads_the_pairs_own_models():
+  from openpilot.starpilot.models.model_pair import pair_kind_error, pair_selection
+  entries = {"lightspeed": {"uses_external_gpu": True}, "resfit": {"uses_external_gpu": True}, "rdf43": {}, "tr16": {}}
+  on = {"enabled": True, "mode": "drive"}
+  assert pair_selection({**on, "lateralModel": "rdf43", "longitudinalModel": "lightspeed"}, entries) == {"big": "lightspeed", "small": "rdf43"}
+  assert pair_selection({**on, "lateralModel": "tr16", "longitudinalModel": "rdf43"}, entries) == {"big": "", "small": "tr16"}
+  assert pair_selection({**on, "lateralModel": "resfit", "longitudinalModel": "lightspeed"}, entries) is None
+  assert pair_selection({**on, "enabled": False, "lateralModel": "tr16", "longitudinalModel": "rdf43"}, entries) is None
+  assert pair_selection({**on, "lateralModel": "gone", "longitudinalModel": "rdf43"}, entries) is None
+  assert pair_kind_error(True, True) and not pair_kind_error(True, False) and not pair_kind_error(False, False)
 
 
 def test_shadow_drives_with_the_primary_and_runs_a_comma_partner_while_the_chestnut_computes(tmp_path):
@@ -166,7 +178,7 @@ def test_setup_pair_reuses_the_loaded_small_model_and_never_fails_the_drive(tmp_
   assert model is primary and "must include" in reason
   assert read_status(tmp_path / "status.json")["state"] == "refused"
 
-  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid: (tmp_path / "x.pkl", "v16", "0" * 64, True))
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid, chestnut_ok=True: (tmp_path / "x.pkl", "v16", "0" * 64, True))
   def broken(*args):
     raise RuntimeError("no memory")
   model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "longitudinalModel": "resfit"}, load=broken)
@@ -181,6 +193,12 @@ def test_setup_pair_reuses_the_loaded_small_model_and_never_fails_the_drive(tmp_
 
   model, reason = setup_pair(primary, small, 1928, 1208, config={**cfg, "enabled": False})
   assert model is primary and reason == "off"
+
+  # without the Chestnut running, a big partner never loads
+  small_primary = Catalog("rdf43", 2.0, chestnut=False, events=events)
+  model, reason = setup_pair(small_primary, small_primary, 1928, 1208, config={**cfg, "lateralModel": "rdf43", "longitudinalModel": "resfit"},
+                             load=lambda *a: pytest.fail("must not load a big model without the Chestnut"))
+  assert model is small_primary and "Chestnut is not running" in reason
 
 
 def test_called_exactly_as_modeld_calls_the_driving_model(tmp_path):

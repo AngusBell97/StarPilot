@@ -4,26 +4,26 @@ from openpilot.starpilot.models.catalog import model_entries, BUNDLED_CURRENT, G
 from openpilot.starpilot.models.manager import (
   ModelError, ModelManager, artifact_entry, artifact_path, atomic_json, catalog, preferences, read_json, state_lock,
 )
-from openpilot.starpilot.models.model_pair import MODES, read_status
+from openpilot.starpilot.models.model_pair import MODES, pair_kind_error, read_status
 
 KEYS = {"enabled", "lateralModel", "longitudinalModel"}
 
 
 def configuration(root: Path) -> dict:
-  default = {"enabled": False, "lateralModel": "", "longitudinalModel": "", "mode": "shadow"}
+  default = {"enabled": False, "lateralModel": "", "longitudinalModel": "", "mode": "drive"}
   try:
     saved = read_json(root / "laboratory.json", 4096)
     validate_configuration(saved, root)
-    return {"mode": "shadow", **saved}
+    return {"mode": "drive", **saved}
   except (OSError, ValueError, TypeError):
     return default
 
 
 def validate_configuration(value: dict, root: Path | None = None) -> None:
-  """A pair of any two catalog models; "mode" is shadow (log only, the default) or drive."""
+  """Two small catalog models, or one big and one small; "mode" is drive (default) or shadow (log only)."""
   entries = model_entries(root)
   if (not isinstance(value, dict) or not KEYS <= set(value) <= KEYS | {"mode"} or type(value["enabled"]) is not bool or
-      value.get("mode", "shadow") not in MODES):
+      value.get("mode", "drive") not in MODES):
     raise ModelError("Invalid laboratory configuration")
   for key in ("lateralModel", "longitudinalModel"):
     mid = value[key]
@@ -32,10 +32,13 @@ def validate_configuration(value: dict, root: Path | None = None) -> None:
   if value["enabled"] and (not value["lateralModel"] or not value["longitudinalModel"] or
                            value["lateralModel"] == value["longitudinalModel"]):
     raise ModelError("Choose two different models")
+  if value["lateralModel"] and value["longitudinalModel"] and (error := pair_kind_error(
+      entries[value["lateralModel"]].uses_external_gpu, entries[value["longitudinalModel"]].uses_external_gpu)):
+    raise ModelError(error)
 
 
 def running_models(owner: ModelManager) -> tuple[str, str, str]:
-  """(model modeld runs now, Active Small, Active Big): Big when a Chestnut is present and one is chosen."""
+  """(model modeld runs in single-model driving, Active Small, Active Big): Big when a Chestnut is present and chosen."""
   prefs = preferences(owner.root)
   small, big = prefs["small"], prefs["big"]
   return (big if owner.gpu_present() and big else small), small, big
@@ -136,11 +139,8 @@ class ModelLaboratory:
               # installed, or still being checked after its download: modeld verifies the digest again when it loads
               if not any(any(owner._snapshot_installed(mid, entries[mid], variant)) for variant in ("standard", "amd")):
                 raise ModelError(f"Download {entries[mid]['name']} before pairing it")
-            _, small, big = running_models(owner)
-            if not {small, big} & {payload["lateralModel"], payload["longitudinalModel"]}:
-              raise ModelError("The pair must include your Active Small or Active Big model")
             owner._require_parked()
-          atomic_json(owner.root / "laboratory.json", {"mode": "shadow", **payload})
+          atomic_json(owner.root / "laboratory.json", {"mode": "drive", **payload})
           message = "Model Laboratory configuration saved"
         else:
           if set(payload) != {"model"} or not isinstance(payload["model"], str):

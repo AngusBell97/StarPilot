@@ -249,8 +249,8 @@ class RuntimeSelection:
   big_sha256: str | None = None
 
 
-def requested_runtime_id(chestnut_available: bool, *, root: Path = ROOT) -> str:
-  prefs = preferences(root)
+def requested_runtime_id(chestnut_available: bool, *, root: Path = ROOT, overrides: dict | None = None) -> str:
+  prefs = {**preferences(root), **(overrides or {})}
   return prefs["big"] if chestnut_available and prefs["big"] else prefs["small"]
 
 
@@ -272,8 +272,13 @@ def randomize_next_start(chestnut_available: bool, *, root: Path = ROOT, chooser
     return prefs
 
 
-def resolve_runtime(chestnut_available: bool, *, root: Path = ROOT, randomize: bool = False) -> RuntimeSelection:
-  prefs = randomize_next_start(chestnut_available, root=root) if randomize else preferences(root)
+def resolve_runtime(chestnut_available: bool, *, root: Path = ROOT, randomize: bool = False,
+                    overrides: dict | None = None) -> RuntimeSelection:
+  """overrides: {"small", "big"} chosen by a Model Laboratory pair instead of the Active models (no randomizing)."""
+  if overrides:
+    prefs = {**preferences(root), **overrides}
+  else:
+    prefs = randomize_next_start(chestnut_available, root=root) if randomize else preferences(root)
   entries = catalog(root)
   small, big = prefs["small"], prefs["big"]
   small_path = verified_artifact(small, entries, root)

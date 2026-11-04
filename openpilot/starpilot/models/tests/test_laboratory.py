@@ -134,16 +134,17 @@ class LaboratoryTest(unittest.TestCase):
     rows = {row['value']: row for row in self.ready_snapshot()['models']}
     self.assertTrue(rows['gwm8223']['pairable'])
     self.assertEqual(rows['gwm8223']['placement'], 'comma')
-    with self.assertRaisesRegex(ModelError, 'Active Small or Active Big'):
-      self.lab.action('configure', self.config)
-    self.manager.action('active', {'profile': 'small', 'model': 'gwm8223'})
+    # the pair decides what loads: neither model needs to be an Active one
     saved = self.lab.action('configure', self.config)
     self.assertTrue(saved['configuration']['enabled'])
-    self.assertEqual(saved['configuration']['mode'], 'shadow')
-    self.assertEqual(saved['runningModel'], 'gwm8223')
+    self.assertEqual(saved['configuration']['mode'], 'drive')
     self.assertFalse(saved['runtime']['active'])
-    saved = self.lab.action('configure', {**self.config, 'mode': 'drive'})
-    self.assertEqual(configuration(self.root)['mode'], 'drive')
+    saved = self.lab.action('configure', {**self.config, 'mode': 'shadow'})
+    self.assertEqual(configuration(self.root)['mode'], 'shadow')
+    # two big models do not fit one Chestnut frame
+    bigs = [row['id'] for row in self.manifest['models'] if row.get('uses_external_gpu')][:2]
+    with self.assertRaisesRegex(ModelError, 'one big and one small'):
+      self.lab.action('configure', {'enabled': False, 'lateralModel': bigs[0], 'longitudinalModel': bigs[1]})
 
   def test_enable_requires_distinct_downloaded_models(self):
     self.download()
@@ -164,7 +165,6 @@ class LaboratoryTest(unittest.TestCase):
     self.download()
     self.download('sc23')
     self.download('gwm8223', 'standard')
-    self.manager.action('active', {'profile': 'small', 'model': 'gwm8223'})
     self.lab.action('configure', self.config)
     with self.assertRaisesRegex(ModelError, 'Disable'):
       self.lab.action('delete', {'model': 'sc23'})

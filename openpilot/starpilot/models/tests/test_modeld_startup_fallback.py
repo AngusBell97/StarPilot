@@ -140,7 +140,7 @@ def test_observed_availability_and_big_eligibility(monkeypatch, present, cable, 
   import sys
 
   manager = ModuleType("openpilot.starpilot.models.manager")
-  manager.resolve_runtime = Mock(side_effect=lambda chestnut_available, randomize:
+  manager.resolve_runtime = Mock(side_effect=lambda chestnut_available, randomize, overrides:
                                  SimpleNamespace(allow_big=allow_big and chestnut_available, big_path=big_path))
   manager.requested_runtime_id = Mock(return_value="selected")
   amd = ModuleType("tinygrad.runtime.ops_amd")
@@ -153,11 +153,11 @@ def test_observed_availability_and_big_eligibility(monkeypatch, present, cable, 
   params = Mock()
   env: dict = {"chestnut_present": Mock(return_value=present), "cable_connected": Mock(return_value=cable), "usb_host_connected": Mock(return_value=False),
          "chestnut_compiled": Mock(return_value=compiled), "Params": lambda: params,
-         "jetlink_adapter": SimpleNamespace(link_on=lambda: link)}
+         "jetlink_adapter": SimpleNamespace(link_on=lambda: link), "cloudlog": Mock(), "pair_selection": Mock(return_value=None)}
   execute(body[start:end], env)
   available = present or (cable and not link)
-  manager.resolve_runtime.assert_called_once_with(chestnut_available=available, randomize=True)
-  manager.requested_runtime_id.assert_called_once_with(available)
+  manager.resolve_runtime.assert_called_once_with(chestnut_available=available, randomize=True, overrides=None)
+  manager.requested_runtime_id.assert_called_once_with(available, overrides=None)
   env["chestnut_present"].assert_called_once_with()
   assert env["cable_connected"].call_count == (0 if present else 1)
   assert env["CHESTNUT"] is expected
@@ -350,13 +350,43 @@ def test_recovery_child_resolves_small_without_randomizer_or_amd(monkeypatch):
   params = Mock()
   env: dict = {"chestnut_present": lambda: True, "cable_connected": lambda: True,
          "chestnut_compiled": Mock(side_effect=AssertionError("Big compiled probe forbidden")),
-         "Params": lambda: params, "os": SimpleNamespace(getenv=lambda key: "1")}
+         "Params": lambda: params, "os": SimpleNamespace(getenv=lambda key: "1"),
+         "jetlink_adapter": SimpleNamespace(link_on=lambda: False), "cloudlog": Mock(), "pair_selection": Mock(return_value=None)}
   execute(body[start:end], env)
-  manager.resolve_runtime.assert_called_once_with(chestnut_available=False, randomize=False)
-  manager.requested_runtime_id.assert_called_once_with(True)
+  manager.resolve_runtime.assert_called_once_with(chestnut_available=False, randomize=False, overrides=None)
+  manager.requested_runtime_id.assert_called_once_with(True, overrides=None)
   assert env["CHESTNUT"] is False
   assert "AMDDevice" not in env
   assert params.put_bool.call_args_list == [(("ChestnutLoading", False),)]
+
+
+@pytest.mark.parametrize("link", [False, True])
+def test_pair_driving_loads_the_pair_models_without_randomizing(monkeypatch, link):
+  from types import ModuleType
+  import sys
+  manager = ModuleType("openpilot.starpilot.models.manager")
+  manager.ROOT, manager.catalog = Path("models"), Mock(return_value={"catalog": True})
+  manager.resolve_runtime = Mock(return_value=SimpleNamespace(allow_big=True, big_path="big"))
+  manager.requested_runtime_id = Mock(return_value="lightspeed")
+  laboratory = ModuleType("openpilot.starpilot.models.laboratory")
+  laboratory.configuration = Mock(return_value={"enabled": True})
+  amd = ModuleType("tinygrad.runtime.ops_amd")
+  amd.AMDDevice = type("FakeAMDDevice", (), {"wait_timeout_ms": 123})
+  for module in (manager, laboratory, amd):
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+  body = main_body()
+  start = next(i for i, node in enumerate(body) if isinstance(node, ast.ImportFrom) and node.module == manager.__name__)
+  end = next(i for i, node in enumerate(body) if ast.unparse(node) == "gc.disable()")
+  pair = {"big": "lightspeed", "small": "rdf43"}
+  env: dict = {"chestnut_present": lambda: True, "cable_connected": lambda: False, "usb_host_connected": lambda: False,
+               "Params": lambda: Mock(), "jetlink_adapter": SimpleNamespace(link_on=lambda: link), "cloudlog": Mock(),
+               "pair_selection": Mock(return_value=pair)}
+  execute(body[start:end], env)
+  expected = None if link else pair
+  manager.resolve_runtime.assert_called_once_with(chestnut_available=True, randomize=link, overrides=expected)
+  manager.requested_runtime_id.assert_called_once_with(True, overrides=expected)
+  if not link:
+    env["pair_selection"].assert_called_once_with({"enabled": True}, {"catalog": True})
 
 
 def test_recovery_small_receipt_reports_runtime_stall_not_load_failure():

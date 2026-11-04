@@ -52,7 +52,7 @@ from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
 from openpilot.starpilot.navigation.intent import TurnIntent, matching_turn_signal
 from openpilot.starpilot.models.catalog import BUNDLED_CURRENT, BY_ID, DEFAULT_SMALL, DEFAULT_SMALL_SHA256
 from openpilot.starpilot.models.runner import CatalogModelState, load_verified_model
-from openpilot.starpilot.models.model_pair import ModelPair, setup_pair, write_status as write_pair_status
+from openpilot.starpilot.models.model_pair import ModelPair, pair_selection, setup_pair, write_status as write_pair_status
 from openpilot.starpilot.models.lane_obstacle import LaneObstacleDetector
 from openpilot.starpilot.models import jetlink_adapter
 import uuid
@@ -314,8 +314,18 @@ def main(demo=False):
   # a Jetson, PC or phone on the port looks like a chestnut to cable_connected(): the cable counts with Jetlink off only
   chestnut_available = chestnut_present() or (cable_connected() and not jetlink_adapter.link_on() and not usb_host_connected())
   recovery_small_only = os.getenv("STARPILOT_MODELD_RECOVERY_SMALL_ONLY") == "1"
-  selection = resolve_runtime(chestnut_available=chestnut_available and not recovery_small_only, randomize=not recovery_small_only)
-  requested_model_id = requested_runtime_id(chestnut_available)
+  # Model Laboratory pair driving: the pair's models load instead of the Active ones (never with Jetlink)
+  pair_models = None
+  if not jetlink_adapter.link_on():
+    try:
+      from openpilot.starpilot.models.laboratory import configuration as pair_configuration
+      from openpilot.starpilot.models.manager import ROOT as MODELS_ROOT, catalog as model_catalog
+      pair_models = pair_selection(pair_configuration(MODELS_ROOT), model_catalog(MODELS_ROOT))
+    except Exception:
+      cloudlog.exception("model pair selection unreadable; driving with the Active models")
+  selection = resolve_runtime(chestnut_available=chestnut_available and not recovery_small_only,
+                              randomize=not recovery_small_only and pair_models is None, overrides=pair_models)
+  requested_model_id = requested_runtime_id(chestnut_available, overrides=pair_models)
   CHESTNUT = selection.allow_big and selection.big_path is not None
   if CHESTNUT:
     from tinygrad.runtime.support.am import startup_trace
