@@ -109,7 +109,9 @@ def test_native_stock_standstill_and_non_longitudinal_configuration_still_win():
 def test_takeoff_budget_is_off_by_default_tapers_by_5ms_and_respects_selected_caps():
   cp = Honda.get_non_essential_params(H.HONDA_CIVIC)
   args = (False, 30., 0., 1.7, 0., cp, 1., 0., True)
-  assert get_cruise_accel(*args, selected_acceleration_max=2.) == 1.7
+  # 4 Nov 2026: the total-acceleration budget below 20 m/s is 2.8 (was 1.7), so a straight launch with Faster
+  # Takeoffs off now reaches the selected 2.0 cap; the toggle only matters once a bend uses part of the budget.
+  assert get_cruise_accel(*args, selected_acceleration_max=2.) == 2.
   assert get_cruise_accel(*args, selected_acceleration_max=2., faster_takeoffs=True) == 2.
   assert get_cruise_accel(*args, selected_acceleration_max=.5, faster_takeoffs=True) == .5
   for speed in (5., 10., 20., 40.):
@@ -133,8 +135,8 @@ def test_actual_native_planner_uses_same_toggle_for_launch_budget():
       planner.update(sm, now_ns=stamp, selected_profiles=SelectedProfileTuning(acceleration_max=2.),
                      faster_lead_takeoff=switch, takeoff_drive_id=DRIVE)
       assert planner.output_a_target <= 2.
-  assert enabled.a_cruise > off.a_cruise
-  assert off.a_cruise <= 1.7 and enabled.a_cruise <= 2.
+  assert enabled.a_cruise >= off.a_cruise
+  assert off.a_cruise <= 2. and enabled.a_cruise <= 2.  # 4 Nov 2026: straight launch budget 2.8 no longer binds a 2.0 cap
 
 
 def test_galaxy_single_toggle_roundtrip_global_and_both_runtime_readers(tmp_path):
