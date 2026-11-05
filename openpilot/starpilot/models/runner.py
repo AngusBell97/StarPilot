@@ -321,12 +321,20 @@ class CatalogModelState:
   def run_on_device_image(self, image, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     """This frame's policy on a warped image already on the policy device: a Model Laboratory partner reading the
     image its primary uploaded this frame (same warp, checked by the pair), instead of its own host-memory copy."""
+    return self.read_queued(self.enqueue_on_device_image(image, inputs))
+
+  def enqueue_on_device_image(self, image, inputs: dict[str, np.ndarray]):
+    """run_on_device_image without waiting: the policy is queued on the device (behind whatever the primary queued
+    there) and its output tensors returned; read_queued() waits for them."""
     if not self.accepts_device_image(image):
       raise ValueError("this model cannot take a device image")
     self.last_warp = None
     self._set_frame_inputs(inputs)
     policy_inputs = {key: self.input_queues[key] for key in self.policy_input_keys}
-    return self._read_outputs(self.run_policy_device_image(**policy_inputs, warped=image))
+    return self.run_policy_device_image(**policy_inputs, warped=image)
+
+  def read_queued(self, output_tensors) -> dict[str, np.ndarray]:
+    return self._read_outputs(output_tensors)
 
   def run(self, bufs: dict, transforms: dict[str, np.ndarray], inputs: dict[str, np.ndarray],
           after_enqueue: Callable[[], None] | None = None, *, shared_warp: SharedCameraWarp | None = None) -> dict[str, np.ndarray]:

@@ -295,6 +295,32 @@ def test_a_chestnut_partner_reads_the_image_the_primary_uploaded(tmp_path):
   assert other.partner_image == "own warp"
 
 
+def test_a_chestnut_partner_is_queued_behind_the_primary_before_its_outputs_are_read(tmp_path):
+  pair, primary, partner, events, clock = make_pair(tmp_path, mode="drive", role="lateral", partner_chestnut=True)
+  image = object()
+  primary.input_queues = {"mapped_gpu_image": image}
+  partner.accepts_device_image = lambda img: img is image
+
+  def enqueue(img, inputs):
+    events.append("rdf43:queued")
+    return ("tensors", img)
+
+  def read(tensors):
+    assert tensors == ("tensors", image)
+    events.append("rdf43:read")
+    return outputs(2.0)
+  partner.enqueue_on_device_image, partner.read_queued = enqueue, read
+  partner.run_on_device_image = lambda img, inputs: pytest.fail("the partner must be queued, not run after the primary")
+  _, action = step(pair)
+  # queued inside the primary's run (after its enqueue, before the primary's outputs are read), read after it
+  assert events == ["lightspeed:start", "rdf43:queued", "lightspeed:end", "rdf43:read"]
+  assert action.desiredCurvature == pytest.approx(2.0) and pair.partner_image == "primary's Chestnut upload"
+  # a queue failure stops the partner, the primary's frame still completes
+  partner.enqueue_on_device_image = lambda img, inputs: (_ for _ in ()).throw(RuntimeError("queue full"))
+  _, action = step(pair)
+  assert not pair.partner_active and "queue full" in pair.stop_reason and action.desiredCurvature == 1.0
+
+
 class FakeRemote:
   """A partner process: answers each submitted job by collect time, or not (late), or fails."""
   chestnut = False
@@ -408,6 +434,46 @@ def test_a_failed_partner_process_stops_without_stopping_the_drive(tmp_path):
   pair.frame_ids = None
   step(pair)
   assert not pair.partner_active and "frame ids" in pair.stop_reason
+
+
+def test_setup_pair_prefers_a_registered_chestnut_build_of_the_small_model(tmp_path, monkeypatch):
+  from openpilot.starpilot.models import runner
+  monkeypatch.setattr(model_pair, "STATUS_PATH", tmp_path / "status.json")
+  monkeypatch.setattr(model_pair, "_is_big", lambda mid: mid == "lightspeed")
+  monkeypatch.setattr(model_pair, "local_variant_ids", lambda root: {"polaris"})
+
+  class Catalog(FakeModel, runner.CatalogModelState):
+    def __init__(self, *args, **kwargs):
+      FakeModel.__init__(self, *args, **kwargs)
+
+  events, loaded, started, reports = [], [], [], []
+  primary = Catalog("lightspeed", 1.0, chestnut=True, events=events)
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid, chestnut_ok=True: (tmp_path / "amd.pkl", "v15", "4" * 64, chestnut_ok))
+
+  class Remote(FakeRemote):
+    def __init__(self, *args, **kwargs):
+      super().__init__(events)
+      started.append(args[0])
+
+    def wait_ready(self):
+      return {}
+
+  def load(cam_w, cam_h, path, version, chestnut, mid, sha):
+    loaded.append((path.name, chestnut, mid))
+    return Catalog(mid, 2.0, chestnut=chestnut, events=events), None
+
+  cfg = {"enabled": True, "lateralModel": "polaris", "longitudinalModel": "lightspeed", "mode": "drive"}
+  model, reason = setup_pair(primary, None, 1344, 760, config=cfg, streams=(False, True), remote=Remote, load=load)
+  assert reason == "" and isinstance(model, ModelPair) and not model.remote and model.partner.chestnut
+  assert loaded == [("amd.pkl", True, "polaris")] and started == []
+
+  # the Chestnut build fails to load: the comma-GPU process is the fallback, and the failure is reported
+  def broken(*args):
+    raise RuntimeError("PCIe link not up")
+  model, reason = setup_pair(primary, None, 1344, 760, config=cfg, streams=(False, True), remote=Remote, load=broken,
+                             report=lambda name, data: reports.append((name, data)))
+  assert reason == "" and model.remote and started == ["polaris"]
+  assert reports[0][0] == "modelPairChestnutPartnerFailed" and "PCIe" in reports[0][1]["reason"]
 
 
 def test_setup_pair_starts_a_comma_partner_process_beside_a_chestnut_primary(tmp_path, monkeypatch):

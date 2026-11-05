@@ -424,19 +424,46 @@ class ModelPair:
       return self._finish(t, primary_out, late)
     t = self.now()
     overlap = self.partner_active and not self.partner.chestnut and self.primary.chestnut
+    queued: list = []   # a Chestnut partner's work queued right behind the primary's on the Chestnut
 
     def enqueued():
       if after_enqueue is not None:
         after_enqueue()
       if overlap and self.partner_active:
         self._run_partner(bufs, transforms, inputs)
+      elif self.partner_active and self.partner.chestnut and self.primary.chestnut:
+        self._queue_partner(inputs, queued)
 
     self._outputs["partner"] = None
     primary_out = self.primary.run(bufs, transforms, inputs, enqueued)
     self._outputs["primary"] = primary_out
-    if self.partner_active and not overlap:
+    if queued:
+      self._read_queued_partner(*queued[0])
+    elif self.partner_active and not overlap:
       self._run_partner(bufs, transforms, inputs)
     return self._finish(t, primary_out, False)
+
+  def _queue_partner(self, inputs, queued: list) -> None:
+    """Both models on the Chestnut, the partner reading the primary's image: queue the partner's policy as soon as the
+    primary's is queued, so the Chestnut runs them back to back while the comma waits for and reads the primary's
+    outputs, instead of a second send and wait after them. Falls back to _run_partner when it cannot."""
+    enqueue = getattr(self.partner, "enqueue_on_device_image", None)
+    if enqueue is None or (image := self._primary_image()) is None:
+      return
+    t = self.now()
+    try:
+      queued.append((enqueue(image, inputs), t))
+    except Exception as error:  # noqa: BLE001 - any partner failure stops the partner, never the drive
+      self._stop_partner(f"partner failed: {type(error).__name__}: {error}"[:300])
+
+  def _read_queued_partner(self, output_tensors, t: float) -> None:
+    try:
+      self.partner_image = "primary's Chestnut upload"
+      self._outputs["partner"] = self.partner.read_queued(output_tensors)
+    except Exception as error:  # noqa: BLE001
+      self._stop_partner(f"partner failed: {type(error).__name__}: {error}"[:300])
+      return
+    self._partner_ms.append((self.now() - t) * 1e3)
 
   def _finish(self, t: float, primary_out: dict, late: bool) -> dict:
     run_s = self.now() - t
@@ -607,7 +634,21 @@ def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | N
   try:
     if not isinstance(primary, CatalogModelState):
       raise ValueError("the running model cannot be paired")
-    if primary.chestnut and streams is not None and not _is_big(plan.partner_id):
+    small_beside_chestnut = bool(primary.chestnut and streams is not None and not _is_big(plan.partner_id))
+    if small_beside_chestnut and plan.partner_id in local_variant_ids(ROOT):
+      # a Chestnut build of the small model registered on this comma (registered only after bench_egpu showed the pair
+      # fits the frame): both models on the Chestnut, the partner reading the primary's image, queued behind it
+      try:
+        path, version, sha256, on_chestnut = partner_artifact(plan.partner_id, chestnut_ok=True)
+        if on_chestnut:
+          if load is None:
+            from openpilot.starpilot.models.runner import load_verified_model as load
+          partner, _ = load(cam_w, cam_h, path, version, True, plan.partner_id, sha256)
+          return ModelPair(primary, partner, plan, report=report), ""
+      except Exception as error:  # noqa: BLE001 - the comma-GPU partner below is the fallback
+        if report is not None:
+          report("modelPairChestnutPartnerFailed", {"reason": f"{type(error).__name__}: {error}"[:300]})
+    if small_beside_chestnut:
       # the small partner beside a Chestnut primary: its own process on the comma GPU, in parallel. modeld started it
       # already as its spare driving model (start_partner_spare) when it could: one copy of the small model, not two.
       spare = getattr(small_model, "partner", None)
