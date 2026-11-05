@@ -199,6 +199,9 @@ class ModelPair:
     self._late: deque[bool] = deque(maxlen=600)
     self._sent_ms: deque[float] = deque(maxlen=600)    # job sent, ms after the pair frame started
     self._ready_ms: deque[float] = deque(maxlen=600)   # partner outputs in hand, ms after the pair frame started
+    # the partner process's own breakdown of each frame (pair_partner.serve diag)
+    self._diag: dict[str, deque] = {key: deque(maxlen=600) for key in ("framesMs", "sendMs", "waitMs", "preempted")}
+    self._gpu_mhz: float | None = None
     self._reused = False
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
@@ -309,6 +312,11 @@ class ModelPair:
       self._stop_partner(f"partner failed: {error}"[:300])
       return primary_out, None, False
     if outputs is not None:
+      diag = getattr(self.partner, "diag", None) or {}
+      for key, values in self._diag.items():
+        if diag.get(key) is not None:
+          values.append(diag[key])
+      self._gpu_mhz = diag.get("gpuMhz", self._gpu_mhz)
       self._ready_ms.append((self.now() - start) * 1e3)
       self._partner_ms.append(partner_ms)
       self._late.append(False)
@@ -398,6 +406,9 @@ class ModelPair:
       "lateFrames": int(sum(self._late)),
       "jobSentMsP50": _percentile(self._sent_ms, 50),
       "partnerReadyMsP50": _percentile(self._ready_ms, 50), "partnerReadyMsP95": _percentile(self._ready_ms, 95),
+      **{f"partner{key[0].upper()}{key[1:]}P50": _percentile(values, 50) for key, values in self._diag.items()},
+      **{f"partner{key[0].upper()}{key[1:]}P95": _percentile(values, 95) for key, values in self._diag.items()},
+      "partnerGpuMhz": self._gpu_mhz,
     }
 
   def write_status(self, force: bool = False) -> None:

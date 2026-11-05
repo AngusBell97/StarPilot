@@ -53,9 +53,11 @@ class Model:
   def __init__(self, fail=False):
     self.runs, self.fail = [], fail
 
-  def run(self, bufs, transforms, inputs):
+  def run(self, bufs, transforms, inputs, after_enqueue=None):
     if self.fail:
       raise RuntimeError("gpu fault")
+    if after_enqueue is not None:
+      after_enqueue()
     self.runs.append((bufs["img"].frame, bufs["big_img"].frame, inputs["x"]))
     return {"plan": np.ones(3)}
 
@@ -73,6 +75,9 @@ def test_serve_runs_the_newest_job_and_reports_what_it_skipped():
   model = Model()
   serve(conn, model, FrameSource({"main": Client([5, 6]), "extra": Client([5, 6])}), extra=True)
   assert model.runs == [(6, 6, 1)] and conn.sent[0][0] == "out" and conn.sent[0][1] == 1
+  # each answer says where the frame's time went
+  diag = conn.sent[0][4]
+  assert {"framesMs", "sendMs", "waitMs", "preempted", "gpuMhz"} <= diag.keys() and diag["sendMs"] >= 0
 
   conn = Conn([("job", 1, (5, 5), {}, {"x": 1})])
   assert serve(conn, Model(fail=True), FrameSource({"main": Client([5])}), extra=False) == 1
@@ -107,7 +112,7 @@ def test_remote_partner_start_jobs_and_late_results():
   partner, child = remote()
   command = child["command"]
   assert command[1:3] == ["-m", "openpilot.starpilot.models.pair_partner"] and "--extra" in command and "--main-wide" not in command
-  assert command[command.index("--core") + 1] == str(pair_partner.PARTNER_CORE) == "5"
+  assert command[command.index("--cores") + 1] == ",".join(map(str, pair_partner.PARTNER_CORES)) == "4,5"
   assert command[command.index("--priority") + 1] == "50"
   # the partner's comma-GPU context stays below modeld's, whatever modeld's own environment says
   assert child["env"]["QCOM_PRIORITY"] == str(pair_partner.PARTNER_GPU_PRIORITY) == "12"
@@ -123,7 +128,10 @@ def test_remote_partner_start_jobs_and_late_results():
   child["conn"].send(("out", seq, {"plan": 1}, 40.0))
   seq2 = partner.submit((8, 8), {}, {})
   child["conn"].send(("out", seq2, {"plan": 2}, 37.0))
-  assert partner.collect(seq2, 1.0) == ({"plan": 2}, 37.0, "")
+  assert partner.collect(seq2, 1.0) == ({"plan": 2}, 37.0, "") and partner.diag == {}
+  seq2b = partner.submit((8, 8), {}, {})
+  child["conn"].send(("out", seq2b, {"plan": 3}, 36.0, {"waitMs": 30.0, "preempted": 2}))
+  assert partner.collect(seq2b, 1.0)[0] == {"plan": 3} and partner.diag == {"waitMs": 30.0, "preempted": 2}
   seq3 = partner.submit((9, 9), {}, {})
   child["conn"].send(("skip", seq3, "camera frame not available"))
   assert partner.collect(seq3, 1.0) == (None, None, "camera frame not available")
@@ -137,7 +145,7 @@ def test_remote_partner_start_jobs_and_late_results():
       received.append(child["conn"].recv())
   except EOFError:   # modeld's end closed after "stop"
     pass
-  assert [m[1] for m in received if m[0] == "job"] == [seq2, seq3] and received[-1] == ("stop",)
+  assert [m[1] for m in received if m[0] == "job"] == [seq2, seq2b, seq3] and received[-1] == ("stop",)
 
 
 def test_remote_partner_that_fails_to_start_or_dies():
@@ -152,3 +160,26 @@ def test_remote_partner_that_fails_to_start_or_dies():
   child["conn"].close()
   with pytest.raises(PartnerError, match="ended"):
     partner.collect(1, 0.5)
+
+
+def test_warm_up_runs_dummy_frames_then_clears_the_models_state():
+  from openpilot.starpilot.models.pair_partner import warm_up
+
+  class Warm:
+    vision_input_names = ("img", "big_img")
+    frame_buf_size = 16
+    npy = {"desire": np.zeros(8)}
+
+    def __init__(self):
+      self.runs, self.reset = 0, 0
+
+    def run(self, bufs, transforms, inputs, after_enqueue=None):
+      assert bufs["img"].shape == (16,) and inputs["desire_pulse"].shape == (8,)
+      self.runs += 1
+
+    def _reset_state(self):
+      self.reset += 1
+
+  model = Warm()
+  warm_up(model, 5)
+  assert (model.runs, model.reset) == (5, 1)

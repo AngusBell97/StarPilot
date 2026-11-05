@@ -28,8 +28,12 @@ import time
 from multiprocessing.connection import Connection
 from pathlib import Path
 
-PARTNER_CORE = 5            # big core; card (4), camerad (6) and modeld (7) keep theirs
+# Big cores 4 and 5, whichever is free (camerad keeps 6, modeld 7). With the car on, selfdrived alone takes ~28 % of
+# core 5 and card shares core 4: RDF V4 on core 5 alone took 50 ms, on core 4 alone 42 ms (5 Nov 2026, parked, car on).
+PARTNER_CORES = (4, 5)
 PARTNER_RT_PRIORITY = 50    # below plannerd/radard (51) and card/selfdrived (53): they always run first
+WARMUP_RUNS = 20            # dummy frames before the first real one: GPU clocks and caches up, first-run costs paid
+DIAG_GPU_EVERY = 20         # frames between reads of the GPU clock for the diagnostics
 START_TIMEOUT_S = 60.0
 # Comma GPU (KGSL) context priorities: lower is higher, and with preemption on the GPU interrupts a lower ring (of
 # four) for a higher one. launch_env.sh puts every model at 12 so the UI (8) interrupts them. With a partner process,
@@ -90,18 +94,21 @@ class RemotePartner:
   vision_input_names = ("img", "big_img")
 
   def __init__(self, model_id: str, behavior_version: str, artifact: Path, sha256: str, cam_w: int, cam_h: int, *,
-               main_wide_camera: bool, use_extra_client: bool, core: int = PARTNER_CORE, priority: int = PARTNER_RT_PRIORITY,
+               main_wide_camera: bool, use_extra_client: bool, cores: tuple[int, ...] = PARTNER_CORES, priority: int = PARTNER_RT_PRIORITY,
                gpu_priority: int = PARTNER_GPU_PRIORITY, popen=subprocess.Popen):
     self.model_id, self.behavior_version = model_id, behavior_version
     self.lat_delay = 0.0
     self.frame_drop_ratio = 0.0
     self.seq = 0
     self.load_s: float | None = None
+    self.info: dict = {}
+    self.diag: dict = {}
     parent, child = socket.socketpair()
     self.conn = Connection(parent.detach())
     command = [sys.executable, "-m", "openpilot.starpilot.models.pair_partner", "--fd", str(child.fileno()),
                "--parent", str(os.getpid()), "--model-id", model_id, "--version", behavior_version, "--artifact", str(artifact),
-               "--sha256", sha256, "--camera", f"{cam_w}x{cam_h}", "--core", str(core), "--priority", str(priority)]
+               "--sha256", sha256, "--camera", f"{cam_w}x{cam_h}", "--cores", ",".join(str(c) for c in cores),
+               "--priority", str(priority)]
     if main_wide_camera:
       command.append("--main-wide")
     if use_extra_client:
@@ -133,7 +140,8 @@ class RemotePartner:
 
   def collect(self, seq: int, timeout_s: float) -> tuple[dict | None, float | None, str]:
     """(outputs, partner run ms, "") for job `seq`, or (None, None, why) when it did not arrive in time or was
-    skipped. Older results that arrive late are dropped. Raises PartnerError when the partner failed."""
+    skipped. Older results that arrive late are dropped. Raises PartnerError when the partner failed. The partner's
+    timing breakdown for that frame is left in self.diag (or {})."""
     deadline = time.monotonic() + max(0.0, timeout_s)
     while True:
       remaining = deadline - time.monotonic()
@@ -149,6 +157,7 @@ class RemotePartner:
       if message[1] < seq:
         continue
       if kind == "out":
+        self.diag = message[4] if len(message) > 4 else {}
         return message[2], message[3], ""
       return None, None, message[2] if kind == "skip" else f"unexpected partner message {kind}"
 
@@ -194,7 +203,7 @@ def _parse(argv=None):
   parser.add_argument("--artifact", type=Path, required=True)
   parser.add_argument("--sha256", required=True)
   parser.add_argument("--camera", required=True)
-  parser.add_argument("--core", type=int, default=PARTNER_CORE)
+  parser.add_argument("--cores", default=",".join(str(c) for c in PARTNER_CORES))
   parser.add_argument("--priority", type=int, default=PARTNER_RT_PRIORITY)
   parser.add_argument("--main-wide", action="store_true")
   parser.add_argument("--extra", action="store_true")
@@ -240,8 +249,40 @@ def _rss_mb() -> float | None:
     return None
 
 
+def _preemptions() -> int:
+  """This process's involuntary context switches so far: how often something else took its CPU."""
+  try:
+    with open("/proc/self/status") as status:
+      return next(int(line.split()[1]) for line in status if line.startswith("nonvoluntary_ctxt_switches"))
+  except (OSError, StopIteration, ValueError):
+    return 0
+
+
+def _gpu_mhz() -> float | None:
+  try:
+    return round(int(Path("/sys/class/kgsl/kgsl-3d0/gpuclk").read_text()) / 1e6, 1)
+  except (OSError, ValueError):
+    return None
+
+
+def warm_up(model, runs: int = WARMUP_RUNS) -> None:
+  """Run dummy frames through the model, then clear its recurrent state, so the first real frames are not slow."""
+  import numpy as np
+  if runs <= 0:
+    return
+  frames = {name: np.zeros(model.frame_buf_size, dtype=np.uint8) for name in model.vision_input_names}
+  transforms = dict.fromkeys(model.vision_input_names, np.eye(3, dtype=np.float32))
+  inputs = {"desire_pulse": np.zeros(len(model.npy["desire"]), dtype=np.float32)}
+  for _ in range(runs):
+    model.run(frames, transforms, inputs)
+  model._reset_state()
+
+
 def serve(conn, model, frames: FrameSource, extra: bool) -> int:
-  """Run jobs until modeld says stop or goes away. Only the newest waiting job runs; older ones are skipped."""
+  """Run jobs until modeld says stop or goes away. Only the newest waiting job runs; older ones are skipped.
+  Each answer carries where the frame's time went (diag), so a short real-drive run is enough to see why it is slow."""
+  count = 0
+  gpu_mhz = _gpu_mhz()
   while True:
     try:
       message = conn.recv()
@@ -254,19 +295,30 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
     if message[0] != "job":
       return 0
     _, seq, (main_id, extra_id), transforms, inputs = message
+    received = time.perf_counter()
+    preempted = _preemptions()
     buf_main = frames.frame("main", main_id)
     buf_extra = frames.frame("extra", extra_id) if extra else buf_main
+    got_frames = time.perf_counter()
     if buf_main is None or buf_extra is None:
       conn.send(("skip", seq, "camera frame not available"))
       continue
     bufs = {name: buf_extra if "big" in name else buf_main for name in model.vision_input_names}
     start = time.perf_counter()
+    sent = []
     try:
-      outputs = model.run(bufs, transforms, inputs)
+      outputs = model.run(bufs, transforms, inputs, lambda: sent.append(time.perf_counter()))
     except Exception as error:  # noqa: BLE001 - reported to modeld, which stops the partner
       conn.send(("error", seq, f"{type(error).__name__}: {error}"[:300]))
       return 1
-    conn.send(("out", seq, outputs, round((time.perf_counter() - start) * 1e3, 2)))
+    done = time.perf_counter()
+    count += 1
+    if count % DIAG_GPU_EVERY == 0:
+      gpu_mhz = _gpu_mhz()
+    sent_at = sent[0] if sent else start
+    diag = {"framesMs": round((got_frames - received) * 1e3, 2), "sendMs": round((sent_at - start) * 1e3, 2),
+            "waitMs": round((done - sent_at) * 1e3, 2), "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz}
+    conn.send(("out", seq, outputs, round((done - start) * 1e3, 2), diag))
 
 
 def main(argv=None) -> int:
@@ -274,7 +326,8 @@ def main(argv=None) -> int:
   conn = Connection(args.fd)
   try:
     _check_parent(args.parent)
-    os.sched_setaffinity(0, {args.core})   # off modeld's core 7 while loading too
+    cores = [int(core) for core in args.cores.split(",")]
+    os.sched_setaffinity(0, set(cores))   # off modeld's core 7 while loading too
     start = time.monotonic()
     os.environ["GMMU"] = "0"
     os.environ.setdefault("AM_POWER_LIMIT", "100")
@@ -296,9 +349,10 @@ def main(argv=None) -> int:
         if time.monotonic() > deadline:
           raise PartnerError(f"camera stream {name} unavailable")
         time.sleep(0.05)
+    config_realtime_process(cores, args.priority)   # also turns the garbage collector off for the run
+    warm_up(model)
     _release_load_memory()
-    config_realtime_process(args.core, args.priority)   # also turns the garbage collector off for the run
-    conn.send(("ready", {"pid": os.getpid(), "loadS": round(time.monotonic() - start, 1), "core": args.core, "priority": args.priority,
+    conn.send(("ready", {"pid": os.getpid(), "loadS": round(time.monotonic() - start, 1), "cores": cores, "priority": args.priority,
                          "desireLen": int(model.npy["desire"].shape[-1]), "rssMb": _rss_mb()}))
   except Exception as error:  # noqa: BLE001 - reported to modeld, which drives without the pair
     try:
