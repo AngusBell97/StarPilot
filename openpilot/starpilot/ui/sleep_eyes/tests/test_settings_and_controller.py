@@ -10,7 +10,7 @@ from openpilot.starpilot.ui.display_preferences import SCREEN_OFF, SLEEP_EYES, r
 from openpilot.starpilot.ui.feature_settings_state import FeatureSettingsRequest
 from openpilot.starpilot.ui.presentation import Profile
 from openpilot.starpilot.ui.sleep_eyes import controller as controller_module
-from openpilot.starpilot.ui.sleep_eyes.car import orange_alert, wakes_screen
+from openpilot.starpilot.ui.sleep_eyes.car import wakes_screen
 
 
 @pytest.fixture
@@ -65,17 +65,23 @@ def test_alert_routing():
     return NS(alertStatus=status, alertSize=size, alertType=kind, alertText1=text1, alertText2=text2)
   assert wakes_screen(ss("critical", "full", "x/permanent"))
   assert wakes_screen(ss("userPrompt", "full", "steerTempUnavailable/softDisable", "TAKE CONTROL IMMEDIATELY"))
-  assert not wakes_screen(ss("userPrompt", "mid", "driverDistracted2/permanent"))
-  assert orange_alert(ss("userPrompt", "mid", "driverDistracted2/permanent", "Pay Attention")) == "alAttn"
-  assert orange_alert(ss("userPrompt", "mid", "driverUnresponsive2/permanent")) == "alWheel"
-  assert orange_alert(ss("userPrompt", "mid", "steerSaturated/warning")) == "alSteer"
-  assert orange_alert(ss("userPrompt", "small", "ldw/permanent")) == "alLdw"
-  assert orange_alert(ss("userPrompt", "small", "", "Car Detected in Blindspot")) == "alBlind"
-  assert orange_alert(ss("userPrompt", "small", "brakeHold/warning")) == "alResume"
-  assert orange_alert(ss("userPrompt", "mid", "speedTooHigh/warning", "Speed Too High")) == "alTake"
-  assert orange_alert(ss("userPrompt", "small", "", "Max Regen Being Used")) is None
-  assert orange_alert(ss("normal", "small", "x/warning")) is None
-  assert orange_alert(ss("userPrompt", "full", "x/softDisable")) is None
+  # Every orange alert that asks something of the driver brings back the driving screen (no amber eyes).
+  for alert in (ss("userPrompt", "mid", "driverDistracted2/permanent", "Pay Attention", "Driver Distracted"),
+                ss("userPrompt", "mid", "driverUnresponsive2/permanent", "Touch Steering Wheel", "Driver Unresponsive"),
+                ss("userPrompt", "mid", "steerSaturated/warning", "take control", "turn exceeds limit"),
+                ss("userPrompt", "small", "ldw/permanent", "Lane Departure Detected"),
+                ss("userPrompt", "small", "laneChangeBlocked/warning", "Car in Blindspot"),
+                ss("userPrompt", "small", "", "Car Detected in Blindspot"),
+                ss("userPrompt", "small", "resumeRequired/warning", "Press Resume"),
+                ss("userPrompt", "small", "brakeHold/warning", "Press Resume to Exit Brake Hold"),
+                ss("userPrompt", "mid", "manualRestart/warning", "TAKE CONTROL", "Resume Driving Manually"),
+                ss("userPrompt", "mid", "speedTooHigh/warning", "Speed Too High", "Model uncertain at this speed")):
+    assert wakes_screen(alert), alert
+  # Orange information, white alerts and silent events leave the eyes up.
+  assert not wakes_screen(ss("userPrompt", "small", "teslaPreapPedal/maxRegen/warning", "Max Regen Being Used"))
+  assert not wakes_screen(ss("userPrompt", "small", "startupMaster/permanent", "WARNING: This branch is not tested"))
+  assert not wakes_screen(ss("normal", "small", "driverDistracted1/permanent", "Pay Attention"))
+  assert not wakes_screen(ss("userPrompt", "none", "x/warning"))
 
 
 class FakeView:

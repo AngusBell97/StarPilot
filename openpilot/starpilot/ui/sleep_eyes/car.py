@@ -1,4 +1,5 @@
-"""Turns live car messages into Sleep Eyes reactions (signals, lane changes, braking, bends, orange alerts)."""
+"""Turns live car messages into Sleep Eyes reactions (signals, lane changes, braking, bends), and decides which
+alerts bring back the full driving screen."""
 from __future__ import annotations
 
 from openpilot.starpilot.ui.sleep_eyes.engine import Engine
@@ -11,24 +12,7 @@ LAT_ON = 3.2             # m/s^2 of lateral acceleration that pins the eyes to t
 LAT_OFF = 2.4
 LAT_HOLD = 400           # ms the bend must last
 
-ALERT_BY_EVENT = {
-  'driverDistracted': 'alAttn',
-  'driverUnresponsive': 'alWheel',
-  'steerSaturated': 'alSteer',
-  'ldw': 'alLdw',
-  'laneChangeBlocked': 'alBlind',
-  'resumeRequired': 'alResume',
-  'brakeHold': 'alResume',
-}
-ALERT_BY_TEXT = (
-  ('blindspot', 'alBlind'),
-  ('press resume', 'alResume'),
-  ('pay attention', 'alAttn'),
-  ('touch steering', 'alWheel'),
-  ('exceeds', 'alSteer'),
-  ('lane departure', 'alLdw'),
-)
-# Orange alerts that are information rather than a request: no reaction.
+# Orange alerts that are information rather than a request: the eyes stay.
 IGNORED_TEXT = ('regen', 'pedal cruise', 'branch is not tested', 'maneuver')
 
 
@@ -37,25 +21,15 @@ def _status(ss) -> str:
 
 
 def wakes_screen(ss) -> bool:
-  """Red alerts, and the full-screen orange TAKE CONTROL IMMEDIATELY, always wake the full screen."""
+  """For safety, every red and every orange alert brings back the full driving screen (the eyes never stand in
+  for an alert). Only orange information (regen, pedal cruise, untested-branch banner) leaves the eyes up."""
   status = _status(ss)
-  return status == 'critical' or (status == 'userPrompt' and str(getattr(ss, 'alertSize', 'none')) == 'full')
-
-
-def orange_alert(ss) -> str | None:
-  if _status(ss) != 'userPrompt' or str(getattr(ss, 'alertSize', 'none')) in ('none', 'full'):
-    return None
+  if status == 'critical':
+    return True
+  if status != 'userPrompt' or str(getattr(ss, 'alertSize', 'none')) == 'none':
+    return False
   text = f"{getattr(ss, 'alertText1', '')} {getattr(ss, 'alertText2', '')}".lower()
-  if any(word in text for word in IGNORED_TEXT):
-    return None
-  event = str(getattr(ss, 'alertType', '')).split('/')[0]
-  for prefix, name in ALERT_BY_EVENT.items():
-    if event.startswith(prefix):
-      return name
-  for word, name in ALERT_BY_TEXT:
-    if word in text:
-      return name
-  return 'alTake'
+  return not any(word in text for word in IGNORED_TEXT)
 
 
 class CarWatcher:
@@ -138,15 +112,5 @@ class CarWatcher:
       self.lat_active = False
       self.lat_since = None
     engine.ctx['lat_hold'] = self.lat_active
-
-    # Orange alerts become amber eyes; which way they look depends on the alert.
-    alert = orange_alert(ss)
-    engine.ctx['alert'] = alert
-    if alert == 'alSteer':
-      engine.ctx['alert_dir'] = -1 if lat > 0 else 1
-    elif alert == 'alBlind':
-      engine.ctx['alert_dir'] = -1 if cs.leftBlinker or getattr(cs, 'leftBlindspot', False) else 1
-    elif alert == 'alLdw':
-      lines = sm['modelV2'].laneLines
-      if len(lines) >= 3 and len(lines[1].y) and len(lines[2].y):
-        engine.ctx['alert_dir'] = -1 if abs(lines[1].y[0]) < abs(lines[2].y[0]) else 1
+    # Alerts are never shown as eyes: red and orange ones wake the full screen instead (see wakes_screen). The
+    # engine's amber alert animations stay in engine.py but nothing triggers them.

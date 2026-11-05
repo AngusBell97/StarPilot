@@ -31,6 +31,7 @@ PARAM_UPDATE_TIME = 1 / 5.0
 
 
 _UI_START = time.monotonic()  # Sleep Eyes: a first look soon after this means the comma just booted
+SELFDRIVE_STALL_S = 5.0  # same as the alert renderer's SELFDRIVE_STATE_TIMEOUT: past this it shows System Unresponsive
 
 
 class UIStatus(Enum):
@@ -690,6 +691,7 @@ class Device:
     self._screen_off_started = ui_state.started
     critical = (ui_state.sm.valid.get('selfdriveState', False) and ui_state.sm.alive.get('selfdriveState', False) and
                 ui_state.sm['selfdriveState'].alertStatus == log.SelfdriveState.AlertStatus.critical)
+    critical = critical or self._selfdrive_stalled()
     if not ui_state.started or road_changed or touched or critical:
       self._screen_off = False
     if critical:
@@ -714,6 +716,21 @@ class Device:
       if any(ev.left_released for ev in gui_app.mouse_events):
         self._wake_touch_active = False
       gui_app.mouse_events.clear()
+
+  @staticmethod
+  def _selfdrive_stalled() -> bool:
+    """Onroad and selfdrived has stopped publishing after being heard from: the screen then draws its own red
+    TAKE CONTROL IMMEDIATELY / System Unresponsive (alert_renderer), which no selfdriveState message carries, so
+    treat it as a critical alert here to wake a sleeping screen (Turn Off Comma Screen or Sleep Eyes)."""
+    if PC or not ui_state.started or getattr(ui_state, "replay_clock", None) is not None:
+      return False
+    try:
+      sm = ui_state.sm
+      if sm.recv_frame["selfdriveState"] < ui_state.started_frame:
+        return False  # not heard from since going onroad: that is "Waiting to start", not a stall
+      return time.monotonic() - sm.recv_time["selfdriveState"] > SELFDRIVE_STALL_S
+    except (AttributeError, KeyError, TypeError):
+      return False
 
   def _update_sleep_eyes(self, touched: bool, blocked: bool, interaction_timeout: bool) -> bool:
     """Sleep Eyes replace the sleeping screen. Returns True while the eyes keep the display on."""
