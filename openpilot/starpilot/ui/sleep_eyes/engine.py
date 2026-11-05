@@ -38,8 +38,15 @@ CONSTELLATION = ((2.5, 5), (5.5, 1.8), (10.5, 2.6), (15.5, 1), (21.5, 1.8), (27,
                  (37.5, 10.5), (36, 15.8))
 
 BASE = dict(gx=0.0, gy=0.0, open=1.0, openL=1.0, openR=1.0, scale=1.0, sx=1.0, sy=1.0, lidL=0.0, lidR=0.0, lidB=0.0,
-            happy=0.0, tilt=0.0, jx=0.0, jy=0.0, cross=0.0, press=0.0, roll=0.0, stick=0.0, daze=0.0, worry=0.0)
-RATE = dict(open=0.55, openL=0.45, openR=0.45, jx=0.35, jy=0.35, gx=0.18, gy=0.18)
+            happy=0.0, tilt=0.0, jx=0.0, jy=0.0, cross=0.0, press=0.0, roll=0.0, stick=0.0, daze=0.0, worry=0.0,
+            side=1.0)
+RATE = dict(open=0.55, openL=0.45, openR=0.45, jx=0.35, jy=0.35, gx=0.18, gy=0.18, side=0.2)
+# Top speed per 60 Hz frame for the keys that move the eyes across the screen, so a big change of target (an animation
+# cut short, a signal flipping sides) glides over a few frames instead of jumping in one. jx/jy are in cells; gx moves
+# 4.2 cells per unit, gy 2.6, stick and side about 26.
+MAX_STEP = dict(jx=0.8, jy=0.8, gx=0.2, gy=0.3, stick=0.07, side=0.12)
+# Keys whose target stays where it is unless an animation sets it (which edge high g pins the eyes to).
+HELD = ('side',)
 NEIGHBOURS = ((1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0), (1, 1, .5), (1, -1, .5), (-1, 1, .5), (-1, -1, .5))
 TAU = 2 * math.pi
 _ZEROS = [0.0] * (N * 3)
@@ -152,7 +159,19 @@ def rest_pose(parked: bool, stopped: bool) -> dict:
   return pose
 
 
+def _stuck(s: int, d: int) -> tuple[float, float, float]:
+  """Where an eye sits pinned by high g to edge d (+1 right, -1 left): x, width, height."""
+  out_side = s == d
+  xs = (38.3 if out_side else 33.4) if d > 0 else (1.7 if out_side else 6.6)
+  ws, hs = (3.2, 12.5) if out_side else (3.8, 11.6)
+  return xs, ws, hs
+
+
 def eyes_of(St: dict, stick_dir: int = 1, daze_ph: float = 0.0) -> list[Eye]:
+  """The two eyes for pose St. The pinned edge comes from St['side'] (eased, so an S-bend sweeps the eyes across);
+  stick_dir is only used for a pose without it."""
+  side = St.get('side', stick_dir)
+  q = clamp((side + 1) / 2, 0.0, 1.0)
   out = []
   for s in (-1, 1):
     p = 1 + 0.12 * St['gx'] * s
@@ -165,10 +184,8 @@ def eyes_of(St: dict, stick_dir: int = 1, daze_ph: float = 0.0) -> list[Eye]:
     x = 20 + s * (7.6 - St['cross'] * 3.2) + St['gx'] * 4.2 + St['jx'] + (0 if outer else direction * St['press'] * 2.5)
     y = 9 + St['gy'] * 2.6 + St['jy'] + s * St['roll'] * 1.8
     if St['stick'] > 0.001:
-      d = stick_dir
-      out_side = s == d
-      xs = (38.3 if out_side else 33.4) if d > 0 else (1.7 if out_side else 6.6)
-      ws, hs = (3.2, 12.5) if out_side else (3.8, 11.6)
+      (xl, wl, hl), (xr, wr, hr) = _stuck(s, -1), _stuck(s, 1)
+      xs, ws, hs = xl + (xr - xl) * q, wl + (wr - wl) * q, hl + (hr - hl) * q
       x += (xs - x) * St['stick']
       w += (ws - w) * St['stick']
       h += (hs - h) * St['stick']
@@ -214,6 +231,19 @@ def each_cell(e: Eye):
 
 def cells_of(E: list[Eye]) -> list[tuple[int, int]]:
   return [cell for e in E for cell in each_cell(e)]
+
+
+def _shape(eye: Eye, rows, c, shade) -> dict[int, tuple]:
+  """Cells (index -> colour) of one eye drawn as a pill (rows None) or as a glyph centred on it."""
+  out = {}
+  if rows is not None:
+    for i, j in glyph_cells(rows, eye.x, eye.y):
+      if 0 <= i < C and 0 <= j < R:
+        out[j * C + i] = c
+  else:
+    for i, j in each_cell(eye):
+      out[j * C + i] = mix(c, '#ffffff', shade(i, j)) if shade else c
+  return out
 
 
 class Frame:
@@ -355,7 +385,7 @@ def r_boot(a, e, u, t, o, now, E0):
   """Comma start-up: black, one pixel blooms into a line, the line splits into two closed eyes, then they wake."""
   if t < BOOT_LIGHT_MS:
     o.hide = True
-    o.T.update(gx=0, gy=0)
+    o.T.update(rest_pose(True, False))  # the hidden eyes settle closed, where the line lands
     if t < 450:
       k = lin(t, 100, 450)
       o.l(20, 9, '#ffffff', k, 0.35 * k, 'f')
@@ -425,10 +455,13 @@ def lane_change(d):
 def lateral(d):
   def start(a, e):
     e.stick_dir = d
+    if e.S['stick'] < 0.05:
+      e.S['side'] = d  # not pinned yet: pick the edge straight away (already pinned: glide across, e.g. an S-bend)
 
   def run(a, e, u, t, o, now, E0):
     T = o.T
     e.stick_dir = d
+    T['side'] = d
     e.daze_ph = t / 170
     if t < 1900:
       T['stick'] = 1; lids(T, 0.28); T['lidB'] = 0.18; T['gx'] = -d * 0.5; T['jy'] = math.sin(t / 38) * 0.18
@@ -1387,13 +1420,22 @@ class Engine:
     self.next_idle = 0.0
     self.next_event = 0.0
     self.last_now: float | None = None
-    # Hand-offs: a short crossfade from the last shown frame whenever an animation is cut short, an eye turns into
-    # a glyph (or back), or the eyes hide/show; the eye colour also eases instead of switching.
-    self.shown: list | None = None
-    self.xfade_from: list | None = None
+    # Hand-offs. The eyes themselves never crossfade (their pose glides, see MAX_STEP), so there is never a second,
+    # fading pair of eyes. Instead:
+    #  - an animation cut short / an alert clearing: everything behind and around the eyes fades from the old picture;
+    #  - an eye turning into a glyph (star, heart, > <) or back: the two shapes blend where the eye is now;
+    #  - the eyes hiding or showing (bursting into particles, forming from them): the whole frame crossfades;
+    #  - the eye colour eases instead of switching.
+    self.shown: list | None = None        # last frame, before dimming (floats)
+    self.xfade_from: list | None = None   # whole-frame crossfade source
     self.xfade_t0 = 0.0
+    self.shown_base: list | None = None   # last picture without the eyes
+    self.base_from: list | None = None    # background crossfade source
+    self.base_t0 = 0.0
     self._xfade_request = False
-    self._look: tuple | None = None
+    self._look: bool | None = None        # hidden last frame
+    self._eye_shape: dict = {}            # per eye: (glyph rows or None for the pill, glyph colour or None)
+    self._eye_blend: dict = {}            # per eye: (old rows, old colour, start ms)
     self.col_disp: tuple | None = None
     self.dim = 1.0  # set by the controller: fades the whole picture out before the screen goes black
 
@@ -1423,10 +1465,12 @@ class Engine:
 
   def reset_display(self) -> None:
     """Forget the last shown frame (the eyes are coming back after being hidden)."""
-    self.shown = self.xfade_from = None
+    self.shown = self.xfade_from = self.shown_base = self.base_from = None
     self.col_disp = None
     self._xfade_request = False
     self._look = None
+    self._eye_shape = {}
+    self._eye_blend = {}
     self.last_now = None
 
   @property
@@ -1495,6 +1539,8 @@ class Engine:
     self._schedule(now)
 
     T = dict(BASE)
+    for k in HELD:
+      T[k] = self.S[k]
     if self.parked:
       lids(T, 0.88)
       T['gy'] = 0.5
@@ -1535,7 +1581,12 @@ class Engine:
     for k, base in BASE.items():
       target = T.get(k, base)
       rate = 0.45 if k == 'stick' and target > S[k] else RATE.get(k, 0.15)
-      S[k] += (target - S[k]) * (1 - (1 - rate) ** frames)
+      d = (target - S[k]) * (1 - (1 - rate) ** frames)
+      cap = MAX_STEP.get(k)
+      if cap is not None:
+        lim = cap * frames
+        d = lim if d > lim else -lim if d < -lim else d
+      S[k] += d
     if o.set_jx is not None:
       S['jx'] = o.set_jx
 
@@ -1550,60 +1601,91 @@ class Engine:
       if max(abs(a - b) for a, b in zip(self.col_disp, target, strict=True)) < 0.75:
         self.col_disp = target
     col = self.col_disp
-    look = (o.hide, tuple(sorted(o.gl)))
-    if look != self._look:
-      if self._look is not None:
-        self._xfade_request = True
-      self._look = look
-    sol: list = [None] * N
-    if not o.hide:
-      for eye in E:
-        glyph = o.gl.get(eye.s)
-        if glyph:
-          c = rgb(glyph[1] or col)
-          for i, j in glyph_cells(glyph[0], eye.x, eye.y):
-            if 0 <= i < C and 0 <= j < R:
-              sol[j * C + i] = c
-        else:
-          for i, j in each_cell(eye):
-            sol[j * C + i] = mix(col, '#ffffff', o.shade(i, j)) if o.shade else col
+
+    # Eyes hiding or showing: crossfade the whole frame (eyes bursting into particles, forming from them).
+    if self._look is not None and o.hide != self._look and self.shown is not None:
+      self.xfade_from, self.xfade_t0 = self.shown, now
+    self._look = o.hide
+
+    # The picture without the eyes: background light, solid glyphs (the brake '!', scene cells), foreground light.
+    solid: list = [None] * N
     for item in o.sol:
       if item[0] == 'g':
         _, gl, cx, cy, c = item
         for i, j in glyph_cells(gl, cx, cy):
           if 0 <= i < C and 0 <= j < R:
-            sol[j * C + i] = c
+            solid[j * C + i] = c
       else:
-        sol[item[1]] = item[2]
-
+        solid[item[1]] = item[2]
     bg = BG_BLACK if self.pure_black else BG_PURPLE
-    out = []
+    base = []
     for k in range(N):
-      s = sol[k]
+      s = solid[k]
       k3 = k * 3
       if s is not None:
-        r, g, b = s[0] + fr[k3], s[1] + fr[k3 + 1], s[2] + fr[k3 + 2]
+        base.append((s[0] + fr[k3], s[1] + fr[k3 + 1], s[2] + fr[k3 + 2]))
       else:
-        r = bg[0] + bk[k3] + fr[k3]
-        g = bg[1] + bk[k3 + 1] + fr[k3 + 1]
-        b = bg[2] + bk[k3 + 2] + fr[k3 + 2]
-      out.append((r, g, b))
-
+        base.append((bg[0] + bk[k3] + fr[k3], bg[1] + bk[k3 + 1] + fr[k3 + 1], bg[2] + bk[k3 + 2] + fr[k3 + 2]))
     if self._xfade_request:
       self._xfade_request = False
-      if self.shown is not None:
-        self.xfade_from, self.xfade_t0 = self.shown, now
-    k = lin(now, self.xfade_t0, self.xfade_t0 + XFADE_MS) if self.xfade_from is not None else 1.0
+      if self.shown_base is not None:
+        self.base_from, self.base_t0 = self.shown_base, now
+    if self.base_from is not None:
+      kb = lin(now, self.base_t0, self.base_t0 + XFADE_MS)
+      if kb >= 1:
+        self.base_from = None
+      else:
+        base = [(p[0] + (q[0] - p[0]) * kb, p[1] + (q[1] - p[1]) * kb, p[2] + (q[2] - p[2]) * kb)
+                for p, q in zip(self.base_from, base, strict=True)]
+    self.shown_base = base
+
+    # The eyes, drawn live where their pose is now; a pill <-> glyph change blends the two shapes in place.
+    paint: dict[int, tuple] = {}
+    if o.hide:
+      self._eye_shape = {}
+      self._eye_blend = {}
+    else:
+      for eye in E:
+        glyph = o.gl.get(eye.s)
+        rows = tuple(glyph[0]) if glyph else None
+        gcol = rgb(glyph[1]) if glyph and glyph[1] else None
+        prev = self._eye_shape.get(eye.s)
+        if prev is not None and prev[0] != rows:
+          self._eye_blend[eye.s] = (prev[0], prev[1], now)
+        self._eye_shape[eye.s] = (rows, gcol)
+        new = _shape(eye, rows, gcol or col, o.shade)
+        blend = self._eye_blend.get(eye.s)
+        kb = 1.0 if blend is None else lin(now, blend[2], blend[2] + XFADE_MS)
+        if kb >= 1:
+          self._eye_blend.pop(eye.s, None)
+          for cell, c in new.items():
+            paint[cell] = (c, 1.0)
+          continue
+        old = _shape(eye, blend[0], blend[1] or col, None)
+        for cell, c in old.items():
+          paint[cell] = (mix(c, new[cell], kb), 1.0) if cell in new else (c, 1 - kb)
+        for cell, c in new.items():
+          if cell not in old:
+            paint[cell] = (c, kb)
+
+    out = base[:]
+    for k, (c, a) in paint.items():
+      if solid[k] is not None:
+        continue  # solid glyphs stay on top of the eyes
+      k3 = k * 3
+      r, g, b = c[0] + fr[k3], c[1] + fr[k3 + 1], c[2] + fr[k3 + 2]
+      if a < 1:
+        p = out[k]
+        r, g, b = p[0] + (r - p[0]) * a, p[1] + (g - p[1]) * a, p[2] + (b - p[2]) * a
+      out[k] = (r, g, b)
+
+    if self.xfade_from is not None:
+      kf = lin(now, self.xfade_t0, self.xfade_t0 + XFADE_MS)
+      if kf >= 1:
+        self.xfade_from = None
+      else:
+        out = [(p[0] + (q[0] - p[0]) * kf, p[1] + (q[1] - p[1]) * kf, p[2] + (q[2] - p[2]) * kf)
+               for p, q in zip(self.xfade_from, out, strict=True)]
+    self.shown = out
     dim = clamp(self.dim, 0.0, 1.0)
-    final = []
-    src = self.xfade_from
-    for i in range(N):
-      r, g, b = out[i]
-      if k < 1:
-        p = src[i]
-        r, g, b = p[0] + (r - p[0]) * k, p[1] + (g - p[1]) * k, p[2] + (b - p[2]) * k
-      final.append((min(255, int(r * dim)), min(255, int(g * dim)), min(255, int(b * dim))))
-    if k >= 1:
-      self.xfade_from = None
-    self.shown = final
-    return final
+    return [(min(255, int(r * dim)), min(255, int(g * dim)), min(255, int(b * dim))) for r, g, b in out]

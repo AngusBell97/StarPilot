@@ -187,3 +187,27 @@ def test_morph_in_forms_closed_eyes_when_asleep():
   _, frame = run(engine, 0, 2000)
   open_eyes = len(cells_of(eyes_of(dict(BASE))))
   assert lit(frame) < open_eyes // 2  # thin closed lids, not two open eyes
+
+
+@pytest.mark.parametrize("first,c1,second,c2", [
+  ('sigL', {'blinker': -1}, 'sigR', {'blinker': 1}),          # signal flips sides
+  ('latL', {'lat_hold': True}, 'latR', {'lat_hold': True}),   # S-bend: pinned right, then left
+  ('alcR', {}, 'alLdw', {'alert': 'alLdw', 'alert_dir': -1}),  # lane change cut short mid-slide
+  ('pong', {}, 'sigL', {'blinker': -1}),
+])
+def test_eyes_glide_to_a_new_animation_instead_of_jumping(first, c1, second, c2):
+  engine = Engine(random.Random(14))
+  engine.auto, engine.next_blink = False, 1e12
+  engine.ctx.update(c1)
+  engine.play(first, 0, force=True)
+  now, _ = run(engine, 0, 1200 if first != 'alcR' else 2050)
+  engine.ctx.update(c2)
+  engine.play(second, now, force=True)
+  prev = [(e.x, e.y) for e in eyes_of(engine.S)]
+  for _ in range(12):
+    now += 50
+    engine.step(now)
+    cur = [(e.x, e.y) for e in eyes_of(engine.S)]
+    assert max(abs(c[0] - p[0]) + abs(c[1] - p[1]) for c, p in zip(cur, prev, strict=True)) < 10
+    assert engine.xfade_from is None  # no fading second pair of eyes: only the background crossfades
+    prev = cur
