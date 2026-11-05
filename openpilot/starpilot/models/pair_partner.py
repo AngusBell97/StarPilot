@@ -210,7 +210,8 @@ def main(argv=None) -> int:
     os.environ.setdefault("AM_POWER_LIMIT", "100")
     from openpilot.starpilot.models.runtime_bridge.runtime import prepare
     prepare("driving")
-    from msgq.visionipc import VisionIpcClient, VisionStreamType
+    from msgq.visionipc import VisionIpcClient
+    from openpilot.cereal.visionipc import VisionStreamType   # where modeld imports it from
     from openpilot.common.realtime import config_realtime_process
     from openpilot.starpilot.models.runner import load_verified_model
     cam_w, cam_h = (int(value) for value in args.camera.split("x"))
