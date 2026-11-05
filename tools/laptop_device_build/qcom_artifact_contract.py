@@ -54,7 +54,7 @@ def compiler_tree(root: Path) -> Path:
     return root / 'tinygrad_repo'
   from openpilot.starpilot.models.runtime_bridge.bootstrap import _inventory, _digest_file
   manifest = legacy / 'runtime-manifest.json'
-  expected_manifest = '20ca9e77010c1ab788f2adb824103db3d595b0da8c4069d6e32b1266f7977b1f'
+  expected_manifest = '6e992322e4671f10c191d6e2bfa8acaf3187e96b798b66c3e29190bbfd3f4611'
   if manifest.is_symlink() or _sha(manifest) != expected_manifest:
     raise ValueError('Unqualified model compiler library')
   data = json.loads(manifest.read_bytes())
@@ -182,11 +182,11 @@ RUNTIME_EXTENSION_CHANGES = {
   ),
   'tinygrad_repo/tinygrad/runtime/support/am/amdev.py': (
     '3ceddc6b7aabe0f03019c6a6d60b99da11d18ea29065f804dbe15a6ba8d1dd98',
-    '90222e5c3817b7358f2155971f2e1c7c83480ace83832c4e35a27cef320e82e7',
+    '78bbce14bb99f5652212425f34b70f915fe09f934efc19bf3fe4f4237b218595',
   ),
   'tinygrad_repo/tinygrad/runtime/support/am/ip.py': (
     '92e13084d4603c908721584411f2587f73792ca318b0978640caefbbb54366c4',
-    '7739c7284002379addcc192e870ef1d7ea7e24a5faec7cab154428833001f923',
+    'c68071fc6c3e6a60b8217a993cf983115ee8fd5d579ee5a323f6ecde8fad05a6',
   ),
   'tinygrad_repo/tinygrad/runtime/support/usb.py': (
     '310ff4f4743a17c80de975196fd4dc21835cf6f672d0a82485d6edd635ad9275',
