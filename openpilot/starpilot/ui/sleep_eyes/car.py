@@ -50,9 +50,12 @@ class CarWatcher:
     self.lat_since: float | None = None
     self.lat_active = False
 
-  def update(self, engine: Engine, now: float, sm, started: bool) -> None:
+  def update(self, engine: Engine, now: float, sm, started: bool, parked_only: bool = False) -> None:
     cs = sm['carState'] if started else None
-    asleep = not started or str(cs.gearShifter) == 'park'
+    in_park = started and str(cs.gearShifter) == 'park'
+    # Only When Parked: the eyes are only seen in Park, so they stay awake there (idle actions and random events).
+    asleep = not started or (in_park and not parked_only)
+    engine.lounging = in_park and parked_only
     # Doze off or wake up whenever the wanted state differs, unless a sleep/wake animation is already playing
     # (the boot animation then settles: into Park it goes to sleep). The very first look sets it silently.
     settled = started or now >= self.grace_until

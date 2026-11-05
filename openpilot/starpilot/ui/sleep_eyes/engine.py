@@ -1389,6 +1389,7 @@ SPECS: dict[str, Spec] = {
 
 IDLE_DRIVE = ('blink', 'dbl', 'around', 'around', 'roll', 'squint', 'yawn', 'side', 'cross', 'wiggle', 'dbl')
 IDLE_STOP = ('sigh', 'hum', 'pong', 'orbit', 'nod', 'doodle', 'blink', 'around', 'yawn')
+IDLE_LOUNGE = IDLE_DRIVE + ('hum', 'pong', 'orbit', 'nod', 'doodle')  # awake in Park (Only When Parked)
 EVENTS = ('eclipse', 'aurora', 'fireworks', 'snow', 'rainbow', 'butterfly', 'bubbles', 'storm', 'constellation', 'shoot',
           'meteor', 'fly', 'heart', 'planet', 'sneeze', 'hiccup')
 EVENTS_PARKED = ('eclipse', 'aurora', 'snow', 'constellation', 'shoot', 'meteor', 'fly', 'planet', 'butterfly')
@@ -1402,6 +1403,7 @@ class Engine:
     self.fr = [0.0] * (N * 3)
     self.parked = False
     self.stopped = False
+    self.lounging = False  # awake in Park (Sleep Eyes Only When Parked): a playful idle set
     self.engaged = False
     self.pure_black = True  # the eyes always sit on pure black; False gives the dim purple grid (tests, mock-ups)
     self.auto = True
@@ -1529,7 +1531,7 @@ class Engine:
         if self.rng.random() < 0.35:
           self.play('peek', now)
       else:
-        self.play(self.rng.choice(IDLE_STOP if self.stopped else IDLE_DRIVE), now)
+        self.play(self.rng.choice(IDLE_LOUNGE if self.lounging else IDLE_STOP if self.stopped else IDLE_DRIVE), now)
       self.next_idle = now + 2500 + self.rng.random() * 4000
 
   def step(self, now: float) -> list[tuple[int, int, int]]:

@@ -580,11 +580,28 @@ class Device:
     if self._override_interactive_timeout is not None:
       return self._override_interactive_timeout
 
+    if self._eyes_parked_only and self._in_park():
+      # Sleep Eyes Only When Parked: in Park the screen gives way to the eyes after the parked timeout.
+      return self._display_preferences.parked_timeout
+
     if self._display_preferences.enabled:
       return self._display_preferences.driving_timeout if ui_state.started else self._display_preferences.parked_timeout
 
     ignition_timeout = 10 if gui_app.big_ui() else 5
     return ignition_timeout if ui_state.started else 30
+
+  @property
+  def _eyes_parked_only(self) -> bool:
+    return bool(getattr(self._display_preferences, "sleep_eyes_parked_only", False))
+
+  @staticmethod
+  def _in_park() -> bool:
+    if not ui_state.started:
+      return False
+    try:
+      return str(ui_state.sm["carState"].gearShifter) == "park"
+    except (AttributeError, KeyError, TypeError, ValueError):
+      return False
 
   def _reset_interactive_timeout(self) -> None:
     self._interaction_time = time.monotonic() + self.interactive_timeout
@@ -687,6 +704,15 @@ class Device:
         touched):
       self._reset_interactive_timeout()
 
+    # Sleep Eyes Only When Parked: shifting into or out of Park restarts the timeout, and out of Park (driving) the
+    # screen stays on: no eyes and no Turn Off Comma Screen.
+    in_park = self._in_park()
+    park_changed = in_park != getattr(self, "_was_in_park", in_park)
+    self._was_in_park = in_park
+    driving_on = self._eyes_parked_only and ui_state.started and not in_park
+    if self._eyes_parked_only and park_changed:
+      self._reset_interactive_timeout()
+
     road_changed = ui_state.started != self._screen_off_started
     self._screen_off_started = ui_state.started
     critical = (ui_state.sm.valid.get('selfdriveState', False) and ui_state.sm.alive.get('selfdriveState', False) and
@@ -705,9 +731,10 @@ class Device:
         callback()
     self._prev_timed_out = interaction_timeout
 
-    auto_screen_off = ui_state.started and self._display_preferences.turn_off_screen and interaction_timeout and not critical and not gpu_loading
+    auto_screen_off = (ui_state.started and self._display_preferences.turn_off_screen and interaction_timeout and not critical and
+                       not gpu_loading and not driving_on)
     awake = not self._screen_off and not auto_screen_off and (ui_state.started or not interaction_timeout or PC)
-    if self._update_sleep_eyes(touched, critical or gpu_loading or self._screen_off, interaction_timeout):
+    if self._update_sleep_eyes(touched, critical or gpu_loading or self._screen_off, interaction_timeout, driving_on):
       awake = True
     self._set_awake(awake)
     # The entire wake gesture belongs to the display, including its release.
@@ -732,7 +759,7 @@ class Device:
     except (AttributeError, KeyError, TypeError):
       return False
 
-  def _update_sleep_eyes(self, touched: bool, blocked: bool, interaction_timeout: bool) -> bool:
+  def _update_sleep_eyes(self, touched: bool, blocked: bool, interaction_timeout: bool, driving_on: bool = False) -> bool:
     """Sleep Eyes replace the sleeping screen. Returns True while the eyes keep the display on."""
     prefs = self._display_preferences
     if not getattr(prefs, "sleep_eyes", False) or ui_state.projection_read_only:
@@ -750,8 +777,9 @@ class Device:
     if touched and eyes.visible:
       self._wake_touch_active = True  # the tap that wakes the eyes must not press anything underneath
     want = eyes.decide(started=ui_state.started, timed_out=interaction_timeout, blocked=blocked, touched=touched,
-                       wake_alert=wake_alert)
-    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked)
+                       wake_alert=wake_alert, driving_on=driving_on)
+    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked,
+                parked_only=self._eyes_parked_only)
     return eyes.visible
 
   def _set_awake(self, on: bool):

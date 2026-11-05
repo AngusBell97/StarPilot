@@ -48,8 +48,10 @@ class SleepEyesController:
   def brightness_cap(self, started: bool) -> int:
     return BRIGHTNESS_DRIVING if started else BRIGHTNESS_PARKED
 
-  def decide(self, *, started: bool, timed_out: bool, blocked: bool, touched: bool, wake_alert: bool) -> bool:
-    """Whether the eyes should be on screen this frame. blocked = critical alert, eGPU hold or manual screen off."""
+  def decide(self, *, started: bool, timed_out: bool, blocked: bool, touched: bool, wake_alert: bool,
+             driving_on: bool = False) -> bool:
+    """Whether the eyes should be on screen this frame. blocked = critical alert, eGPU hold or manual screen off.
+    driving_on = Only When Parked is on and the car is out of Park: the driving screen stays on."""
     now = time.monotonic()
     self.limit_hit = False
     self._touched = touched
@@ -58,6 +60,10 @@ class SleepEyesController:
     if self._started_prev is not None and started != self._started_prev and not started and self.visible:
       self.sticky = True  # offroad while the eyes show: keep them (only seen if the comma stays powered)
     self._started_prev = started
+    if driving_on:
+      self.sticky = self.boot_pending = False
+      self.asleep_since = None
+      return False
     # The sleep timer runs while the eyes are asleep (in Park, or offroad); a tap or waking up restarts it.
     if touched or not self.engine.parked:
       self.asleep_since = None
@@ -74,10 +80,10 @@ class SleepEyesController:
       return False
     return want
 
-  def update(self, gui_app, sm, *, started: bool, want: bool, urgent: bool) -> None:
+  def update(self, gui_app, sm, *, started: bool, want: bool, urgent: bool, parked_only: bool = False) -> None:
     engine, view = self.engine, self.view
     urgent = urgent or self.limit_hit
-    self.watcher.update(engine, time.monotonic() * 1000, sm, started)
+    self.watcher.update(engine, time.monotonic() * 1000, sm, started, parked_only=parked_only)
     if self.asleep_since is not None:
       engine.dim = min(1.0, max(0.0, (ASLEEP_LIMIT_S - (time.monotonic() - self.asleep_since)) / FADE_TO_BLACK_S))
     else:

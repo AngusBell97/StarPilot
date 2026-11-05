@@ -155,7 +155,7 @@ class DisplaySettingsTests(unittest.TestCase):
         inputs.release(800, y, root)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 9)
+        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 10)
         self.assertEqual(submenu.rows[0].key, MASTER)
         self.assertTrue(all(not row.available for row in submenu.rows[1:] if row.key not in STANDALONE_KEYS))
         self.assertTrue(submenu.rows[-1].available)
