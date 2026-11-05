@@ -116,6 +116,10 @@ function launch {
     if ! "$DIR/scripts/install_boot_logo.sh"; then
       echo "StarPilot boot image update failed; continuing startup."
     fi
+    # comma four OLED: one panel sleep/wake per boot clears the red glow in black areas (see the script)
+    if ! sudo -n timeout -k 1s 8s python3 "$DIR/openpilot/starpilot/system/oled_panel_reset.py" --boot; then
+      echo "OLED panel reset failed; continuing startup."
+    fi
   fi
 
   # write tmux scrollback to a file
