@@ -50,6 +50,7 @@ PARTNER_DEADLINE_S = 0.045  # a partner process's outputs must arrive within thi
 PROBE_FRAMES = 40
 PROBE_READY_S = 0.042
 MAX_DEMOTIONS = 3
+PROBE_LIMIT_FRAMES = 20 * 60 * 5   # a partner never on time in 5 minutes of probing stops (its timing stays recorded)
 STATUS_PERIOD_S = 1.0
 LOG_PERIOD_S = 10.0
 
@@ -229,6 +230,8 @@ class ModelPair:
     self._probe: deque[bool] = deque(maxlen=PROBE_FRAMES)
     self._probe_ready_ms: deque[float] = deque(maxlen=600)
     self._pending: dict[int, float] = {}   # probing: job number -> when its frame started
+    self._probe_frames = 0
+    self._demote_now = ""
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
     self.lat_delay = 0.0
@@ -334,7 +337,10 @@ class ModelPair:
       return primary_out, None, False
     if self.probing:
       self._pending[job["seq"]] = start
+      self._probe_frames += 1
       self._probe_answers()
+      if self.probing and self._probe_frames >= PROBE_LIMIT_FRAMES:
+        self._stop_partner(f"never on time in {PROBE_LIMIT_FRAMES // 1200} minutes of probing")
       return primary_out, None, False
     try:
       outputs, partner_ms, _why = self.partner.collect(job["seq"], PARTNER_DEADLINE_S - (self.now() - start))
@@ -353,10 +359,13 @@ class ModelPair:
       self._reused = False
       return primary_out, outputs, False
     self._late.append(True)
-    # one late frame reuses the partner's previous outputs (50 ms old); two in a row fall back to the primary alone
-    previous = self._outputs["partner"] if not self._reused else None
-    self._reused = previous is not None
-    return primary_out, previous, True
+    # one late frame reuses the partner's previous outputs (50 ms old); two in a row hand the role back to the primary
+    # until the partner qualifies again, so the two models never alternate frame by frame
+    if self._reused or self._outputs["partner"] is None:
+      self._demote_now = "two partner frames late in a row"
+      return primary_out, None, True
+    self._reused = True
+    return primary_out, self._outputs["partner"], True
 
   def _probe_answers(self) -> None:
     """Probing: score every answer that has come in (ready within PROBE_READY_S of its frame's start, or not) without
@@ -393,6 +402,7 @@ class ModelPair:
     """Driving and late: the primary takes the partner's role back at once, and the partner probes again."""
     self.probing = True
     self.demotions += 1
+    self._probe_frames = 0
     self.stop_reason = f"probing again: {reason}"[:300]
     self._outputs["partner"] = None
     self._probe.clear()
@@ -431,7 +441,10 @@ class ModelPair:
     run_s = self.now() - t
     self._run_ms.append(run_s * 1e3)
     self._frames += 1
-    if self.partner_active and (reason := self.guard.check(run_s, self.frame_drop_ratio, late)):
+    reason = self.guard.check(run_s, self.frame_drop_ratio, late) if self.partner_active else ""
+    if self.partner_active and self._demote_now:
+      reason, self._demote_now = self._demote_now, ""
+    if self.partner_active and reason:
       if self.remote and not self.probing and self.demotions < MAX_DEMOTIONS:
         self._demote(reason)
       else:

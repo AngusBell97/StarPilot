@@ -360,18 +360,31 @@ def test_a_partner_process_gets_its_job_at_the_start_of_the_frame(tmp_path):
   assert status["partnerProcess"] is True and status["partnerMsP50"] == 37.0 and status["lateFrames"] == 0
 
 
-def test_a_late_partner_reuses_its_previous_outputs_once_then_the_primary_steers(tmp_path):
-  answers = {1: True, 2: False, 3: False, 4: True}
+def test_a_late_partner_reuses_its_previous_outputs_once_then_the_primary_takes_the_role_back(tmp_path):
+  answers = {1: True, 2: False, 3: True, 4: False, 5: False, 6: True}
   pair, primary, partner, events = make_remote_pair(tmp_path, answer=lambda seq: answers.get(seq, True))
   _, first = step(pair)
   _, late_once = step(pair)
-  _, late_twice = step(pair)
   _, back = step(pair)
   assert first.desiredCurvature == pytest.approx(2.001)
   assert late_once.desiredCurvature == pytest.approx(2.001)      # previous partner outputs, one frame old
-  assert late_twice.desiredCurvature == 1.0                      # never two stale frames: the primary steers
-  assert back.desiredCurvature == pytest.approx(2.004) and pair.partner_active
-  assert pair.summary()["lateFrames"] == 2
+  assert back.desiredCurvature == pytest.approx(2.003) and not pair.probing
+  _, late_again = step(pair)
+  _, late_twice = step(pair)
+  assert late_again.desiredCurvature == pytest.approx(2.003)
+  # two in a row: the primary steers and keeps steering (the partner probes again), never alternating per frame
+  assert late_twice.desiredCurvature == 1.0 and pair.probing and pair.demotions == 1
+  _, after = step(pair)
+  assert after.desiredCurvature == 1.0 and pair.summary()["lateFrames"] == 3
+
+
+def test_probing_stops_a_partner_that_is_never_on_time(tmp_path, monkeypatch):
+  monkeypatch.setattr(model_pair, "PROBE_LIMIT_FRAMES", 60)
+  pair, primary, partner, events = make_remote_pair(tmp_path, probing=True, ready=lambda seq: 0.050)
+  for _ in range(60):
+    step(pair)
+  assert not pair.partner_active and "never on time" in pair.stop_reason
+  assert pair.summary()["probeReadyMsP50"] == pytest.approx(50.0)
 
 
 def test_a_partner_process_that_keeps_missing_its_deadline_stops_steering(tmp_path):
@@ -379,9 +392,10 @@ def test_a_partner_process_that_keeps_missing_its_deadline_stops_steering(tmp_pa
   pair.demotions = model_pair.MAX_DEMOTIONS      # no more chances: stopped for the drive
   for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
     step(pair)
-  assert not pair.partner_active and "late" in pair.stop_reason and partner.closed
+  # the second late frame in a row acts at once (sooner than the guard's 5 in 40)
+  assert not pair.partner_active and "late in a row" in pair.stop_reason and partner.closed
   _, action = step(pair)
-  assert action.desiredCurvature == 1.0 and partner.seq == model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1
+  assert action.desiredCurvature == 1.0 and partner.seq == model_pair.WARMUP_FRAMES + 2
 
 
 def test_a_failed_partner_process_stops_without_stopping_the_drive(tmp_path):
