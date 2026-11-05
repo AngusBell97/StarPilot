@@ -195,6 +195,8 @@ class ModelPair:
     self.frame_ids: tuple[int, int] | None = None   # modeld sets the camera frame ids before each run
     self.partner_image = "own process" if self.remote else ""
     self._late: deque[bool] = deque(maxlen=600)
+    self._sent_ms: deque[float] = deque(maxlen=600)    # job sent, ms after the pair frame started
+    self._ready_ms: deque[float] = deque(maxlen=600)   # partner outputs in hand, ms after the pair frame started
     self._reused = False
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
@@ -285,6 +287,7 @@ class ModelPair:
       if self.partner_active and self.frame_ids is not None:
         try:
           job["seq"] = self.partner.submit(self.frame_ids, transforms, inputs)
+          self._sent_ms.append((self.now() - start) * 1e3)
         except Exception as error:  # noqa: BLE001
           self._stop_partner(f"partner process unreachable: {error}"[:300])
 
@@ -301,6 +304,7 @@ class ModelPair:
       self._stop_partner(f"partner failed: {error}"[:300])
       return primary_out, None, False
     if outputs is not None:
+      self._ready_ms.append((self.now() - start) * 1e3)
       self._partner_ms.append(partner_ms)
       self._late.append(False)
       self._reused = False
@@ -387,6 +391,8 @@ class ModelPair:
       "accelDiffP50": _percentile(self._long_diff, 50), "accelDiffP95": _percentile(self._long_diff, 95),
       "frameDropRatio": round(float(self.frame_drop_ratio), 4),
       "lateFrames": int(sum(self._late)),
+      "jobSentMsP50": _percentile(self._sent_ms, 50),
+      "partnerReadyMsP50": _percentile(self._ready_ms, 50), "partnerReadyMsP95": _percentile(self._ready_ms, 95),
     }
 
   def write_status(self, force: bool = False) -> None:
