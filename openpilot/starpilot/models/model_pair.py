@@ -157,9 +157,10 @@ class PairGuard:
 
   def check(self, run_s: float, frame_drop_ratio: float) -> str:
     self.frames += 1
-    self.slow.append(run_s > SLOW_FRAME_S)
+    # warm-up frames take hundreds of ms while the GPUs clock up; keep them out of the slow window
     if self.frames <= WARMUP_FRAMES:
       return ""
+    self.slow.append(run_s > SLOW_FRAME_S)
     if frame_drop_ratio > DROP_LIMIT:
       return f"frames dropped ({frame_drop_ratio:.0%}) while the pair ran"
     if sum(self.slow) > SLOW_LIMIT:

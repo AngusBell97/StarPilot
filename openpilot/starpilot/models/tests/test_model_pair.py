@@ -148,6 +148,14 @@ def test_guard_stops_on_dropped_frames_after_warmup():
   assert PairGuard().check(0.040, 0.0) == ""
 
 
+def test_guard_ignores_slow_warmup_frames():
+  guard = PairGuard()
+  assert all(guard.check(0.700, 0.0) == "" for _ in range(model_pair.WARMUP_FRAMES))
+  assert all(guard.check(0.040, 0.0) == "" for _ in range(model_pair.SLOW_WINDOW))
+  assert all(guard.check(0.060, 0.0) == "" for _ in range(model_pair.SLOW_LIMIT))
+  assert "too slow" in guard.check(0.060, 0.0)
+
+
 def test_status_round_trip_and_staleness(tmp_path):
   path = tmp_path / "status.json"
   write_status({"state": "testing"}, path)
