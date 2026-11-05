@@ -161,6 +161,23 @@ class RemotePartner:
         return message[2], message[3], ""
       return None, None, message[2] if kind == "skip" else f"unexpected partner message {kind}"
 
+  def drain(self) -> list[tuple[int, dict | None, dict, str]]:
+    """Every answer waiting right now, without blocking: [(seq, outputs or None, diag, why)]. Raises PartnerError
+    when the partner failed or went away."""
+    answers = []
+    try:
+      while self.conn.poll(0):
+        message = self.conn.recv()
+        if message[0] == "error":
+          raise PartnerError(message[-1])
+        if message[0] == "out":
+          answers.append((message[1], message[2], message[4] if len(message) > 4 else {}, ""))
+        elif message[0] == "skip":
+          answers.append((message[1], None, {}, message[2]))
+    except (EOFError, OSError) as error:
+      raise PartnerError(f"partner process ended: {error or 'connection closed'}") from None
+    return answers
+
   def get_action_from_model(self, outputs, previous, lat_action_t, long_action_t, v_ego):
     from openpilot.selfdrive.modeld.modeld import LAT_SMOOTH_SECONDS, LONG_SMOOTH_SECONDS
     from openpilot.starpilot.models.runner import action_from_outputs
@@ -326,7 +343,8 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
     if count % DIAG_GPU_EVERY == 0:
       gpu_mhz = _gpu_mhz()
     sent_at = sent[0] if sent else start
-    diag = {"framesMs": round((got_frames - received) * 1e3, 2), "sendMs": round((sent_at - start) * 1e3, 2),
+    # doneAt: time.perf_counter() is the system-wide monotonic clock on Linux, so modeld can compare it with its own
+    diag = {"doneAt": done, "framesMs": round((got_frames - received) * 1e3, 2), "sendMs": round((sent_at - start) * 1e3, 2),
             "waitMs": round((done - sent_at) * 1e3, 2), "parseMs": round(parse_ms[0], 2),
             "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz}
     conn.send(("out", seq, outputs, round((done - start) * 1e3, 2), diag))

@@ -635,6 +635,8 @@ def main(demo=False):
     model.frame_drop_ratio = frame_drop_ratio
     if isinstance(model, (ModelPair, PartnerDriver)):
       model.frame_ids = (meta_main.frame_id, meta_extra.frame_id)   # a partner process reads the same camera frames
+    if isinstance(model, ModelPair):
+      model.lat_active = bool(sm['carControl'].latActive)            # a probing partner never takes over mid-steer
     mt1 = time.perf_counter()
     try:
       send_chestnut = (chestnut_state is not None and

@@ -96,7 +96,7 @@ class ModelLaboratory:
                        "placement": "chestnut" if not small else "comma", "localBuild": local_amd,
                        "artifactSize": artifact.get("artifact_size", 0)})
       status = read_status()
-      live = status is not None and status.get("fresh") and status.get("state") in ("testing", "driving")
+      live = status is not None and status.get("fresh") and status.get("state") in ("testing", "driving", "probing")
       runtime = {"requested": config["enabled"], "active": bool(live), "state": (status or {}).get("state", "off"),
                  "lateralModel": (status or {}).get("lateralModel", "") if live else "",
                  "longitudinalModel": (status or {}).get("longitudinalModel", "") if live else "",

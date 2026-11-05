@@ -300,16 +300,25 @@ class FakeRemote:
   chestnut = False
   remote = True
 
-  def __init__(self, events, value=2.0, *, answer=True, fail=False):
+  def __init__(self, events, value=2.0, *, answer=True, fail=False, clock=None, ready=lambda seq: 0.039):
     self.model_id, self.events, self.value = "polaris", events, value
     self.answer, self.fail, self.seq, self.closed = answer, fail, 0, False
     self.jobs = []
+    self.clock, self.ready, self.queued = clock, ready, []
 
   def submit(self, frame_ids, transforms, inputs):
     self.seq += 1
     self.jobs.append(frame_ids)
     self.events.append("polaris:job")
+    sent = self.clock() if self.clock is not None else 0.0
+    self.queued.append((self.seq, sent + self.ready(self.seq)))
     return self.seq
+
+  def drain(self):
+    if self.fail:
+      raise RuntimeError("partner process ended")
+    answers, self.queued = self.queued, []
+    return [(seq, outputs(self.value + seq / 1000), {"doneAt": done, "waitMs": 30.0}, "") for seq, done in answers]
 
   def collect(self, seq, timeout_s):
     self.events.append("polaris:collect")
@@ -327,13 +336,14 @@ class FakeRemote:
     self.closed = True
 
 
-def make_remote_pair(tmp_path, **remote_kwargs):
+def make_remote_pair(tmp_path, *, probing=False, **remote_kwargs):
   events, clock = [], Clock()
   primary = FakeModel("lightspeed", 1.0, chestnut=True, events=events, cost=0.039, clock=clock)
-  partner = FakeRemote(events, **remote_kwargs)
+  partner = FakeRemote(events, clock=clock, **remote_kwargs)
   pair = ModelPair(primary, partner, PairPlan("drive", "polaris", "lightspeed", "polaris", "lateral"), now=clock,
                    status_path=tmp_path / "pair.json")
   pair.frame_ids = (100, 100)
+  pair.probing = probing    # most tests start from driving; a real partner process starts probing
   return pair, primary, partner, events
 
 
@@ -364,8 +374,9 @@ def test_a_late_partner_reuses_its_previous_outputs_once_then_the_primary_steers
   assert pair.summary()["lateFrames"] == 2
 
 
-def test_a_partner_process_that_keeps_missing_its_deadline_is_stopped(tmp_path):
+def test_a_partner_process_that_keeps_missing_its_deadline_stops_steering(tmp_path):
   pair, primary, partner, events = make_remote_pair(tmp_path, answer=lambda seq: seq <= model_pair.WARMUP_FRAMES)
+  pair.demotions = model_pair.MAX_DEMOTIONS      # no more chances: stopped for the drive
   for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
     step(pair)
   assert not pair.partner_active and "late" in pair.stop_reason and partner.closed
@@ -512,3 +523,48 @@ def test_a_tuned_comma_gpu_build_is_used_for_the_partner_only_when_registered_an
   tuned.write_bytes(b"tuned build")
   (tmp_path / "local_variants.json").write_text(json.dumps({"rdf43": {"tuned": {**entry, "behavior_version": "v16"}}}))
   assert partner_artifact("rdf43", root=tmp_path, chestnut_ok=False)[0] == tmp_path / "standard.pkl"
+
+
+def test_a_partner_process_probes_first_and_takes_over_only_when_on_time_and_not_steering(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path, probing=True)
+  assert pair.probing and json.loads(json.dumps(pair.summary()))["probing"] is True
+  # probing: the primary drives, modeld never waits for the partner (no collect), every answer is scored
+  for _ in range(model_pair.PROBE_FRAMES - 1):
+    _, action = step(pair)
+    assert action.desiredCurvature == 1.0
+  assert "polaris:collect" not in events and pair.probing
+  pair.lat_active = True                         # 40 on time, but the car is steering itself: no handover yet
+  step(pair)
+  step(pair)
+  assert pair.probing and pair.summary()["probeOnTime"] == f"{model_pair.PROBE_FRAMES}/{model_pair.PROBE_FRAMES}"
+  pair.lat_active = False
+  step(pair)                                     # handed over at the end of this frame
+  assert not pair.probing
+  _, action = step(pair)
+  assert action.desiredCurvature > 2.0 and "polaris:collect" in events
+  pair.write_status(force=True)
+  assert json.loads((tmp_path / "pair.json").read_text())["state"] == "driving"
+
+
+def test_a_slow_probing_partner_never_takes_over_and_never_slows_modeld(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path, probing=True, ready=lambda seq: 0.046)
+  for _ in range(3 * model_pair.PROBE_FRAMES):
+    _, action = step(pair)
+    assert action.desiredCurvature == 1.0
+  assert pair.probing and pair.partner_active and pair.summary()["probeReadyMsP95"] == pytest.approx(46.0)
+  assert pair.summary()["runMsMax"] == pytest.approx(39.0)     # modeld's frame is the primary's alone
+
+
+def test_a_driving_partner_that_runs_late_goes_back_to_probing_then_stops_after_max_demotions(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path, answer=lambda seq: seq <= model_pair.WARMUP_FRAMES)
+  for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
+    step(pair)
+  assert pair.partner_active and pair.probing and pair.demotions == 1 and "probing again" in pair.stop_reason
+  _, action = step(pair)
+  assert action.desiredCurvature == 1.0                         # the primary steers again at once
+  pair.demotions = model_pair.MAX_DEMOTIONS
+  pair.probing = False
+  pair.guard = model_pair.PairGuard()
+  for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
+    step(pair)
+  assert not pair.partner_active and "late" in pair.stop_reason and partner.closed

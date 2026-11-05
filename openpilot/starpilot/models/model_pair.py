@@ -44,6 +44,12 @@ SLOW_LIMIT = 4              # slow frames allowed in the window before the partn
 DROP_LIMIT = 0.02           # modeld's filtered frame-drop ratio that stops the partner
 WARMUP_FRAMES = 10          # frames before the guard judges (modeld also ignores its first 10 frames' drops)
 PARTNER_DEADLINE_S = 0.045  # a partner process's outputs must arrive within this of the pair frame's start
+# A partner process starts by probing: it runs every frame but the primary drives and modeld never waits for it.
+# It takes over (its role) only after PROBE_FRAMES answers in a row each ready within PROBE_READY_S, and only while
+# the car is not steering itself. If it then runs late it goes back to probing (at once), at most MAX_DEMOTIONS times.
+PROBE_FRAMES = 40
+PROBE_READY_S = 0.042
+MAX_DEMOTIONS = 3
 STATUS_PERIOD_S = 1.0
 LOG_PERIOD_S = 10.0
 
@@ -217,6 +223,12 @@ class ModelPair:
     self._diag: dict[str, deque] = {key: deque(maxlen=600) for key in ("framesMs", "sendMs", "waitMs", "parseMs", "preempted")}
     self._gpu_mhz: float | None = None
     self._reused = False
+    self.probing = self.remote          # see PROBE_FRAMES
+    self.lat_active = False             # modeld sets it each frame: no handover while the car steers itself
+    self.demotions = 0
+    self._probe: deque[bool] = deque(maxlen=PROBE_FRAMES)
+    self._probe_ready_ms: deque[float] = deque(maxlen=600)
+    self._pending: dict[int, float] = {}   # probing: job number -> when its frame started
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
     self.lat_delay = 0.0
@@ -249,7 +261,7 @@ class ModelPair:
 
   @property
   def driving(self) -> bool:
-    return self.partner_active and self.plan.mode == "drive"
+    return self.partner_active and self.plan.mode == "drive" and not self.probing
 
   def __getattr__(self, name):
     # anything else modeld or a hook reads (input_queues, last_warp, ...) is the primary's
@@ -320,6 +332,10 @@ class ModelPair:
     if "seq" not in job:
       self._stop_partner("camera frame ids unavailable for the partner process")
       return primary_out, None, False
+    if self.probing:
+      self._pending[job["seq"]] = start
+      self._probe_answers()
+      return primary_out, None, False
     try:
       outputs, partner_ms, _why = self.partner.collect(job["seq"], PARTNER_DEADLINE_S - (self.now() - start))
     except Exception as error:  # noqa: BLE001 - a failed partner stops, the primary drives on
@@ -341,6 +357,49 @@ class ModelPair:
     previous = self._outputs["partner"] if not self._reused else None
     self._reused = previous is not None
     return primary_out, previous, True
+
+  def _probe_answers(self) -> None:
+    """Probing: score every answer that has come in (ready within PROBE_READY_S of its frame's start, or not) without
+    waiting, and hand over once PROBE_FRAMES in a row were on time while the car is not steering itself."""
+    try:
+      answers = self.partner.drain()
+    except Exception as error:  # noqa: BLE001
+      self._stop_partner(f"partner failed: {error}"[:300])
+      return
+    for seq, outputs, diag, _why in answers:
+      for missed in [s for s in self._pending if s < seq]:   # never answered: skipped as stale by the partner
+        self._pending.pop(missed)
+        self._probe.append(False)
+      started = self._pending.pop(seq, None)
+      if started is None:
+        continue
+      ready = (diag.get("doneAt", float("inf")) - started) if outputs is not None else float("inf")
+      if ready != float("inf"):
+        self._probe_ready_ms.append(ready * 1e3)
+        for key, values in self._diag.items():
+          if diag.get(key) is not None:
+            values.append(diag[key])
+        self._gpu_mhz = diag.get("gpuMhz", self._gpu_mhz)
+      self._probe.append(ready <= PROBE_READY_S)
+    if len(self._probe) == PROBE_FRAMES and all(self._probe) and not self.lat_active:
+      self.probing = False
+      self._pending.clear()
+      self.guard = PairGuard()
+      if self.report is not None:
+        self.report("modelPairDriving", {"demotions": self.demotions, **self.summary()})
+      self.write_status(force=True)
+
+  def _demote(self, reason: str) -> None:
+    """Driving and late: the primary takes the partner's role back at once, and the partner probes again."""
+    self.probing = True
+    self.demotions += 1
+    self.stop_reason = f"probing again: {reason}"[:300]
+    self._outputs["partner"] = None
+    self._probe.clear()
+    self.guard = PairGuard()
+    if self.report is not None:
+      self.report("modelPairProbing", {"reason": reason, "demotions": self.demotions, **self.summary()})
+    self.write_status(force=True)
 
   def run(self, bufs, transforms, inputs, after_enqueue: Callable[[], None] | None = None) -> dict:
     for model in (self.primary, self.partner):
@@ -373,7 +432,10 @@ class ModelPair:
     self._run_ms.append(run_s * 1e3)
     self._frames += 1
     if self.partner_active and (reason := self.guard.check(run_s, self.frame_drop_ratio, late)):
-      self._stop_partner(reason)
+      if self.remote and not self.probing and self.demotions < MAX_DEMOTIONS:
+        self._demote(reason)
+      else:
+        self._stop_partner(reason)
     partner_out = self._outputs["partner"]
     if not self.driving or partner_out is None:
       return primary_out
@@ -423,6 +485,9 @@ class ModelPair:
       **{f"partner{key[0].upper()}{key[1:]}P50": _percentile(values, 50) for key, values in self._diag.items()},
       **{f"partner{key[0].upper()}{key[1:]}P95": _percentile(values, 95) for key, values in self._diag.items()},
       "partnerGpuMhz": self._gpu_mhz,
+      "probing": self.probing, "demotions": self.demotions,
+      "probeOnTime": f"{sum(self._probe)}/{len(self._probe)}",
+      "probeReadyMsP50": _percentile(self._probe_ready_ms, 50), "probeReadyMsP95": _percentile(self._probe_ready_ms, 95),
     }
 
   def write_status(self, force: bool = False) -> None:
@@ -430,7 +495,7 @@ class ModelPair:
     if not force and now - self._last_status < STATUS_PERIOD_S:
       return
     self._last_status = now
-    state = ("driving" if self.driving else "testing") if self.partner_active else "stopped"
+    state = (("probing" if self.probing else "driving" if self.driving else "testing") if self.partner_active else "stopped")
     status = {"state": state, "mode": self.plan.mode, "lateralModel": self.plan.lateral_id,
               "longitudinalModel": self.plan.longitudinal_id, "primary": self.primary.model_id,
               "partner": self.plan.partner_id, "partnerDevice": self.partner_device, "sharedWarp": self.share_warp,
