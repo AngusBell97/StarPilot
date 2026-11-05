@@ -43,6 +43,7 @@ RATE = dict(open=0.55, openL=0.45, openR=0.45, jx=0.35, jy=0.35, gx=0.18, gy=0.1
 NEIGHBOURS = ((1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0), (1, 1, .5), (1, -1, .5), (-1, 1, .5), (-1, -1, .5))
 TAU = 2 * math.pi
 _ZEROS = [0.0] * (N * 3)
+XFADE_MS = 220
 
 
 def clamp(v: float, a: float = -1.0, b: float = 1.0) -> float:
@@ -138,6 +139,17 @@ class Eye:
 
   def __init__(self, s, St, w, h, x, y, eh, lid):
     self.s, self.St, self.w, self.h, self.x, self.y, self.eh, self.lid = s, St, w, h, x, y, eh, lid
+
+
+def rest_pose(parked: bool, stopped: bool) -> dict:
+  """The pose the eyes settle into with nothing playing: closed and low asleep, half-lidded when bored."""
+  pose = dict(BASE)
+  if parked:
+    lids(pose, 0.88)
+    pose['gy'] = 0.5
+  elif stopped:
+    lids(pose, 0.3)
+  return pose
 
 
 def eyes_of(St: dict, stick_dir: int = 1, daze_ph: float = 0.0) -> list[Eye]:
@@ -473,9 +485,10 @@ def r_disengaged(a, e, u, t, o, now, E0):
   T = o.T
   if t < 1300:
     o.hide = True
+    T.update(rest_pose(False, e.stopped))  # the hidden eyes settle where the particles land
     if a.parts is None:
       src = cells_of(E0)
-      tgt = cells_of(eyes_of(dict(BASE)))
+      tgt = cells_of(eyes_of(rest_pose(False, e.stopped)))
       a.parts = []
       for k, (tx, ty) in enumerate(tgt):
         sx, sy = src[(k * 7) % len(src)] if src else (20, 9)
@@ -615,7 +628,7 @@ def s_morph_in(a, e):
 
 def r_morph_in(a, e, u, t, o, now, E0):
   if a.parts is None:
-    tgt = cells_of(eyes_of(dict(BASE)))
+    tgt = cells_of(eyes_of(rest_pose(e.parked, e.stopped)))
     scene = e.scene_cells or [(20, 20, 40)] * N
     src = [((k % C) + 0.5, (k // C) + 0.5, scene[k]) for k in range(N)]
     e.rng.shuffle(src)
@@ -627,6 +640,7 @@ def r_morph_in(a, e, u, t, o, now, E0):
         a.parts.append((x, y, c, None, None, e.rng.random() * 400))
   if t < 1150:
     o.hide = True
+    o.T.update(rest_pose(e.parked, e.stopped))  # the hidden eyes settle where the particles land
     for x, y, c, tx, ty, d in a.parts:
       if tx is None:
         k = lin(t, d, d + 500)
@@ -635,7 +649,7 @@ def r_morph_in(a, e, u, t, o, now, E0):
       else:
         k = eio(lin(t, d, d + 750))
         o.l(x + (tx - x) * k, y + (ty - y) * k, mix(c, o.col_now, k), 1, 0, 'f')
-  else:
+  elif not e.parked:
     o.T['open'] = tri(t, 1250, 200) * tri(t, 1550, 200)
 
 
@@ -1373,6 +1387,15 @@ class Engine:
     self.next_idle = 0.0
     self.next_event = 0.0
     self.last_now: float | None = None
+    # Hand-offs: a short crossfade from the last shown frame whenever an animation is cut short, an eye turns into
+    # a glyph (or back), or the eyes hide/show; the eye colour also eases instead of switching.
+    self.shown: list | None = None
+    self.xfade_from: list | None = None
+    self.xfade_t0 = 0.0
+    self._xfade_request = False
+    self._look: tuple | None = None
+    self.col_disp: tuple | None = None
+    self.dim = 1.0  # set by the controller: fades the whole picture out before the screen goes black
 
   # --- control ---------------------------------------------------------------------------------------------
   def reset_timers(self, now: float) -> None:
@@ -1384,8 +1407,10 @@ class Engine:
     spec = SPECS[name]
     if self.cur is not None and not force and spec.prio < self.cur.spec.prio:
       return False
-    if self.cur is not None and self.cur.spec.end and self.cur.name != name:
-      self.cur.spec.end(self.cur, self)
+    if self.cur is not None:
+      self._xfade_request = True  # cutting another animation short
+      if self.cur.spec.end and self.cur.name != name:
+        self.cur.spec.end(self.cur, self)
     self.cur = Act(name, spec)
     self.cur_start = now
     if spec.start:
@@ -1395,6 +1420,14 @@ class Engine:
   def stop(self) -> None:
     self.cur = None
     self.queue = []
+
+  def reset_display(self) -> None:
+    """Forget the last shown frame (the eyes are coming back after being hidden)."""
+    self.shown = self.xfade_from = None
+    self.col_disp = None
+    self._xfade_request = False
+    self._look = None
+    self.last_now = None
 
   @property
   def current(self) -> str | None:
@@ -1412,6 +1445,7 @@ class Engine:
     t = now - self.cur_start
     if spec.loop is not None and self.ctx.get(spec.loop) != spec.loop_value:
       self.cur = None
+      self._xfade_request = True  # e.g. an alert cleared: fade its border and colour out
       return
     if spec.hold is not None and self.ctx.get(spec.hold[0]) and t > spec.hold[1]:
       self.cur_start = now - spec.hold[2]
@@ -1508,7 +1542,19 @@ class Engine:
     E = eyes_of(S, self.stick_dir, self.daze_ph)
     for eye in E:
       eye.eh *= bf
-    col = rgb(o.col or col_now)
+    target = rgb(o.col or col_now)
+    if self.col_disp is None:
+      self.col_disp = target
+    else:
+      self.col_disp = mix(self.col_disp, target, 1 - (1 - 0.25) ** frames)
+      if max(abs(a - b) for a, b in zip(self.col_disp, target, strict=True)) < 0.75:
+        self.col_disp = target
+    col = self.col_disp
+    look = (o.hide, tuple(sorted(o.gl)))
+    if look != self._look:
+      if self._look is not None:
+        self._xfade_request = True
+      self._look = look
     sol: list = [None] * N
     if not o.hide:
       for eye in E:
@@ -1541,5 +1587,23 @@ class Engine:
         r = bg[0] + bk[k3] + fr[k3]
         g = bg[1] + bk[k3 + 1] + fr[k3 + 1]
         b = bg[2] + bk[k3 + 2] + fr[k3 + 2]
-      out.append((min(255, int(r)), min(255, int(g)), min(255, int(b))))
-    return out
+      out.append((r, g, b))
+
+    if self._xfade_request:
+      self._xfade_request = False
+      if self.shown is not None:
+        self.xfade_from, self.xfade_t0 = self.shown, now
+    k = lin(now, self.xfade_t0, self.xfade_t0 + XFADE_MS) if self.xfade_from is not None else 1.0
+    dim = clamp(self.dim, 0.0, 1.0)
+    final = []
+    src = self.xfade_from
+    for i in range(N):
+      r, g, b = out[i]
+      if k < 1:
+        p = src[i]
+        r, g, b = p[0] + (r - p[0]) * k, p[1] + (g - p[1]) * k, p[2] + (b - p[2]) * k
+      final.append((min(255, int(r * dim)), min(255, int(g * dim)), min(255, int(b * dim))))
+    if k >= 1:
+      self.xfade_from = None
+    self.shown = final
+    return final

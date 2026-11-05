@@ -125,3 +125,65 @@ def test_neutral_eyes_fit_the_grid():
   cells = cells_of(eyes_of(dict(BASE)))
   assert 80 < len(cells) < 200
   assert all(0 <= i < C and 0 <= j < R for i, j in cells)
+
+
+def lit(frame, threshold=40):
+  return sum(1 for c in frame if max(c) > threshold)
+
+
+def test_an_interrupted_animation_fades_out_instead_of_vanishing():
+  engine = Engine(random.Random(9))
+  engine.auto = False
+  engine.play('aurora', 0, force=True)
+  now, before = run(engine, 0, 3000)
+  engine.ctx['alert'] = 'alAttn'
+  engine.play('alAttn', now)  # cuts the aurora short
+  first = engine.step(now + 50)
+  later = run(engine, now + 50, 600)[1]
+  aurora_cells = [k for k, c in enumerate(before) if c[1] > c[0] + 20]  # green-ish aurora light
+  assert aurora_cells
+  assert sum(1 for k in aurora_cells if first[k][1] > 30) > len(aurora_cells) // 3  # still fading
+  assert sum(1 for k in aurora_cells if later[k][1] > 60 and later[k][1] > later[k][0]) == 0  # gone
+
+
+def test_eye_colour_eases_between_states():
+  engine = Engine(random.Random(10))
+  engine.auto = False
+  now, _ = run(engine, 0, 1000)
+  engine.engaged = True
+  first = engine.step(now + 50)
+  eye_cells = {j * C + i for i, j in cells_of(eyes_of(engine.S))}
+  colours = {first[k] for k in eye_cells}
+  assert all(c != (0xb7, 0x7a, 0xff) for c in colours)  # not snapped to engaged purple in one frame
+  _, settled = run(engine, now + 50, 1500)
+  eye_cells = {j * C + i for i, j in cells_of(eyes_of(engine.S))}
+  assert any(settled[k] == (0xb7, 0x7a, 0xff) for k in eye_cells)
+
+
+def test_dim_fades_the_whole_picture_to_black():
+  engine = Engine(random.Random(11))
+  engine.dim = 0.0
+  _, frame = run(engine, 0, 500)
+  assert all(c == (0, 0, 0) for c in frame)
+
+
+def test_reappearing_eyes_do_not_crossfade_from_an_old_frame():
+  engine = Engine(random.Random(12))
+  engine.play('fireworks', 0, force=True)
+  now, _ = run(engine, 0, 1500)
+  engine.reset_display()
+  engine.scene_cells = [(0, 0, 0)] * N
+  engine.play('morphIn', now + 60000, force=True)
+  assert engine.xfade_from is None and engine.shown is None
+  frame = engine.step(now + 60050)
+  assert lit(frame) < 40  # a black scene and the first morph frame: nothing left over from the fireworks
+
+
+def test_morph_in_forms_closed_eyes_when_asleep():
+  engine = Engine(random.Random(13))
+  engine.parked, engine.auto = True, False
+  engine.scene_cells = [(200, 200, 200)] * N
+  engine.play('morphIn', 0, force=True)
+  _, frame = run(engine, 0, 2000)
+  open_eyes = len(cells_of(eyes_of(dict(BASE))))
+  assert lit(frame) < open_eyes // 2  # thin closed lids, not two open eyes

@@ -9,6 +9,8 @@ from openpilot.starpilot.ui.sleep_eyes.engine import Engine
 
 BOOT_WINDOW_S = 30        # Sleep Eyes switched on within this long of the UI starting means the comma just booted
 ASLEEP_LIMIT_S = 600       # after 10 minutes asleep (in Park or offroad) the screen goes fully black
+FADE_TO_BLACK_S = 4        # the sleeping eyes fade out over the last seconds before that
+BOOT_GRACE_S = 25          # right after boot the comma is briefly offroad: don't doze off for that
 BRIGHTNESS_DRIVING = 50    # caps while the eyes show (percent)
 BRIGHTNESS_PARKED = 25
 EYES_FPS = 20              # the whole UI loop runs at this rate while the eyes show
@@ -18,7 +20,7 @@ class SleepEyesController:
   def __init__(self, booting: bool = False):
     from openpilot.starpilot.ui.sleep_eyes.view import SleepEyesView
     self.engine = Engine()
-    self.watcher = CarWatcher()
+    self.watcher = CarWatcher(grace_until=(time.monotonic() + BOOT_GRACE_S) * 1000 if booting else 0.0)
     self.view = SleepEyesView(self.engine)
     self.sticky = False
     self.asleep_since: float | None = None
@@ -76,6 +78,10 @@ class SleepEyesController:
     engine, view = self.engine, self.view
     urgent = urgent or self.limit_hit
     self.watcher.update(engine, time.monotonic() * 1000, sm, started)
+    if self.asleep_since is not None:
+      engine.dim = min(1.0, max(0.0, (ASLEEP_LIMIT_S - (time.monotonic() - self.asleep_since)) / FADE_TO_BLACK_S))
+    else:
+      engine.dim = 1.0
     if want != self._logged_want:
       self._logged_want = want
       cloudlog.info(f"sleep eyes: {'show' if want else 'hide'} (started={started}, urgent={urgent}, phase={view.phase})")

@@ -658,8 +658,13 @@ class Device:
       if saved != AUTO:
         clipped_brightness = saved
     brightness = round(self._brightness_filter.update(clipped_brightness))
-    if self.sleep_eyes_visible:
-      brightness = min(brightness, self._sleep_eyes.brightness_cap(ui_state.started))
+    # Sleep Eyes cap the brightness; ease the cap in and out (about half a second) instead of jumping.
+    cap_target = self._sleep_eyes.brightness_cap(ui_state.started) if self.sleep_eyes_visible else 100.0
+    cap = getattr(self, "_eyes_cap", 100.0)
+    cap += (cap_target - cap) * min(1.0, 6.0 / max(gui_app.target_fps, 1))
+    self._eyes_cap = cap
+    if cap < 99.5:
+      brightness = min(brightness, round(cap))
     if not self._awake:
       brightness = 0
 

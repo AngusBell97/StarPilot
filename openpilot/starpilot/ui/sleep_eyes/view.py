@@ -45,6 +45,8 @@ class SleepEyesView:
     return self.phase in ('capture_in', 'capture_out')
 
   def enter(self, boot: bool = False) -> None:
+    if self.phase in ('off', 'done'):
+      self.engine.reset_display()
     if boot and self.phase in ('off', 'done'):
       # Start-up: the screen is black already, so no capture; the eyes power on from black.
       self.engine.exit_done = False
@@ -114,17 +116,28 @@ class SleepEyesView:
       self.engine.scene_cells = None
 
   def _draw_level(self, rect: rl.Rectangle, progress: float) -> None:
-    """progress 0 = sharpest copy, 1 = the 40 x 18 grid."""
+    """progress 0 = sharpest copy, 1 = the 40 x 18 grid. The picture eases from the full screen into the grid's
+    rectangle and the grid's gaps fade in, so the last step lines up exactly with the eyes' squares."""
     if not self._levels:
       return
+    progress = min(max(progress, 0.0), 1.0)
     index = min(len(self._levels) - 1, int(progress * len(self._levels)))
     texture = self._levels[index]
-    if index == len(self._levels) - 1:
-      cell, _, ox, oy = self._grid(rect)
-      dest = rl.Rectangle(ox, oy, cell * C, cell * R)
-    else:
-      dest = rect
+    cell, gap, ox, oy = self._grid(rect)
+    k = progress * progress * (3 - 2 * progress)
+    dest = rl.Rectangle(rect.x + (ox - rect.x) * k, rect.y + (oy - rect.y) * k,
+                        rect.width + (cell * C - rect.width) * k, rect.height + (cell * R - rect.height) * k)
     rl.draw_texture_pro(texture, rl.Rectangle(0, 0, texture.width, texture.height), dest, rl.Vector2(0, 0), 0.0, rl.WHITE)
+    alpha = int(255 * min(1.0, max(0.0, (progress - 0.45) / 0.55)))
+    if alpha:
+      # Gap lines follow the zooming picture: a 40 x 18 lattice over the destination rectangle.
+      lines = rl.Color(0, 0, 0, alpha)
+      cw, ch = dest.width / C, dest.height / R
+      g = max(1, round(gap * cw / cell))
+      for i in range(1, C + 1):
+        rl.draw_rectangle(int(dest.x + i * cw) - g, int(dest.y), g, int(dest.height), lines)
+      for j in range(1, R + 1):
+        rl.draw_rectangle(int(dest.x), int(dest.y + j * ch) - g, int(dest.width), g, lines)
 
   # --- drawing ----------------------------------------------------------------------------------------------
   def _color(self, c) -> rl.Color:

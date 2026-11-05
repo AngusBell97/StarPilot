@@ -64,9 +64,10 @@ class CarWatcher:
 
   SLEEP_WAKE = ('boot', 'ignOn', 'ignOff', 'morphIn')
 
-  def __init__(self):
+  def __init__(self, grace_until: float = 0.0):
     self.started: bool | None = None
     self.first = True
+    self.grace_until = grace_until  # ms: until then, offroad counts as "not known yet" (the comma just booted)
     self.engaged: bool | None = None
     self.lane_change = 'off'
     self.accel_since: float | None = None
@@ -80,7 +81,8 @@ class CarWatcher:
     asleep = not started or str(cs.gearShifter) == 'park'
     # Doze off or wake up whenever the wanted state differs, unless a sleep/wake animation is already playing
     # (the boot animation then settles: into Park it goes to sleep). The very first look sets it silently.
-    if engine.current not in self.SLEEP_WAKE and engine.parked != asleep:
+    settled = started or now >= self.grace_until
+    if settled and engine.current not in self.SLEEP_WAKE and engine.parked != asleep:
       if self.first and engine.current is None:
         engine.parked = asleep
       else:
