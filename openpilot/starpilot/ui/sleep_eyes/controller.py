@@ -86,7 +86,7 @@ class SleepEyesController:
       self._logged_want = want
       cloudlog.info(f"sleep eyes: {'show' if want else 'hide'} (started={started}, urgent={urgent}, phase={view.phase})")
     if want:
-      if not view.visible or view.phase in ('capture_out', 'morph_out', 'pix_out'):
+      if not view.visible or view.phase in ('settle_out', 'capture_out', 'morph_out', 'pix_out'):
         engine.reset_timers(time.monotonic() * 1000)
         view.enter(boot=self.boot_pending or self.slept_black)
         self.boot_pending = self.slept_black = False

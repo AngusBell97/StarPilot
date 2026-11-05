@@ -11,6 +11,8 @@ from openpilot.system.ui.lib.application import gui_app
 STEP_MS = 45          # engine updates at most ~20 Hz (the UI runs at 20 fps while the eyes show)
 PIXELATE_IN_MS = 800
 PIXELATE_OUT_MS = 500
+SETTLE_FRAMES = 2     # driving-view frames drawn under the eyes after a tap before the snapshot the eyes dissolve into
+SETTLE_MAX_MS = 400   # stop waiting for the driving view's own slides after this long and jump them to their end
 COLOR_CACHE_LIMIT = 4096
 
 
@@ -19,7 +21,11 @@ def _now_ms() -> float:
 
 
 class SleepEyesView:
-  """Phases: off -> capture_in -> pix_in -> eyes -> capture_out -> morph_out -> pix_out -> done."""
+  """Phases: off -> capture_in -> pix_in -> eyes -> settle_out -> capture_out -> morph_out -> pix_out -> done.
+
+  settle_out keeps the eyes on screen while the normal UI is drawn underneath for a few frames, so the screen it
+  was about to switch to (a slide to the home page, say) is reached before the snapshot is taken. Otherwise the
+  eyes dissolve into a stale picture and the UI jumps or slides away from it straight after."""
 
   def __init__(self, engine: Engine):
     self.engine = engine
@@ -29,6 +35,7 @@ class SleepEyesView:
     self._cells: list = []
     self._levels: list = []
     self._colors: dict = {}
+    self._settled = 0
 
   # --- control from Device ------------------------------------------------------------------------------------
   @property
@@ -41,8 +48,8 @@ class SleepEyesView:
 
   @property
   def needs_stack(self) -> bool:
-    # Only the capture frames draw the normal UI (to grab it); otherwise its offscreen work is skipped.
-    return self.phase in ('capture_in', 'capture_out')
+    # Only the settle and capture frames draw the normal UI; otherwise its offscreen work is skipped.
+    return self.phase in ('capture_in', 'settle_out', 'capture_out')
 
   def enter(self, boot: bool = False) -> None:
     if self.phase in ('off', 'done'):
@@ -55,6 +62,8 @@ class SleepEyesView:
     elif self.phase in ('off', 'done'):
       self.engine.exit_done = False
       self.phase = 'capture_in'
+    elif self.phase == 'settle_out':
+      self.phase = 'eyes'  # the eyes never started leaving: carry on as they were
     elif self.phase in ('capture_out', 'morph_out', 'pix_out'):
       # Timed out again while leaving: go straight back to the eyes.
       self._free_levels()
@@ -66,11 +75,30 @@ class SleepEyesView:
       self._free_levels()
       self.phase = 'done'
     elif self.phase in ('eyes', 'pix_in', 'capture_in'):
-      self.phase = 'capture_out'
+      self.phase, self._settled, self._t0 = 'settle_out', 0, _now_ms()
 
   def reset(self) -> None:
     self._free_levels()
     self.phase = 'off'
+
+  @staticmethod
+  def _finish_slides() -> None:
+    """Jump any page slide that is still under way (scroll_to) to its end, so the snapshot shows where it lands."""
+    for widget in getattr(gui_app, '_nav_stack', ()):
+      scroller = getattr(widget, '_scroller', None)
+      finish = getattr(scroller, 'finish_auto_scroll', None)
+      if finish is not None:
+        try:
+          finish()
+        except Exception:
+          cloudlog.exception("sleep eyes: finishing a page slide failed")
+
+  @staticmethod
+  def _sliding() -> bool:
+    for widget in getattr(gui_app, '_nav_stack', ()):
+      if getattr(getattr(widget, '_scroller', None), 'is_auto_scrolling', False):
+        return True
+    return False
 
   # --- capture and pixel levels -----------------------------------------------------------------------------
   def _grid(self, rect: rl.Rectangle) -> tuple[int, int, int, int]:
@@ -187,7 +215,20 @@ class SleepEyesView:
         return
       self.engine.play('morphIn', now, force=True)
       self.phase = phase = 'eyes'
+    if phase == 'settle_out':
+      if self._settled >= SETTLE_FRAMES and (not self._sliding() or now - self._t0 >= SETTLE_MAX_MS):
+        self.phase = phase = 'capture_out'
+      else:
+        # Draw the normal UI so it catches up (its first frame after a long sleep can be stale or slow, and a page
+        # slide it starts plays out here), then cover it with the eyes.
+        draw_stack(rect)
+        rl.clear_background(rl.BLACK)
+        self._settled += 1
+        self._step(now)
+        self._draw_grid(rect)
+        return
     if phase == 'capture_out':
+      self._finish_slides()
       draw_stack(rect)
       self._capture(rect)
       rl.clear_background(rl.BLACK)
