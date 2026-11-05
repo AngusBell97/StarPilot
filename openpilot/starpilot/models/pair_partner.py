@@ -282,6 +282,15 @@ def _gpu_mhz() -> float | None:
     return None
 
 
+def _gpu_busy_pct() -> float | None:
+  """The comma GPU's recent busy share (kgsl gpubusy, as hardwared reads it): near 100 % means the GPU is full."""
+  try:
+    used, total = Path("/sys/class/kgsl/kgsl-3d0/gpubusy").read_text().split()
+    return round(100.0 * int(used) / int(total), 1) if int(total) else None
+  except (OSError, ValueError):
+    return None
+
+
 def warm_up(model, runs: int = WARMUP_RUNS) -> None:
   """Run dummy frames through the model, then clear its recurrent state, so the first real frames are not slow."""
   import numpy as np
@@ -299,7 +308,7 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
   """Run jobs until modeld says stop or goes away. Only the newest waiting job runs; older ones are skipped.
   Each answer carries where the frame's time went (diag), so a short real-drive run is enough to see why it is slow."""
   count = 0
-  gpu_mhz = _gpu_mhz()
+  gpu_mhz, gpu_busy = _gpu_mhz(), _gpu_busy_pct()
   parse_ms = [0.0]
   parse = getattr(model, "_parse", None)
   if parse is not None:
@@ -341,12 +350,12 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
     done = time.perf_counter()
     count += 1
     if count % DIAG_GPU_EVERY == 0:
-      gpu_mhz = _gpu_mhz()
+      gpu_mhz, gpu_busy = _gpu_mhz(), _gpu_busy_pct()
     sent_at = sent[0] if sent else start
     # doneAt: time.perf_counter() is the system-wide monotonic clock on Linux, so modeld can compare it with its own
     diag = {"doneAt": done, "framesMs": round((got_frames - received) * 1e3, 2), "sendMs": round((sent_at - start) * 1e3, 2),
             "waitMs": round((done - sent_at) * 1e3, 2), "parseMs": round(parse_ms[0], 2),
-            "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz}
+            "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz, "gpuBusyPct": gpu_busy}
     conn.send(("out", seq, outputs, round((done - start) * 1e3, 2), diag))
 
 

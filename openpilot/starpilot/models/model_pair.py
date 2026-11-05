@@ -221,7 +221,8 @@ class ModelPair:
     self._sent_ms: deque[float] = deque(maxlen=600)    # job sent, ms after the pair frame started
     self._ready_ms: deque[float] = deque(maxlen=600)   # partner outputs in hand, ms after the pair frame started
     # the partner process's own breakdown of each frame (pair_partner.serve diag)
-    self._diag: dict[str, deque] = {key: deque(maxlen=600) for key in ("framesMs", "sendMs", "waitMs", "parseMs", "preempted")}
+    self._diag: dict[str, deque] = {key: deque(maxlen=600) for key in ("framesMs", "sendMs", "waitMs", "parseMs", "preempted",
+                                                                        "gpuBusyPct")}
     self._gpu_mhz: float | None = None
     self._reused = False
     self.probing = self.remote          # see PROBE_FRAMES
