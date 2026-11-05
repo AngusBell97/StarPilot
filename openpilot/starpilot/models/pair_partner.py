@@ -283,6 +283,16 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
   Each answer carries where the frame's time went (diag), so a short real-drive run is enough to see why it is slow."""
   count = 0
   gpu_mhz = _gpu_mhz()
+  parse_ms = [0.0]
+  parse = getattr(model, "_parse", None)
+  if parse is not None:
+    def timed_parse(outputs):   # decoding the outputs on the CPU, timed apart from the GPU wait
+      started = time.perf_counter()
+      try:
+        return parse(outputs)
+      finally:
+        parse_ms[0] = (time.perf_counter() - started) * 1e3
+    model._parse = timed_parse
   while True:
     try:
       message = conn.recv()
@@ -317,7 +327,8 @@ def serve(conn, model, frames: FrameSource, extra: bool) -> int:
       gpu_mhz = _gpu_mhz()
     sent_at = sent[0] if sent else start
     diag = {"framesMs": round((got_frames - received) * 1e3, 2), "sendMs": round((sent_at - start) * 1e3, 2),
-            "waitMs": round((done - sent_at) * 1e3, 2), "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz}
+            "waitMs": round((done - sent_at) * 1e3, 2), "parseMs": round(parse_ms[0], 2),
+            "preempted": _preemptions() - preempted, "gpuMhz": gpu_mhz}
     conn.send(("out", seq, outputs, round((done - start) * 1e3, 2), diag))
 
 

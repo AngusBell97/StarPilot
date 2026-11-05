@@ -77,7 +77,7 @@ def test_serve_runs_the_newest_job_and_reports_what_it_skipped():
   assert model.runs == [(6, 6, 1)] and conn.sent[0][0] == "out" and conn.sent[0][1] == 1
   # each answer says where the frame's time went
   diag = conn.sent[0][4]
-  assert {"framesMs", "sendMs", "waitMs", "preempted", "gpuMhz"} <= diag.keys() and diag["sendMs"] >= 0
+  assert {"framesMs", "sendMs", "waitMs", "parseMs", "preempted", "gpuMhz"} <= diag.keys() and diag["sendMs"] >= 0
 
   conn = Conn([("job", 1, (5, 5), {}, {"x": 1})])
   assert serve(conn, Model(fail=True), FrameSource({"main": Client([5])}), extra=False) == 1
