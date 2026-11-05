@@ -2,11 +2,14 @@
 
 Inside modeld's one thread a comma-GPU partner can only run after the big model's USB work, which does not fit the
 50 ms frame. In its own process it runs in parallel: modeld sends each frame's job (camera frame ids, warp
-transforms, model inputs) as soon as the big model's camera warp is queued on the comma GPU, so the warp is never
-stuck behind the partner; the partner reads the same camera frames from camerad, runs, and sends its outputs back.
+transforms, model inputs) at the start of the frame; the partner reads the same camera frames from camerad, runs,
+and sends its outputs back. On the comma GPU, modeld's work (the big model's camera warp) runs at a higher priority
+than the partner's, so the GPU interrupts the partner for it and the big model never waits.
 
-Measured on the comma (5 Nov 2026, forced onroad, car off): lightspeed 39 ms and Polaris R4A 37 ms per frame
-together, against 38.5 ms for lightspeed alone.
+Measured on the comma (5 Nov 2026, real stack, forced onroad, car off, RDF V4 + lightspeed): modeld 40.0 ms per
+frame (max 44.7) against 38.6 ms for lightspeed alone, the partner's outputs ready 39.4 ms into the frame, no late
+or dropped frames; UI (20 fps) and driver monitoring (+0.9 ms) unchanged. With both at GPU priority 12 and the job
+sent after the warp instead, the outputs landed 44.5-46.3 ms into the frame.
 
 The partner runs on a big core at a real-time priority below every control process (card, selfdrived, plannerd,
 radard), so they always preempt it, and never on the isolated cores 6 (camerad) and 7 (modeld).
@@ -28,6 +31,11 @@ from pathlib import Path
 PARTNER_CORE = 5            # big core; card (4), camerad (6) and modeld (7) keep theirs
 PARTNER_RT_PRIORITY = 50    # below plannerd/radard (51) and card/selfdrived (53): they always run first
 START_TIMEOUT_S = 60.0
+# Comma GPU (KGSL) context priorities: lower is higher, and with preemption on the GPU interrupts a lower ring (of
+# four) for a higher one. launch_env.sh puts every model at 12 so the UI (8) interrupts them. With a partner process,
+# modeld's context goes to 11 (the UI's ring, so it never interrupts the UI) and the partner stays at 12.
+PRIMARY_GPU_PRIORITY = 11
+PARTNER_GPU_PRIORITY = 12
 
 
 class PartnerError(RuntimeError):
@@ -44,7 +52,7 @@ class RemotePartner:
 
   def __init__(self, model_id: str, behavior_version: str, artifact: Path, sha256: str, cam_w: int, cam_h: int, *,
                main_wide_camera: bool, use_extra_client: bool, core: int = PARTNER_CORE, priority: int = PARTNER_RT_PRIORITY,
-               popen=subprocess.Popen):
+               gpu_priority: int = PARTNER_GPU_PRIORITY, popen=subprocess.Popen):
     self.model_id, self.behavior_version = model_id, behavior_version
     self.lat_delay = 0.0
     self.frame_drop_ratio = 0.0
@@ -60,7 +68,9 @@ class RemotePartner:
     if use_extra_client:
       command.append("--extra")
     try:
-      self.proc = popen(command, pass_fds=(child.fileno(),), close_fds=True)
+      # modeld's own GPU priority (PRIMARY_GPU_PRIORITY) must not pass on to the partner
+      env = {**os.environ, "QCOM_PRIORITY": str(gpu_priority)}
+      self.proc = popen(command, pass_fds=(child.fileno(),), close_fds=True, env=env)
     finally:
       child.close()
 

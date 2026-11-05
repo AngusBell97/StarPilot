@@ -26,13 +26,10 @@ class FakeModel:
     self.last_warp = None
     self.shared = []
 
-  def run(self, bufs, transforms, inputs, after_enqueue=None, *, shared_warp=None, after_warp=None):
+  def run(self, bufs, transforms, inputs, after_enqueue=None, *, shared_warp=None):
     self.events.append(f"{self.model_id}:start")
     if self.fail:
       raise RuntimeError("boom")
-    if after_warp is not None:
-      self.events.append(f"{self.model_id}:warp")
-      after_warp()
     self.shared.append(shared_warp)
     if after_enqueue is not None:
       after_enqueue()
@@ -340,11 +337,11 @@ def make_remote_pair(tmp_path, **remote_kwargs):
   return pair, primary, partner, events
 
 
-def test_a_partner_process_gets_its_job_once_the_camera_warp_is_queued(tmp_path):
+def test_a_partner_process_gets_its_job_at_the_start_of_the_frame(tmp_path):
   pair, primary, partner, events = make_remote_pair(tmp_path)
   out, action = step(pair)
-  # the job goes out after the primary's warp and before its policy runs; outputs are collected after the primary
-  assert events == ["lightspeed:start", "lightspeed:warp", "polaris:job", "lightspeed:end", "polaris:collect"]
+  # the job goes out before the primary runs (the comma GPU puts the primary's warp first); outputs are collected after
+  assert events == ["polaris:job", "lightspeed:start", "lightspeed:end", "polaris:collect"]
   assert partner.jobs == [(100, 100)]
   assert action.desiredCurvature == pytest.approx(2.001) and action.desiredAcceleration == 10.0
   assert pair.partner_device == "comma" and pair.partner_image == "own process"

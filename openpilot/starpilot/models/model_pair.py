@@ -4,8 +4,9 @@ Pairs are two small models, or one big and one small (two big ones do not fit on
 pair switched on, modeld loads the pair's models instead of the Active ones (`pair_selection`): the big one on the
 Chestnut as the running model, else the lateral small one; the other model is the partner. With the big model on
 the Chestnut, the small partner runs on the comma's GPU in its own process (pair_partner.py), in parallel with the
-big model: modeld sends it each frame's job once the big model's camera warp is queued, and collects its outputs by
-a deadline (a late frame reuses the partner's previous outputs once). Everything on the Chestnut does not fit: the
+big model: modeld sends it each frame's job at the start of the frame and collects its outputs by a deadline (a late
+frame reuses the partner's previous outputs once). The comma GPU interrupts the partner for the big model's camera
+warp, because modeld's GPU work runs at a higher priority than the partner's (pair_partner.PRIMARY_GPU_PRIORITY). Everything on the Chestnut does not fit: the
 Chestnut needs ~13-15 ms to compute even a small model (measured 5 Nov 2026). Other placements (small+small) run the
 partner in modeld's thread as before. Mode "drive" (default) composes the outputs; "shadow" keeps a log-only test
 path that Galaxy no longer offers.
@@ -283,7 +284,7 @@ class ModelPair:
     """Primary on the Chestnut, partner in its own process on the comma GPU: (primary outputs, partner outputs, late)."""
     job = {}
 
-    def warp_queued():
+    def send_job():
       if self.partner_active and self.frame_ids is not None:
         try:
           job["seq"] = self.partner.submit(self.frame_ids, transforms, inputs)
@@ -292,7 +293,9 @@ class ModelPair:
           self._stop_partner(f"partner process unreachable: {error}"[:300])
 
     start = self.now()
-    primary_out = self.primary.run(bufs, transforms, inputs, after_enqueue, after_warp=warp_queued)
+    # at once: the GPU runs the big model's camera warp ahead of the partner (higher priority), so nothing waits
+    send_job()
+    primary_out = self.primary.run(bufs, transforms, inputs, after_enqueue)
     if not self.partner_active:
       return primary_out, None, False
     if "seq" not in job:

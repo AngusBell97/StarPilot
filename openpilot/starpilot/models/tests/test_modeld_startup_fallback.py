@@ -381,15 +381,24 @@ def test_pair_driving_loads_the_pair_models_without_randomizing(monkeypatch, lin
   start = next(i for i, node in enumerate(body) if isinstance(node, ast.ImportFrom) and node.module == manager.__name__)
   end = next(i for i, node in enumerate(body) if ast.unparse(node) == "gc.disable()")
   pair = {"big": "lightspeed", "small": "rdf43"}
+  environ = {"QCOM_PRIORITY": "12"}
   env: dict = {"chestnut_present": lambda: True, "cable_connected": lambda: False, "usb_host_connected": lambda: False,
                "Params": lambda: Mock(), "jetlink_adapter": SimpleNamespace(link_on=lambda: link), "cloudlog": Mock(),
-               "pair_selection": Mock(return_value=pair)}
+               "pair_selection": Mock(return_value=pair),
+               "os": SimpleNamespace(getenv=lambda key: None, environ=environ)}
   execute(body[start:end], env)
   expected = None if link else pair
   manager.resolve_runtime.assert_called_once_with(chestnut_available=True, randomize=link, overrides=expected)
   manager.requested_runtime_id.assert_called_once_with(True, overrides=expected)
   if not link:
     env["pair_selection"].assert_called_once_with({"enabled": True}, {"catalog": True})
+  # a big + small pair raises modeld's comma-GPU priority above the small model's process before any GPU work
+  from openpilot.starpilot.models.pair_partner import PRIMARY_GPU_PRIORITY
+  assert environ["QCOM_PRIORITY"] == ("12" if link else str(PRIMARY_GPU_PRIORITY))
+  environ["QCOM_PRIORITY"] = "12"
+  env["pair_selection"] = Mock(return_value={"big": "", "small": "rdf43"})
+  execute(body[start:end], env)
+  assert environ["QCOM_PRIORITY"] == "12"      # small + small: unchanged
 
 
 def test_recovery_small_receipt_reports_runtime_stall_not_load_failure():

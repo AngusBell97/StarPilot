@@ -93,8 +93,8 @@ class Proc:
 def remote():
   child = {}
 
-  def popen(command, pass_fds, close_fds):
-    child["command"] = command
+  def popen(command, pass_fds, close_fds, env):
+    child["command"], child["env"] = command, env
     child["conn"] = Connection(os.dup(pass_fds[0]))
     return Proc()
 
@@ -109,6 +109,9 @@ def test_remote_partner_start_jobs_and_late_results():
   assert command[1:3] == ["-m", "openpilot.starpilot.models.pair_partner"] and "--extra" in command and "--main-wide" not in command
   assert command[command.index("--core") + 1] == str(pair_partner.PARTNER_CORE) == "5"
   assert command[command.index("--priority") + 1] == "50"
+  # the partner's comma-GPU context stays below modeld's, whatever modeld's own environment says
+  assert child["env"]["QCOM_PRIORITY"] == str(pair_partner.PARTNER_GPU_PRIORITY) == "12"
+  assert pair_partner.PRIMARY_GPU_PRIORITY < pair_partner.PARTNER_GPU_PRIORITY
   child["conn"].send(("ready", {"loadS": 3.6}))
   assert partner.wait_ready(1.0)["loadS"] == 3.6
 

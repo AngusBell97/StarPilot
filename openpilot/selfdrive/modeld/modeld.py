@@ -323,6 +323,11 @@ def main(demo=False):
       pair_models = pair_selection(pair_configuration(MODELS_ROOT), model_catalog(MODELS_ROOT))
     except Exception:
       cloudlog.exception("model pair selection unreadable; driving with the Active models")
+  if pair_models is not None and pair_models.get("big") and chestnut_available and not recovery_small_only:
+    # big + small pair: the small one runs in its own process on the comma GPU. Before any GPU context exists, raise
+    # modeld's GPU priority above it so the big model's camera warp never waits behind the partner.
+    from openpilot.starpilot.models.pair_partner import PRIMARY_GPU_PRIORITY
+    os.environ['QCOM_PRIORITY'] = str(PRIMARY_GPU_PRIORITY)
   selection = resolve_runtime(chestnut_available=chestnut_available and not recovery_small_only,
                               randomize=not recovery_small_only and pair_models is None, overrides=pair_models)
   requested_model_id = requested_runtime_id(chestnut_available, overrides=pair_models)
