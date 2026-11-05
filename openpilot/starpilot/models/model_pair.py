@@ -94,6 +94,16 @@ def plan_pair(config: dict, primary_id: str) -> tuple[PairPlan | None, str]:
 
 
 LOCAL_VARIANTS = "local_variants.json"
+LOCAL_BUILDS = "local_builds"   # comma-GPU builds made on this comma (kept out of the catalog's model folders)
+
+
+def local_build_path(model_id: str, root: Path, kind: str) -> Path:
+  """Where a build made on this comma lives: a Chestnut ("amd") build beside the catalog model, a tuned comma-GPU
+  ("tuned", BEAM-searched kernels) build under <root>/local_builds."""
+  if kind == "amd":
+    from openpilot.starpilot.models.manager import artifact_path
+    return artifact_path(model_id, root, "amd")
+  return root / LOCAL_BUILDS / f"{model_id}_driving_{kind}_tinygrad.pkl"
 
 
 def local_variant_ids(root: Path) -> set[str]:
@@ -104,15 +114,14 @@ def local_variant_ids(root: Path) -> set[str]:
     return set()
 
 
-def local_variant(model_id: str, root: Path, *, verify: bool = True) -> dict | None:
-  """A Chestnut (AMD) build of a small model made on this comma (not published in the catalog):
-  {"artifact_sha256", "artifact_size", "behavior_version", ...} from <root>/local_variants.json when its file
-  is present (and, with verify, its digest matches)."""
+def local_variant(model_id: str, root: Path, *, verify: bool = True, kind: str = "amd") -> dict | None:
+  """A build of a small model made on this comma (not published in the catalog), a Chestnut one ("amd") or a tuned
+  comma-GPU one ("tuned"): {"artifact_sha256", "artifact_size", "behavior_version", ...} from
+  <root>/local_variants.json when its file is present (and, with verify, its digest matches)."""
   import hashlib
-  from openpilot.starpilot.models.manager import artifact_path
   try:
-    entry = json.loads((root / LOCAL_VARIANTS).read_text())[model_id]["amd"]
-    path = artifact_path(model_id, root, "amd")
+    entry = json.loads((root / LOCAL_VARIANTS).read_text())[model_id][kind]
+    path = local_build_path(model_id, root, kind)
     if path.is_symlink() or not path.is_file() or path.stat().st_size != entry["artifact_size"]:
       return None
     if verify:
@@ -144,6 +153,11 @@ def partner_artifact(partner_id: str, *, root: Path | None = None, chestnut_ok: 
   local = local_variant(partner_id, base) if chestnut_ok else None
   if local is not None and local.get("behavior_version") == row["version"]:
     return local["path"], row["version"], local["artifact_sha256"], True
+  # on the comma GPU, a tuned build made on this comma wins once registered (it is registered only after a parked
+  # check shows it faster with outputs matching the catalog build closely)
+  tuned = local_variant(partner_id, base, kind="tuned")
+  if tuned is not None and tuned.get("behavior_version") == row["version"]:
+    return tuned["path"], row["version"], tuned["artifact_sha256"], False
   path = manager.verified_artifact(partner_id, entries, base)
   if path is not None:
     return path, row["version"], row["artifact_sha256"], False

@@ -489,3 +489,26 @@ def test_the_spare_partner_drives_alone_if_the_chestnut_fails():
     driver.run({}, {}, {})                                    # a second one is modeld's to handle
   action = driver.get_action_from_model(first, log.ModelDataV2.Action(), 0.3, 0.5, 20.0)
   assert action.desiredCurvature == pytest.approx(2.001) and driver.chestnut is False
+
+
+def test_a_tuned_comma_gpu_build_is_used_for_the_partner_only_when_registered_and_intact(tmp_path, monkeypatch):
+  import hashlib
+  from openpilot.starpilot.models import manager
+  from openpilot.starpilot.models.model_pair import local_build_path, partner_artifact
+  rows = {"rdf43": {"name": "RDF V4", "version": "v15", "artifact_sha256": "s" * 64}}
+  monkeypatch.setattr(manager, "catalog", lambda root: rows)
+  monkeypatch.setattr(manager, "verified_artifact", lambda *a, **k: tmp_path / "standard.pkl" if len(a) < 4 else None)
+  assert partner_artifact("rdf43", root=tmp_path, chestnut_ok=False) == (tmp_path / "standard.pkl", "v15", "s" * 64, False)
+  tuned = local_build_path("rdf43", tmp_path, "tuned")
+  assert tuned == tmp_path / "local_builds" / "rdf43_driving_tuned_tinygrad.pkl"
+  tuned.parent.mkdir()
+  tuned.write_bytes(b"tuned build")
+  entry = {"artifact_sha256": hashlib.sha256(b"tuned build").hexdigest(), "artifact_size": 11, "behavior_version": "v15"}
+  (tmp_path / "local_variants.json").write_text(json.dumps({"rdf43": {"tuned": entry}}))
+  assert partner_artifact("rdf43", root=tmp_path, chestnut_ok=False) == (tuned, "v15", entry["artifact_sha256"], False)
+  # a changed file, or one for another model version, falls back to the catalog build
+  tuned.write_bytes(b"tuned BUILD")
+  assert partner_artifact("rdf43", root=tmp_path, chestnut_ok=False)[0] == tmp_path / "standard.pkl"
+  tuned.write_bytes(b"tuned build")
+  (tmp_path / "local_variants.json").write_text(json.dumps({"rdf43": {"tuned": {**entry, "behavior_version": "v16"}}}))
+  assert partner_artifact("rdf43", root=tmp_path, chestnut_ok=False)[0] == tmp_path / "standard.pkl"
