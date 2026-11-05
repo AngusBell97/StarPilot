@@ -76,7 +76,7 @@ class ModelLaboratory:
         if not small:
           state, reason = "unsupported", "Big models run on the Chestnut already and need no eGPU variant."
         elif local_amd:
-          state, reason = "installed", "A Chestnut version built on this comma. In a pair this model runs on the Chestnut."
+          state, reason = "installed", "A Chestnut version built on this comma. Next to a big model it runs on the comma's GPU in its own process."
         elif not eligible:
           state, reason = "unsupported", "This model is not available for combining."
         elif not published:
@@ -92,7 +92,8 @@ class ModelLaboratory:
                        "modelLabArtifactAvailable": published, "modelLabArtifactInstalled": amd_installed, "checking": checking,
                        "modelLabStatus": state, "modelLabReason": reason,
                        "installed": installed, "pairable": installed or verifying or amd_installed or local_amd,
-                       "placement": "chestnut" if not small or amd_installed or local_amd else "comma", "localBuild": local_amd,
+                       # next to a big model a small one runs on the comma's GPU in its own process (pair_partner.py)
+                       "placement": "chestnut" if not small else "comma", "localBuild": local_amd,
                        "artifactSize": artifact.get("artifact_size", 0)})
       status = read_status()
       live = status is not None and status.get("fresh") and status.get("state") in ("testing", "driving")

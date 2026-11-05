@@ -469,7 +469,8 @@ def main(demo=False):
   if jetlink_model is None:
     pair_result = []
     pair_loader = threading.Thread(target=lambda: pair_result.append(setup_pair(
-      model, small_model, cam_w, cam_h, report=lambda event, data: cloudlog.event(event, **data))), daemon=True)
+      model, small_model, cam_w, cam_h, report=lambda event, data: cloudlog.event(event, **data),
+      streams=(main_wide_camera, use_extra_client))), daemon=True)
     pair_loader.start()
     pair_loader.join(BIG_MODEL_TIMEOUT)
     if pair_result:
@@ -621,6 +622,8 @@ def main(demo=False):
 
     model.lat_delay = lat_delay
     model.frame_drop_ratio = frame_drop_ratio
+    if isinstance(model, ModelPair):
+      model.frame_ids = (meta_main.frame_id, meta_extra.frame_id)   # a partner process reads the same camera frames
     mt1 = time.perf_counter()
     try:
       send_chestnut = (chestnut_state is not None and

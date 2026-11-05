@@ -872,7 +872,7 @@ export const ModelsPage = {
                 <div class="gx-row gx-row--borderless">
                   <div class="gx-row__info">
                     <span class="gx-row__label">Last pair run</span>
-                    <span v-if="labStats.frames && labStats.partner" class="gx-row__desc">{{ labModelLabel(labStats.partner) }} ran on the {{ labStats.partnerDevice === 'chestnut' ? 'Chestnut' : 'comma GPU' }}{{ labStats.sharedWarp ? ' (shared camera image)' : '' }}</span>
+                    <span v-if="labStats.frames && labStats.partner" class="gx-row__desc">{{ labModelLabel(labStats.partner) }} ran on the {{ labStats.partnerDevice === 'chestnut' ? 'Chestnut' : 'comma GPU' }}{{ labStats.partnerProcess ? ' in its own process' : labStats.sharedWarp ? ' (shared camera image)' : '' }}</span>
                     <span v-if="labStats.frames" class="gx-row__desc">Model time {{ labStats.runMsP50 }} ms typical, {{ labStats.runMsP95 }} ms at 95% (frame is 50 ms) · {{ labModelLabel(labStats.partner) }} {{ labStats.partnerMsP50 ?? '–' }} ms · {{ labStats.frames }} frames</span>
                     <span v-if="labStats.curvatureDiffP50 != null" class="gx-row__desc">Disagreement: steering {{ labStats.curvatureDiffP50 }} (95%: {{ labStats.curvatureDiffP95 }}) 1/m · speed {{ labStats.accelDiffP50 }} (95%: {{ labStats.accelDiffP95 }}) m/s²</span>
                     <span v-if="!labStats.frames" class="gx-row__desc">No pair has run yet. A pair starts when the driving model next starts.</span>

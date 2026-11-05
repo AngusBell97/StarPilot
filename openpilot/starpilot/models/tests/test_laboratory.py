@@ -85,7 +85,8 @@ class LaboratoryTest(unittest.TestCase):
     verified = next(row for row in self.ready_snapshot()['models'] if row['value'] == 'gwm8223')
     self.assertEqual(verified['modelLabStatus'], 'installed')
     self.assertTrue(verified['pairable'])
-    self.assertEqual(verified['placement'], 'chestnut')
+    # next to a big model a small one runs on the comma's GPU in its own process, eGPU variant or not
+    self.assertEqual(verified['placement'], 'comma')
     self.assertFalse(self.lab.snapshot()['runtime']['active'])
 
   def test_amd_download_and_delete_preserve_normal_small_artifact(self):

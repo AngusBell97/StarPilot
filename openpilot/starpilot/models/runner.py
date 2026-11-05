@@ -329,7 +329,8 @@ class CatalogModelState:
     return self._read_outputs(self.run_policy_device_image(**policy_inputs, warped=image))
 
   def run(self, bufs: dict, transforms: dict[str, np.ndarray], inputs: dict[str, np.ndarray],
-          after_enqueue: Callable[[], None] | None = None, *, shared_warp: SharedCameraWarp | None = None) -> dict[str, np.ndarray]:
+          after_enqueue: Callable[[], None] | None = None, *, shared_warp: SharedCameraWarp | None = None,
+          after_warp: Callable[[], None] | None = None) -> dict[str, np.ndarray]:
     self.last_warp = None
     road_pointer, wide_pointer = (np.frombuffer(bufs[name].data, dtype=np.uint8).ctypes.data for name in self.vision_input_names)
     pointers = (road_pointer, wide_pointer)
@@ -343,6 +344,9 @@ class CatalogModelState:
       warped = self.warp_frames(pointers, transforms["img"], transforms["big_img"])
     else:
       warped = shared_warp.tensor
+    if after_warp is not None:
+      # the camera warp is queued on its GPU: a pair partner process on the same GPU may start now without delaying it
+      after_warp()
     policy_inputs = {key: self.input_queues[key] for key in self.policy_input_keys}
     output_tensors = (self.run_policy(**policy_inputs, warped=warped) if self.image_history_pipeline == "policy" else
                       self.run_policy(**policy_inputs, img=warped[0], big_img=warped[1]))

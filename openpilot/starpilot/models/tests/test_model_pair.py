@@ -26,10 +26,13 @@ class FakeModel:
     self.last_warp = None
     self.shared = []
 
-  def run(self, bufs, transforms, inputs, after_enqueue=None, *, shared_warp=None):
+  def run(self, bufs, transforms, inputs, after_enqueue=None, *, shared_warp=None, after_warp=None):
     self.events.append(f"{self.model_id}:start")
     if self.fail:
       raise RuntimeError("boom")
+    if after_warp is not None:
+      self.events.append(f"{self.model_id}:warp")
+      after_warp()
     self.shared.append(shared_warp)
     if after_enqueue is not None:
       after_enqueue()
@@ -293,3 +296,137 @@ def test_a_chestnut_partner_reads_the_image_the_primary_uploaded(tmp_path):
   s2.run_on_device_image = lambda img, inputs: pytest.fail("must not read Chestnut memory")
   step(other)
   assert other.partner_image == "own warp"
+
+
+class FakeRemote:
+  """A partner process: answers each submitted job by collect time, or not (late), or fails."""
+  chestnut = False
+  remote = True
+
+  def __init__(self, events, value=2.0, *, answer=True, fail=False):
+    self.model_id, self.events, self.value = "polaris", events, value
+    self.answer, self.fail, self.seq, self.closed = answer, fail, 0, False
+    self.jobs = []
+
+  def submit(self, frame_ids, transforms, inputs):
+    self.seq += 1
+    self.jobs.append(frame_ids)
+    self.events.append("polaris:job")
+    return self.seq
+
+  def collect(self, seq, timeout_s):
+    self.events.append("polaris:collect")
+    if self.fail:
+      raise RuntimeError("partner process ended")
+    if self.answer is False or (callable(self.answer) and not self.answer(seq)):
+      return None, None, "late"
+    return outputs(self.value + seq / 1000), 37.0, ""
+
+  def get_action_from_model(self, out, prev, lat_t, long_t, v_ego):
+    v = float(out["plan"][0, 0])
+    return log.ModelDataV2.Action(desiredCurvature=v, desiredAcceleration=10 * v, shouldStop=False)
+
+  def close(self):
+    self.closed = True
+
+
+def make_remote_pair(tmp_path, **remote_kwargs):
+  events, clock = [], Clock()
+  primary = FakeModel("lightspeed", 1.0, chestnut=True, events=events, cost=0.039, clock=clock)
+  partner = FakeRemote(events, **remote_kwargs)
+  pair = ModelPair(primary, partner, PairPlan("drive", "polaris", "lightspeed", "polaris", "lateral"), now=clock,
+                   status_path=tmp_path / "pair.json")
+  pair.frame_ids = (100, 100)
+  return pair, primary, partner, events
+
+
+def test_a_partner_process_gets_its_job_once_the_camera_warp_is_queued(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path)
+  out, action = step(pair)
+  # the job goes out after the primary's warp and before its policy runs; outputs are collected after the primary
+  assert events == ["lightspeed:start", "lightspeed:warp", "polaris:job", "lightspeed:end", "polaris:collect"]
+  assert partner.jobs == [(100, 100)]
+  assert action.desiredCurvature == pytest.approx(2.001) and action.desiredAcceleration == 10.0
+  assert pair.partner_device == "comma" and pair.partner_image == "own process"
+  pair.write_status(force=True)
+  status = json.loads((tmp_path / "pair.json").read_text())
+  assert status["partnerProcess"] is True and status["partnerMsP50"] == 37.0 and status["lateFrames"] == 0
+
+
+def test_a_late_partner_reuses_its_previous_outputs_once_then_the_primary_steers(tmp_path):
+  answers = {1: True, 2: False, 3: False, 4: True}
+  pair, primary, partner, events = make_remote_pair(tmp_path, answer=lambda seq: answers.get(seq, True))
+  _, first = step(pair)
+  _, late_once = step(pair)
+  _, late_twice = step(pair)
+  _, back = step(pair)
+  assert first.desiredCurvature == pytest.approx(2.001)
+  assert late_once.desiredCurvature == pytest.approx(2.001)      # previous partner outputs, one frame old
+  assert late_twice.desiredCurvature == 1.0                      # never two stale frames: the primary steers
+  assert back.desiredCurvature == pytest.approx(2.004) and pair.partner_active
+  assert pair.summary()["lateFrames"] == 2
+
+
+def test_a_partner_process_that_keeps_missing_its_deadline_is_stopped(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path, answer=lambda seq: seq <= model_pair.WARMUP_FRAMES)
+  for _ in range(model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1):
+    step(pair)
+  assert not pair.partner_active and "late" in pair.stop_reason and partner.closed
+  _, action = step(pair)
+  assert action.desiredCurvature == 1.0 and partner.seq == model_pair.WARMUP_FRAMES + model_pair.SLOW_LIMIT + 1
+
+
+def test_a_failed_partner_process_stops_without_stopping_the_drive(tmp_path):
+  pair, primary, partner, events = make_remote_pair(tmp_path, fail=True)
+  out, action = step(pair)
+  assert not pair.partner_active and "partner process ended" in pair.stop_reason and partner.closed
+  assert float(out["plan"][0, 0]) == 1.0 and action.desiredCurvature == 1.0
+  # without camera frame ids from modeld the partner process cannot run
+  pair, primary, partner, events = make_remote_pair(tmp_path)
+  pair.frame_ids = None
+  step(pair)
+  assert not pair.partner_active and "frame ids" in pair.stop_reason
+
+
+def test_setup_pair_starts_a_comma_partner_process_beside_a_chestnut_primary(tmp_path, monkeypatch):
+  from openpilot.starpilot.models import runner
+  monkeypatch.setattr(model_pair, "STATUS_PATH", tmp_path / "status.json")
+  monkeypatch.setattr(model_pair, "_is_big", lambda mid: mid == "lightspeed")
+
+  class Catalog(FakeModel, runner.CatalogModelState):
+    def __init__(self, *args, **kwargs):
+      FakeModel.__init__(self, *args, **kwargs)
+
+  events, asked, started = [], [], []
+  primary = Catalog("lightspeed", 1.0, chestnut=True, events=events)
+
+  def artifact(mid, chestnut_ok=True):
+    asked.append(chestnut_ok)
+    return tmp_path / "p.pkl", "v15", "3" * 64, False
+
+  monkeypatch.setattr(model_pair, "partner_artifact", artifact)
+
+  class Remote(FakeRemote):
+    def __init__(self, mid, version, path, sha, cam_w, cam_h, *, main_wide_camera, use_extra_client):
+      super().__init__(events)
+      started.append((mid, version, path.name, cam_w, cam_h, main_wide_camera, use_extra_client))
+
+    def wait_ready(self):
+      return {}
+
+  cfg = {"enabled": True, "lateralModel": "polaris", "longitudinalModel": "lightspeed", "mode": "drive"}
+  model, reason = setup_pair(primary, None, 1344, 760, config=cfg, streams=(False, True), remote=Remote,
+                             load=lambda *a: pytest.fail("the partner runs in its own process"))
+  assert reason == "" and isinstance(model, ModelPair) and model.remote and asked == [False]
+  assert started == [("polaris", "v15", "p.pkl", 1344, 760, False, True)]
+
+  class Broken(Remote):
+    def wait_ready(self):
+      raise RuntimeError("no GPU")
+
+    def close(self):
+      started.append("closed")
+
+  model, reason = setup_pair(primary, None, 1344, 760, config=cfg, streams=(False, True), remote=Broken)
+  assert model is primary and "no GPU" in reason and started[-1] == "closed"
+  assert read_status(tmp_path / "status.json")["state"] == "refused"

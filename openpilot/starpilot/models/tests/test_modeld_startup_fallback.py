@@ -228,7 +228,8 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
          "jetlink_adapter": SimpleNamespace(hooks=lambda: hooks, coherent_warp=lambda: None), "drop_chestnut": Mock(),
          "release_compile_pool": Mock(), "gc": Mock(),
          "LaneObstacleDetector": SimpleNamespace(create=Mock(return_value=None)),
-         "setup_pair": Mock(side_effect=lambda model, small, w, h, report: (model, "off")), "write_pair_status": Mock()}
+         "setup_pair": Mock(side_effect=lambda model, small, w, h, report, streams: (model, "off")), "write_pair_status": Mock(),
+         "main_wide_camera": False, "use_extra_client": True}
   wrapper = ast.parse("def startup():\n  pass").body[0]
   wrapper.body = body[start:end] + [ast.Return(value=ast.Call(func=ast.Name(id="locals", ctx=ast.Load()), args=[], keywords=[]))]
   env["cam_w"], env["cam_h"] = env["vipc_client_main"].width, env["vipc_client_main"].height
@@ -273,6 +274,8 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
   # Model Laboratory: offered the loaded model and the small spare once, after the detector, never with Jetlink
   env["setup_pair"].assert_called_once()
   assert env["setup_pair"].call_args.args[:2] == (env["model"], env["small_model"])
+  # a small partner process reads the same camera streams modeld uses
+  assert env["setup_pair"].call_args.kwargs["streams"] == (False, True)
 
 
 def test_wait_for_enumeration_succeeds_without_real_sleep(monkeypatch):

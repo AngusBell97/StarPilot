@@ -2,11 +2,13 @@
 
 Pairs are two small models, or one big and one small (two big ones do not fit one Chestnut's 50 ms frame). With a
 pair switched on, modeld loads the pair's models instead of the Active ones (`pair_selection`): the big one on the
-Chestnut as the running model, else the lateral small one; the other model is the partner. A big partner would run
-on the Chestnut after the primary, sharing its warped camera image when the models allow it. A small partner runs on
-the Chestnut when its AMD variant is installed and the primary is there, else on the comma's GPU, overlapping the
-Chestnut's compute when the primary is on the Chestnut. Mode "drive" (default) composes the outputs; "shadow" keeps
-a log-only test path that Galaxy no longer offers.
+Chestnut as the running model, else the lateral small one; the other model is the partner. With the big model on
+the Chestnut, the small partner runs on the comma's GPU in its own process (pair_partner.py), in parallel with the
+big model: modeld sends it each frame's job once the big model's camera warp is queued, and collects its outputs by
+a deadline (a late frame reuses the partner's previous outputs once). Everything on the Chestnut does not fit: the
+Chestnut needs ~13-15 ms to compute even a small model (measured 5 Nov 2026). Other placements (small+small) run the
+partner in modeld's thread as before. Mode "drive" (default) composes the outputs; "shadow" keeps a log-only test
+path that Galaxy no longer offers.
 
 A timing guard stops the partner for the rest of the session when it threatens the 20 Hz frame budget, and any
 partner error stops it too; the primary then carries on alone. A primary error is modeld's to handle (it falls
@@ -40,6 +42,7 @@ SLOW_WINDOW = 40            # frames (2 s)
 SLOW_LIMIT = 4              # slow frames allowed in the window before the partner stops
 DROP_LIMIT = 0.02           # modeld's filtered frame-drop ratio that stops the partner
 WARMUP_FRAMES = 10          # frames before the guard judges (modeld also ignores its first 10 frames' drops)
+PARTNER_DEADLINE_S = 0.045  # a partner process's outputs must arrive within this of the pair frame's start
 STATUS_PERIOD_S = 1.0
 LOG_PERIOD_S = 10.0
 
@@ -155,16 +158,16 @@ class PairGuard:
     self.frames = 0
     self.slow = deque(maxlen=SLOW_WINDOW)
 
-  def check(self, run_s: float, frame_drop_ratio: float) -> str:
+  def check(self, run_s: float, frame_drop_ratio: float, late: bool = False) -> str:
     self.frames += 1
     # warm-up frames take hundreds of ms while the GPUs clock up; keep them out of the slow window
     if self.frames <= WARMUP_FRAMES:
       return ""
-    self.slow.append(run_s > SLOW_FRAME_S)
+    self.slow.append(run_s > SLOW_FRAME_S or late)
     if frame_drop_ratio > DROP_LIMIT:
       return f"frames dropped ({frame_drop_ratio:.0%}) while the pair ran"
     if sum(self.slow) > SLOW_LIMIT:
-      return f"pair too slow: {sum(self.slow)} of the last {len(self.slow)} frames over {SLOW_FRAME_S * 1e3:.0f} ms"
+      return f"pair too slow: {sum(self.slow)} of the last {len(self.slow)} frames over {SLOW_FRAME_S * 1e3:.0f} ms or late"
     return ""
 
 
@@ -187,7 +190,12 @@ class ModelPair:
     self.partner_active = True
     self.stop_reason = ""
     self.partner_device = "chestnut" if partner.chestnut else "comma"
-    self.partner_image = ""
+    # a partner in its own process (pair_partner.RemotePartner) gets jobs instead of run() calls
+    self.remote = bool(getattr(partner, "remote", False))
+    self.frame_ids: tuple[int, int] | None = None   # modeld sets the camera frame ids before each run
+    self.partner_image = "own process" if self.remote else ""
+    self._late: deque[bool] = deque(maxlen=600)
+    self._reused = False
     self.share_warp = bool(partner.chestnut and primary.chestnut and getattr(primary, "camera_warp_descriptor", None) is not None and
                            primary.camera_warp_descriptor == getattr(partner, "camera_warp_descriptor", None))
     self.lat_delay = 0.0
@@ -235,6 +243,11 @@ class ModelPair:
     self.partner_active = False
     self.stop_reason = reason
     self._outputs["partner"] = None
+    if self.remote:
+      try:
+        self.partner.close()
+      except Exception:  # noqa: BLE001 - closing never fails the drive
+        pass
     if self.report is not None:
       self.report("modelPairStopped", {"reason": reason, **self.summary()})
     self.write_status(force=True)
@@ -264,9 +277,50 @@ class ModelPair:
       return
     self._partner_ms.append((self.now() - t) * 1e3)
 
+  def _run_remote(self, bufs, transforms, inputs, after_enqueue) -> tuple[dict, dict | None, bool]:
+    """Primary on the Chestnut, partner in its own process on the comma GPU: (primary outputs, partner outputs, late)."""
+    job = {}
+
+    def warp_queued():
+      if self.partner_active and self.frame_ids is not None:
+        try:
+          job["seq"] = self.partner.submit(self.frame_ids, transforms, inputs)
+        except Exception as error:  # noqa: BLE001
+          self._stop_partner(f"partner process unreachable: {error}"[:300])
+
+    start = self.now()
+    primary_out = self.primary.run(bufs, transforms, inputs, after_enqueue, after_warp=warp_queued)
+    if not self.partner_active:
+      return primary_out, None, False
+    if "seq" not in job:
+      self._stop_partner("camera frame ids unavailable for the partner process")
+      return primary_out, None, False
+    try:
+      outputs, partner_ms, _why = self.partner.collect(job["seq"], PARTNER_DEADLINE_S - (self.now() - start))
+    except Exception as error:  # noqa: BLE001 - a failed partner stops, the primary drives on
+      self._stop_partner(f"partner failed: {error}"[:300])
+      return primary_out, None, False
+    if outputs is not None:
+      self._partner_ms.append(partner_ms)
+      self._late.append(False)
+      self._reused = False
+      return primary_out, outputs, False
+    self._late.append(True)
+    # one late frame reuses the partner's previous outputs (50 ms old); two in a row fall back to the primary alone
+    previous = self._outputs["partner"] if not self._reused else None
+    self._reused = previous is not None
+    return primary_out, previous, True
+
   def run(self, bufs, transforms, inputs, after_enqueue: Callable[[], None] | None = None) -> dict:
     for model in (self.primary, self.partner):
       model.lat_delay, model.frame_drop_ratio = self.lat_delay, self.frame_drop_ratio
+    if self.remote:
+      t = self.now()
+      primary_out, partner_out, late = self._run_remote(bufs, transforms, inputs, after_enqueue)
+      self._outputs["primary"] = primary_out
+      if self.partner_active:
+        self._outputs["partner"] = partner_out
+      return self._finish(t, primary_out, late)
     t = self.now()
     overlap = self.partner_active and not self.partner.chestnut and self.primary.chestnut
 
@@ -281,10 +335,13 @@ class ModelPair:
     self._outputs["primary"] = primary_out
     if self.partner_active and not overlap:
       self._run_partner(bufs, transforms, inputs)
+    return self._finish(t, primary_out, False)
+
+  def _finish(self, t: float, primary_out: dict, late: bool) -> dict:
     run_s = self.now() - t
     self._run_ms.append(run_s * 1e3)
     self._frames += 1
-    if self.partner_active and (reason := self.guard.check(run_s, self.frame_drop_ratio)):
+    if self.partner_active and (reason := self.guard.check(run_s, self.frame_drop_ratio, late)):
       self._stop_partner(reason)
     partner_out = self._outputs["partner"]
     if not self.driving or partner_out is None:
@@ -329,6 +386,7 @@ class ModelPair:
       "curvatureDiffP50": _percentile(self._lat_diff, 50), "curvatureDiffP95": _percentile(self._lat_diff, 95),
       "accelDiffP50": _percentile(self._long_diff, 50), "accelDiffP95": _percentile(self._long_diff, 95),
       "frameDropRatio": round(float(self.frame_drop_ratio), 4),
+      "lateFrames": int(sum(self._late)),
     }
 
   def write_status(self, force: bool = False) -> None:
@@ -340,7 +398,7 @@ class ModelPair:
     status = {"state": state, "mode": self.plan.mode, "lateralModel": self.plan.lateral_id,
               "longitudinalModel": self.plan.longitudinal_id, "primary": self.primary.model_id,
               "partner": self.plan.partner_id, "partnerDevice": self.partner_device, "sharedWarp": self.share_warp,
-              "partnerImage": self.partner_image,
+              "partnerImage": self.partner_image, "partnerProcess": self.remote,
               "reason": self.stop_reason, **self.summary()}
     write_status(status, self.status_path)
     if force or now - self._last_persist >= PERSIST_PERIOD_S:
@@ -380,8 +438,14 @@ def read_status(path: Path | None = None, *, max_age_s: float = 5.0) -> dict | N
   return {**status, "fresh": fresh}
 
 
+def _is_big(model_id: str) -> bool:
+  from openpilot.starpilot.models import manager
+  return bool(manager.catalog(manager.ROOT).get(model_id, {}).get("uses_external_gpu"))
+
+
 def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | None = None, load=None,
-               report: Callable[[str, dict], None] | None = None):
+               report: Callable[[str, dict], None] | None = None, streams: tuple[bool, bool] | None = None,
+               remote=None):
   """Wrap the loaded primary in a ModelPair when the saved pair asks for one; returns (model, reason)."""
   from openpilot.starpilot.models.laboratory import configuration
   from openpilot.starpilot.models.manager import ROOT
@@ -400,7 +464,19 @@ def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | N
   try:
     if not isinstance(primary, CatalogModelState):
       raise ValueError("the running model cannot be paired")
-    # a Chestnut build of the partner wins when the primary is on the Chestnut; else the loaded small model is reused
+    if primary.chestnut and streams is not None and not _is_big(plan.partner_id):
+      # the small partner beside a Chestnut primary: its own process on the comma GPU, in parallel
+      path, version, sha256, _ = partner_artifact(plan.partner_id, chestnut_ok=False)
+      if remote is None:
+        from openpilot.starpilot.models.pair_partner import RemotePartner as remote
+      partner = remote(plan.partner_id, version, path, sha256, cam_w, cam_h, main_wide_camera=streams[0], use_extra_client=streams[1])
+      try:
+        partner.wait_ready()
+      except Exception:
+        partner.close()
+        raise
+      return ModelPair(primary, partner, plan, report=report), ""
+    # elsewhere: a Chestnut build of the partner wins when the primary is on the Chestnut; else the loaded small model is reused
     path, version, sha256, on_chestnut = partner_artifact(plan.partner_id, chestnut_ok=bool(primary.chestnut))
     if on_chestnut and not primary.chestnut:
       raise ValueError("the Chestnut is not running, so the big model cannot join the pair")
