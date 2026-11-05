@@ -42,6 +42,45 @@ class PartnerError(RuntimeError):
   pass
 
 
+class PartnerDriver:
+  """The pair's partner process as modeld's spare driving model, so the comma holds one copy of the small model
+  instead of two (memory: a real drive ran the comma to 94 % with both). If the Chestnut fails, modeld drives on
+  with it: the partner computes complete outputs every frame."""
+
+  chestnut = False
+  vision_input_names = ("img", "big_img")
+  WAIT_S = 0.1
+
+  def __init__(self, partner: "RemotePartner", desire_len: int):
+    import numpy as np
+    self.partner = partner
+    self.model_id = partner.model_id
+    self.npy = {"desire": np.zeros(desire_len, dtype=np.float32)}   # modeld reads the desire width
+    self.lat_delay = 0.0
+    self.frame_drop_ratio = 0.0
+    self.frame_ids: tuple[int, int] | None = None                   # modeld sets them each frame
+    self._last: dict | None = None
+
+  def run(self, bufs, transforms, inputs, after_enqueue=None):
+    if self.frame_ids is None:
+      raise PartnerError("camera frame ids unavailable")
+    seq = self.partner.submit(self.frame_ids, transforms, inputs)
+    if after_enqueue is not None:
+      after_enqueue()
+    outputs, _, why = self.partner.collect(seq, self.WAIT_S)
+    if outputs is None:
+      # one missed frame reuses the previous outputs; a second in a row is a failure modeld handles
+      if self._last is None:
+        raise PartnerError(f"partner process {why}")
+      outputs, self._last = self._last, None
+      return outputs
+    self._last = outputs
+    return outputs
+
+  def get_action_from_model(self, outputs, previous, lat_action_t, long_action_t, v_ego):
+    return self.partner.get_action_from_model(outputs, previous, lat_action_t, long_action_t, v_ego)
+
+
 class RemotePartner:
   """modeld's handle on the partner process. Quacks enough like a model for ModelPair (model_id, chestnut,
   get_action_from_model); `remote` tells the pair to send jobs instead of calling run()."""
@@ -83,6 +122,7 @@ class RemotePartner:
       self.close()
       raise PartnerError(f"partner process failed to start: {message[-1]}")
     self.load_s = message[1].get("loadS")
+    self.info = message[1]
     return message[1]
 
   def submit(self, frame_ids: tuple[int, int], transforms: dict, inputs: dict) -> int:
@@ -180,6 +220,26 @@ class FrameSource:
     return buf if frame_id == wanted else None
 
 
+def _release_load_memory() -> None:
+  """Hand the model load's temporary buffers (the file read, the unpickled arena) back to the system: the comma has
+  little memory to spare during a drive."""
+  import ctypes
+  import gc
+  gc.collect()
+  try:
+    ctypes.CDLL("libc.so.6").malloc_trim(0)
+  except (OSError, AttributeError):
+    pass
+
+
+def _rss_mb() -> float | None:
+  try:
+    with open("/proc/self/status") as status:
+      return next(round(int(line.split()[1]) / 1024, 1) for line in status if line.startswith("VmRSS:"))
+  except (OSError, StopIteration, ValueError):
+    return None
+
+
 def serve(conn, model, frames: FrameSource, extra: bool) -> int:
   """Run jobs until modeld says stop or goes away. Only the newest waiting job runs; older ones are skipped."""
   while True:
@@ -236,8 +296,10 @@ def main(argv=None) -> int:
         if time.monotonic() > deadline:
           raise PartnerError(f"camera stream {name} unavailable")
         time.sleep(0.05)
-    config_realtime_process(args.core, args.priority)
-    conn.send(("ready", {"pid": os.getpid(), "loadS": round(time.monotonic() - start, 1), "core": args.core, "priority": args.priority}))
+    _release_load_memory()
+    config_realtime_process(args.core, args.priority)   # also turns the garbage collector off for the run
+    conn.send(("ready", {"pid": os.getpid(), "loadS": round(time.monotonic() - start, 1), "core": args.core, "priority": args.priority,
+                         "desireLen": int(model.npy["desire"].shape[-1]), "rssMb": _rss_mb()}))
   except Exception as error:  # noqa: BLE001 - reported to modeld, which drives without the pair
     try:
       conn.send(("error", 0, f"{type(error).__name__}: {error}"[:300]))

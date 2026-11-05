@@ -427,3 +427,65 @@ def test_setup_pair_starts_a_comma_partner_process_beside_a_chestnut_primary(tmp
   model, reason = setup_pair(primary, None, 1344, 760, config=cfg, streams=(False, True), remote=Broken)
   assert model is primary and "no GPU" in reason and started[-1] == "closed"
   assert read_status(tmp_path / "status.json")["state"] == "refused"
+
+
+def test_the_partner_process_is_modelds_spare_and_the_pair_reuses_it(tmp_path, monkeypatch):
+  from openpilot.starpilot.models import runner
+  from openpilot.starpilot.models.model_pair import start_partner_spare
+  from openpilot.starpilot.models.pair_partner import PartnerDriver
+  monkeypatch.setattr(model_pair, "STATUS_PATH", tmp_path / "status.json")
+  monkeypatch.setattr(model_pair, "_is_big", lambda mid: mid == "lightspeed")
+  monkeypatch.setattr(model_pair, "partner_artifact", lambda mid, chestnut_ok=True: (tmp_path / "p.pkl", "v15", "3" * 64, False))
+  events, started = [], []
+
+  class Remote(FakeRemote):
+    def __init__(self, mid, version, path, sha, cam_w, cam_h, *, main_wide_camera, use_extra_client):
+      super().__init__(events)
+      self.info = {"desireLen": 8}
+      started.append(mid)
+
+    def wait_ready(self):
+      return self.info
+
+  spare = start_partner_spare("rdf43", 1344, 760, (False, True), remote=Remote)
+  assert isinstance(spare, PartnerDriver) and spare.model_id == "polaris" and spare.npy["desire"].shape == (8,)
+
+  class Catalog(FakeModel, runner.CatalogModelState):
+    def __init__(self, *args, **kwargs):
+      FakeModel.__init__(self, *args, **kwargs)
+
+  primary = Catalog("lightspeed", 1.0, chestnut=True, events=events)
+  spare.model_id = "rdf43"
+  cfg = {"enabled": True, "lateralModel": "rdf43", "longitudinalModel": "lightspeed", "mode": "drive"}
+  model, reason = setup_pair(primary, spare, 1344, 760, config=cfg, streams=(False, True), remote=Remote)
+  # no second process: the pair drives with the spare's process and keeps it when the pair stops
+  assert reason == "" and model.partner is spare.partner and model.keep_partner and started == ["rdf43"]
+  model._stop_partner("test")
+  assert not spare.partner.closed
+
+  # a spare that cannot start leaves modeld to load its own small model
+  class Broken(Remote):
+    def wait_ready(self):
+      raise RuntimeError("no memory")
+
+  reports = []
+  assert start_partner_spare("rdf43", 1344, 760, (False, True), remote=Broken, report=reports.append) is None
+  assert "no memory" in reports[0]
+
+
+def test_the_spare_partner_drives_alone_if_the_chestnut_fails():
+  from openpilot.starpilot.models.pair_partner import PartnerDriver, PartnerError
+  events, enqueued = [], []
+  answers = {1: True, 2: False, 3: False}
+  partner = FakeRemote(events, answer=lambda seq: answers.get(seq, True))
+  driver = PartnerDriver(partner, 8)
+  with pytest.raises(PartnerError, match="frame ids"):
+    driver.run({}, {}, {})
+  driver.frame_ids = (7, 7)
+  first = driver.run({}, {}, {}, lambda: enqueued.append(True))
+  assert float(first["plan"][0, 0]) == pytest.approx(2.001) and enqueued == [True] and partner.jobs == [(7, 7)]
+  assert driver.run({}, {}, {}) is first                      # one missed frame reuses the previous outputs
+  with pytest.raises(PartnerError, match="late"):
+    driver.run({}, {}, {})                                    # a second one is modeld's to handle
+  action = driver.get_action_from_model(first, log.ModelDataV2.Action(), 0.3, 0.5, 20.0)
+  assert action.desiredCurvature == pytest.approx(2.001) and driver.chestnut is False

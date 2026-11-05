@@ -52,7 +52,8 @@ from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
 from openpilot.starpilot.navigation.intent import TurnIntent, matching_turn_signal
 from openpilot.starpilot.models.catalog import BUNDLED_CURRENT, BY_ID, DEFAULT_SMALL, DEFAULT_SMALL_SHA256
 from openpilot.starpilot.models.runner import CatalogModelState, load_verified_model
-from openpilot.starpilot.models.model_pair import ModelPair, pair_selection, setup_pair, write_status as write_pair_status
+from openpilot.starpilot.models.model_pair import ModelPair, pair_selection, setup_pair, start_partner_spare, write_status as write_pair_status
+from openpilot.starpilot.models.pair_partner import PartnerDriver
 from openpilot.starpilot.models.lane_obstacle import LaneObstacleDetector
 from openpilot.starpilot.models import jetlink_adapter
 import uuid
@@ -323,7 +324,8 @@ def main(demo=False):
       pair_models = pair_selection(pair_configuration(MODELS_ROOT), model_catalog(MODELS_ROOT))
     except Exception:
       cloudlog.exception("model pair selection unreadable; driving with the Active models")
-  if pair_models is not None and pair_models.get("big") and chestnut_available and not recovery_small_only:
+  remote_pair = bool(pair_models is not None and pair_models.get("big") and chestnut_available and not recovery_small_only)
+  if remote_pair:
     # big + small pair: the small one runs in its own process on the comma GPU. Before any GPU context exists, raise
     # modeld's GPU priority above it so the big model's camera warp never waits behind the partner.
     from openpilot.starpilot.models.pair_partner import PRIMARY_GPU_PRIORITY
@@ -407,7 +409,8 @@ def main(demo=False):
   # A timed-out GPU worker must never hold up access to the small runner.
   small_model = small_prepared = None
   selected_small_failed = False
-  if selection.big_path is not None and selection.small_path is not None:
+  # with a big + small pair the pair's small-model process is the spare instead (one copy, loaded after the big model)
+  if selection.big_path is not None and selection.small_path is not None and not remote_pair:
     small_model, small_prepared, selected_small_failed = load_small()
   if CHESTNUT:
     big_path = selection.big_path or modeld_pkl_path(True)
@@ -445,6 +448,9 @@ def main(demo=False):
       # Avoid Python/native finalizers retaining this failed GPU context.
       os._exit(STARTUP_FALLBACK_EXIT)
 
+  if small_model is None and remote_pair and model is not None and pair_models is not None:
+    small_model = start_partner_spare(pair_models["small"], cam_w, cam_h, (main_wide_camera, use_extra_client),
+                                      report=cloudlog.warning)
   if small_model is None:
     small_model, small_prepared, selected_small_failed = load_small()
   initial_chestnut_fallback = CHESTNUT and model is None
@@ -620,14 +626,14 @@ def main(demo=False):
     if not sm['carControl'].latActive:
       prev_action.desiredCurvature = sm['controlsState'].curvature
 
-    if isinstance(model, (CatalogModelState, ModelPair)) or model is jetlink_model:
+    if isinstance(model, (CatalogModelState, ModelPair, PartnerDriver)) or model is jetlink_model:
       inputs['prev_action'] = np.array([prev_action.desiredCurvature * max(1.0, v_ego) ** 2,
                                         prev_action.desiredAcceleration], dtype=np.float32)
       inputs['lateral_control_params'] = np.array([v_ego, lat_delay], dtype=np.float32)
 
     model.lat_delay = lat_delay
     model.frame_drop_ratio = frame_drop_ratio
-    if isinstance(model, ModelPair):
+    if isinstance(model, (ModelPair, PartnerDriver)):
       model.frame_ids = (meta_main.frame_id, meta_extra.frame_id)   # a partner process reads the same camera frames
     mt1 = time.perf_counter()
     try:

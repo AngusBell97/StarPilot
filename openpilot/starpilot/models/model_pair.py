@@ -180,10 +180,11 @@ class ModelPair:
   """Drop-in for the driving model in modeld's loop (run, get_action_from_model, chestnut, npy, ...)."""
 
   def __init__(self, primary, partner, plan: PairPlan, *, now: Callable[[], float] = time.perf_counter,
-               status_path: Path | None = None, report: Callable[[str, dict], None] | None = None):
+               status_path: Path | None = None, report: Callable[[str, dict], None] | None = None, keep_partner: bool = False):
     self.primary = primary
     self.partner = partner
     self.plan = plan
+    self.keep_partner = keep_partner   # the partner process is modeld's spare too: stopping the pair leaves it running
     self.now = now
     self.status_path = STATUS_PATH if status_path is None else status_path
     self.report = report
@@ -246,7 +247,8 @@ class ModelPair:
     self.partner_active = False
     self.stop_reason = reason
     self._outputs["partner"] = None
-    if self.remote:
+    # a partner process that is also modeld's spare driving model stays up (idle) for a Chestnut failure
+    if self.remote and not self.keep_partner:
       try:
         self.partner.close()
       except Exception:  # noqa: BLE001 - closing never fails the drive
@@ -452,6 +454,34 @@ def _is_big(model_id: str) -> bool:
   return bool(manager.catalog(manager.ROOT).get(model_id, {}).get("uses_external_gpu"))
 
 
+def start_partner(model_id: str, cam_w: int, cam_h: int, streams: tuple[bool, bool], remote=None):
+  """Start the small model's process on the comma GPU and wait until it is ready; raises when it cannot start."""
+  path, version, sha256, _ = partner_artifact(model_id, chestnut_ok=False)
+  if remote is None:
+    from openpilot.starpilot.models.pair_partner import RemotePartner as remote
+  partner = remote(model_id, version, path, sha256, cam_w, cam_h, main_wide_camera=streams[0], use_extra_client=streams[1])
+  try:
+    partner.wait_ready()
+  except Exception:
+    partner.close()
+    raise
+  return partner
+
+
+def start_partner_spare(model_id: str, cam_w: int, cam_h: int, streams: tuple[bool, bool], *, remote=None,
+                        report: Callable[[str], None] | None = None):
+  """For a big + small pair: the small model's process, as modeld's spare driving model too (pair_partner.PartnerDriver),
+  so modeld need not load its own copy. None when it cannot start; modeld then loads its usual spare."""
+  from openpilot.starpilot.models.pair_partner import PartnerDriver
+  try:
+    partner = start_partner(model_id, cam_w, cam_h, streams, remote)
+    return PartnerDriver(partner, int(getattr(partner, "info", {}).get("desireLen", 8)))
+  except Exception as error:  # noqa: BLE001 - modeld falls back to loading its own small model
+    if report is not None:
+      report(f"pair partner process could not start as the spare: {error}"[:300])
+    return None
+
+
 def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | None = None, load=None,
                report: Callable[[str, dict], None] | None = None, streams: tuple[bool, bool] | None = None,
                remote=None):
@@ -474,16 +504,12 @@ def setup_pair(primary, small_model, cam_w: int, cam_h: int, *, config: dict | N
     if not isinstance(primary, CatalogModelState):
       raise ValueError("the running model cannot be paired")
     if primary.chestnut and streams is not None and not _is_big(plan.partner_id):
-      # the small partner beside a Chestnut primary: its own process on the comma GPU, in parallel
-      path, version, sha256, _ = partner_artifact(plan.partner_id, chestnut_ok=False)
-      if remote is None:
-        from openpilot.starpilot.models.pair_partner import RemotePartner as remote
-      partner = remote(plan.partner_id, version, path, sha256, cam_w, cam_h, main_wide_camera=streams[0], use_extra_client=streams[1])
-      try:
-        partner.wait_ready()
-      except Exception:
-        partner.close()
-        raise
+      # the small partner beside a Chestnut primary: its own process on the comma GPU, in parallel. modeld started it
+      # already as its spare driving model (start_partner_spare) when it could: one copy of the small model, not two.
+      spare = getattr(small_model, "partner", None)
+      if spare is not None and getattr(small_model, "model_id", None) == plan.partner_id:
+        return ModelPair(primary, spare, plan, report=report, keep_partner=True), ""
+      partner = start_partner(plan.partner_id, cam_w, cam_h, streams, remote)
       return ModelPair(primary, partner, plan, report=report), ""
     # elsewhere: a Chestnut build of the partner wins when the primary is on the Chestnut; else the loaded small model is reused
     path, version, sha256, on_chestnut = partner_artifact(plan.partner_id, chestnut_ok=bool(primary.chestnut))

@@ -117,6 +117,8 @@ def execute(statements, env):
     raise SystemExit(code)
   env.setdefault("os", SimpleNamespace(getenv=lambda key: None, _exit=exit_process))
   env.setdefault("recovery_small_only", False)
+  env.setdefault("remote_pair", False)
+  env.setdefault("start_partner_spare", Mock(return_value=None))
   env.setdefault("coherent_warp", None)
   env.setdefault("set_core_affinity", Mock())
   from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
