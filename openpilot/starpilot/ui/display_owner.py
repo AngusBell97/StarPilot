@@ -6,7 +6,7 @@ import math
 
 from openpilot.starpilot.ui.display_preferences import (
   AUTO, GPU_LOADING, BOOLEAN_KEYS, BRIGHTNESS, CUSTOM_KEYS, KEYS, MASTER, PIXEL_SHIFT, PIXEL_SHIFT_DESCRIPTION, SCREEN_OFF,
-  SCREEN_OFF_DESCRIPTION, SLEEP_EYES, SLEEP_EYES_DESCRIPTION, STANDALONE_KEYS,
+  SCREEN_OFF_DESCRIPTION, SLEEP_EYES, SLEEP_EYES_DESCRIPTION, SLEEP_EYES_PARKED, SLEEP_EYES_PARKED_DESCRIPTION, STANDALONE_KEYS,
   STATIC_DIM, STATIC_DIM_DESCRIPTION, default_value, read_choice,
 )
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow, FeatureSettingsRequest, FeatureSettingsState
@@ -21,6 +21,7 @@ LABELS = {
   "ScreenTimeoutOnroad": "Driving Interaction Timeout",
   SCREEN_OFF: "Turn Off Comma Screen",
   SLEEP_EYES: "Sleep Eyes",
+  SLEEP_EYES_PARKED: "Sleep Eyes Only When Parked",
   GPU_LOADING: "Keep Screen On While eGPU Loads",
   PIXEL_SHIFT: "Pixel Shift",
   STATIC_DIM: "Dim Static Elements",
@@ -28,14 +29,16 @@ LABELS = {
 STANDALONE_REASONS = {
   SCREEN_OFF: SCREEN_OFF_DESCRIPTION,
   SLEEP_EYES: SLEEP_EYES_DESCRIPTION,
+  SLEEP_EYES_PARKED: SLEEP_EYES_PARKED_DESCRIPTION,
   GPU_LOADING: "Keep the driving screen awake while an eGPU model loads. Manual Screen Off still takes priority.",
   PIXEL_SHIFT: PIXEL_SHIFT_DESCRIPTION,
   STATIC_DIM: STATIC_DIM_DESCRIPTION,
 }
 AUTO_PREFIX = "display:auto:"
 SCREEN_OFF_NEEDED_FOR_EYES = "Turn on Turn Off Comma Screen to use"
-# Sleep Eyes replaces Turn Off Comma Screen's black screen, so it needs that option on.
-EYES_REQUIRES = {SLEEP_EYES: (SCREEN_OFF,)}
+EYES_NEEDED_FOR_PARKED = "Turn on Sleep Eyes to use"
+# Sleep Eyes replaces Turn Off Comma Screen's black screen, so it needs that option on; Only When Parked needs both.
+EYES_REQUIRES = {SLEEP_EYES: (SCREEN_OFF,), SLEEP_EYES_PARKED: (SCREEN_OFF, SLEEP_EYES)}
 
 
 def eyes_blocker(key: str, saved: dict) -> str:
@@ -44,6 +47,10 @@ def eyes_blocker(key: str, saved: dict) -> str:
   screen_off = saved[SCREEN_OFF]
   if not (screen_off.readable and screen_off.valid and screen_off.value == 1):
     return SCREEN_OFF_NEEDED_FOR_EYES
+  if SLEEP_EYES in EYES_REQUIRES[key]:
+    eyes = saved[SLEEP_EYES]
+    if not (eyes.readable and eyes.valid and eyes.value == 1):
+      return EYES_NEEDED_FOR_PARKED
   return ""
 
 
