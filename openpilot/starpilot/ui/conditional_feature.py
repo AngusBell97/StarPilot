@@ -22,6 +22,7 @@ from openpilot.starpilot.conditional_mode.manual_saved import KEY as MANUAL_KEY,
 from openpilot.starpilot.conditional_mode.preferences import encode_preferences
 from openpilot.starpilot.conditional_mode.runtime_settings import experimental_available, read_mode_sources
 from openpilot.starpilot.conditional_mode.policy import ModeChoice
+from openpilot.starpilot.conditional_mode import ccm_page
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow, FeatureSettingsRequest
 
 
@@ -208,7 +209,9 @@ class ConditionalFeature:
                              vehicle_fingerprint=self.owner.vehicle_fingerprint(), capability=_mode_capability(cp),
                              dependencies=dependencies + (("ExperimentalMode", baseline), ("SafeMode", mode_safe))))
       rows.append(FeatureRow("", "Experimental conditions", "Saved options", page="conditional/cem", available=True))
-      rows.append(FeatureRow("", "Chill conditions", "Saved options", page="conditional/ccm", available=True))
+      ccm_speed = f"{_display(display_number('speed_mps', preferences.ccm.speed_mps, metric))} {_unit('speed_mps', metric)}"
+      rows.append(FeatureRow("", "Chill conditions", ccm_page.summary(preferences.ccm, ccm_speed) if valid_units else "Saved options",
+                             page="conditional/ccm", available=True))
       if manual.status in ("invalid", "read_error"):
         rows.append(FeatureRow("", "Remembered manual choices", "Invalid" if manual.status == "invalid" else "Unavailable"))
       if manual.status == "invalid":
@@ -218,6 +221,9 @@ class ConditionalFeature:
       return rows
     lane_page = page == "lane_change"
     section = "cem" if page in ("conditional/cem", "lane_change") else "ccm"
+    if section == "ccm":
+      return self._ccm_rows(preferences, document, metric, valid_units, allowed, unavailable, dependencies,
+                            manual, manual_available, manual_dependencies)
     option = preferences.cem if section == "cem" else preferences.ccm
     for field in fields(option):
       name = field.name
@@ -253,6 +259,49 @@ class ConditionalFeature:
                                unit=unit if valid_units else "",
                                available=allowed and valid_units, reason=help_text if allowed and valid_units else
                                "Invalid saved units" if not valid_units else unavailable,
+                               dependencies=dependencies, display_unit=unit if valid_units else ""))
+    return rows
+
+  def _ccm_rows(self, preferences, document, metric, valid_units, allowed, unavailable, dependencies,
+                manual, manual_available, manual_dependencies) -> list[FeatureRow]:
+    """Chill conditions, shaped by "Use Chill for": only rows that apply are shown (ccm_page.py)."""
+    ccm = preferences.ccm
+    stock = decode_preferences(stock_document()).ccm
+    climb = ccm.climb
+    rows = []
+    for name, label, help_text in ccm_page.layout(climb):
+      key = PREFIX + "ccm:" + name
+      needs = ccm_page.DEPENDS[climb].get(name)
+      ready = needs is None or getattr(ccm, needs[0])
+      reason = (help_text if ready else needs[1]) if allowed else unavailable
+      if name == ccm_page.USE:
+        rows.append(FeatureRow(key, label, ccm_page.USE_CLIMB if climb else ccm_page.USE_CLASSIC, document,
+                               ccm_page.USE_CHOICES, default_value=ccm_page.USE_CLASSIC, available=allowed,
+                               reason=reason, dependencies=dependencies))
+      elif name == ccm_page.AFTER_BEND:
+        rows.append(FeatureRow(key, label, ccm_page.bend_choice(ccm.allow_chill_in_bends, ccm.climb_on_bend_exit), document,
+                               ccm_page.BEND_CHOICES, default_value=ccm_page.BEND_WAIT, available=allowed,
+                               reason=reason, dependencies=dependencies))
+      elif name == "persist_manual":
+        manual_ok = manual_available and manual.status in ("valid", "absent")
+        rows.append(FeatureRow(key, label, "On" if ccm.persist_manual else "Off", document, ("Off", "On"),
+                               default_value="On" if stock.persist_manual else "Off", available=manual_ok,
+                               reason=help_text if manual_ok else "Saved manual choices need repair" if manual_available else unavailable,
+                               dependencies=manual_dependencies))
+      elif name in BOOLEAN_FIELDS["ccm"]:
+        rows.append(FeatureRow(key, label, "On" if getattr(ccm, name) else "Off", document, ("Off", "On"),
+                               default_value="On" if getattr(stock, name) else "Off",
+                               available=allowed and ready, reason=reason, dependencies=dependencies))
+      elif name in NUMBER_FIELDS["ccm"]:
+        value = getattr(ccm, name)
+        displayed = display_number(name, value, metric)
+        unit = _unit(name, metric)
+        rows.append(FeatureRow(key, label, _display(displayed) if valid_units else "Invalid saved units", document,
+                               default_value=_display(display_number(name, getattr(stock, name), metric)),
+                               step=1.0 if valid_units else 0.0, minimum=0.0,
+                               maximum=max(field_limit("ccm", name, metric), float(_display(displayed))),
+                               unit=unit if valid_units else "", available=allowed and valid_units and ready,
+                               reason=reason if valid_units else "Invalid saved units",
                                dependencies=dependencies, display_unit=unit if valid_units else ""))
     return rows
 

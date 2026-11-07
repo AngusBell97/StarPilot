@@ -23,6 +23,8 @@ from openpilot.starpilot.conditional_mode.preferences import (
   PreferenceError, SavedPreferences, decode_preferences, encode_preferences,
 )
 from openpilot.starpilot.saved_source import read_saved
+from openpilot.starpilot.conditional_mode.ccm_page import (AFTER_BEND, BEND_CHOICES, USE, USE_CHOICES, USE_CLIMB,
+                                                           bend_fields)
 
 
 DOCUMENT_KEY = "ConditionalModeConfig"
@@ -36,6 +38,8 @@ BOOLEAN_FIELDS = {
                        "stop_lights", "signal_lane_detection")),
   "ccm": frozenset(("lead", "launch_assist", "allow_chill_in_bends", "climb", "climb_on_bend_exit", "climb_lead")),
 }
+# Choice rows over existing saved fields (see ccm_page.py).
+CHOICE_FIELDS = {"cem": frozenset(), "ccm": frozenset((USE, AFTER_BEND))}
 NUMBER_FIELDS = {
   "cem": frozenset(("speed_mps", "speed_with_lead_mps", "signal_speed_mps", "model_stop_s", "signal_lane_width_m")),
   "ccm": frozenset(("speed_mps", "speed_with_lead_mps", "set_speed_margin_mps")),
@@ -84,7 +88,15 @@ def edit(preferences: SavedPreferences, key: str, value: str, *, metric: bool) -
       raise PreferenceError("unknown conditional option")
     section, field = parts[1:]
     option = preferences.cem if section == "cem" else preferences.ccm
-    if field in BOOLEAN_FIELDS[section]:
+    if section == "ccm" and field == USE:
+      if value not in USE_CHOICES:
+        raise PreferenceError("invalid Use Chill for choice")
+      changed = replace(option, climb=value == USE_CLIMB)
+    elif section == "ccm" and field == AFTER_BEND:
+      if value not in BEND_CHOICES:
+        raise PreferenceError("invalid After a bend choice")
+      changed = replace(option, **bend_fields(value))  # both bend fields in one validated document
+    elif field in BOOLEAN_FIELDS[section]:
       if value not in ("On", "Off"):
         raise PreferenceError("invalid conditional boolean")
       changed = replace(option, **{field: value == "On"})

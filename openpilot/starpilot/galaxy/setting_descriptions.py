@@ -5,6 +5,7 @@ This presentation catalog supplies the purpose before any genuine prerequisite.
 """
 from openpilot.starpilot.ui.long_profile_feature import CATEGORY_HELP, VALUE_HELP
 from openpilot.starpilot.ui.feature_settings_state import SLC_OFFSET_KEYS
+from openpilot.starpilot.conditional_mode.ccm_page import HELP_BY_LABEL as CCM_HELP_BY_LABEL
 
 DESCRIPTIONS = {
   'DisengageOnAccelerator': 'When enabled, pressing the accelerator pedal will disengage openpilot.',
@@ -210,6 +211,8 @@ CONDITIONS = {
   'climb_on_bend_exit': 'Starts a climb as soon as a bend is over, instead of 2 seconds after it. Experimental still slows for the bend.',
   'climb_lead': ('Also climbs when a lead far ahead keeps pulling away and Experimental is not keeping up. Hands back ' +
     'once the gap closes or the lead stops pulling away.'),
+  'use': 'Chooses what Conditional Chill uses Chill for: climbing to the set speed, or the classic speed and lead conditions.',
+  'after_bend': 'Chooses when Chill may bring the speed back after Experimental has slowed for a bend.',
   'persist_manual': 'Remembers your manual driving-mode choice across drives. Changing this setting resets that choice to Automatic.',
 }
 
@@ -333,6 +336,8 @@ def purpose(row):
     return DESCRIPTIONS[key]
   if key.startswith(('wheel:', 'conditional:button:')):
     return f'Assigns the action performed by {row.label.lower()}.'
+  if key.startswith('conditional:ccm:') and row.label in CCM_HELP_BY_LABEL:
+    return CCM_HELP_BY_LABEL[row.label]  # one text, shared with the comma's own settings screen
   if key.startswith('conditional:'):
     section, field = key.split(':')[1:]
     if field in ('speed_mps', 'speed_with_lead_mps'):
@@ -402,6 +407,9 @@ def description(row):
   base = purpose(row)
   if base is None:
     return row.reason
+  if row.key.startswith('conditional:ccm:') and row.label in CCM_HELP_BY_LABEL:
+    # The row's help is the purpose already; only a greyed row's reason ("Turn on ...") is added.
+    return base if row.available or row.reason == base else ' '.join((base, row.reason))
   suffix = INITIALIZATION.get(row.key, '')
   if row.key.startswith('lane_change:') and row.key not in ('lane_change:close_gap', 'lane_change:close_gap_seconds', 'lane_change:reset'):
     suffix = 'Changes apply when the current signal and maneuver end; turning assistance off cancels it after the preference refresh.'
