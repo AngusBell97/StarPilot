@@ -65,9 +65,13 @@ class WorkerChannel:
 
 class TeslaReceiver:
   def __init__(self, params, actions, vehicle, *, clock=time.monotonic,
-               messages=lambda: None, channel_factory=WorkerChannel, speed_actions=None):
+               messages=lambda: None, channel_factory=WorkerChannel, speed_actions=None, keyed_actions=None):
     self.params, self.actions, self.vehicle = params, actions, vehicle
     self.speed_actions = speed_actions
+    # Looks up only the requested keys. The full catalog checks every settings
+    # page (including the maps package), which took 2.3 s on a cold first press
+    # and outlived MAX_AGE, so the press was dropped.
+    self.keyed_actions = keyed_actions
     self._restart_drive = None
     self._restarts = 0
     self._diagnostic_at = 0.
@@ -162,8 +166,12 @@ class TeslaReceiver:
     binding = doc['bindings'].get(name)
     if binding is None:
       return
-    catalog = self.speed_actions if binding['key'] in (SPEED_UP, SPEED_DOWN) and self.speed_actions is not None else self.actions
-    action = catalog().get(binding['key'])
+    if binding['key'] in (SPEED_UP, SPEED_DOWN) and self.speed_actions is not None:
+      action = self.speed_actions().get(binding['key'])
+    elif self.keyed_actions is not None:
+      action = self.keyed_actions({binding['key']}).get(binding['key'])
+    else:
+      action = self.actions().get(binding['key'])
     if action is None or not action.available:
       self._diagnostic('action_unavailable', event)
       return
