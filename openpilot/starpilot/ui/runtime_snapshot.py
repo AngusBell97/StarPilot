@@ -445,7 +445,6 @@ class RuntimeSnapshotAdapter:
         now_ns - self._appearance_read_ns >= 1_000_000_000):
       self._customization_value = read_customization(self.ui_state.params)
       self._appearance_value = onroad_appearance(self.ui_state.params)
-      self._lane_clean_arc = _text(self.ui_state.params, "LaneCenteringVersion") == "6"
       self._navigation_enabled = _flag(self.ui_state.params, "NavigationEnabled")
       self._show_curve_status = _flag(self.ui_state.params, "ShowCSCStatus")
       if self.appearance_override is not None:

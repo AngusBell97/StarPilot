@@ -31,18 +31,15 @@ def publication_program():
   advance = next(node for node in loop.body if isinstance(node, ast.Assign) and ast.unparse(node.targets[0]) == "last_vipc_frame_id")
   program = ast.Module(body=[copy.deepcopy(count), *slice_statements(loop.body), copy.deepcopy(advance)], type_ignores=[])
   services = [node.value.args[0].value for node in ast.walk(program) if sends(node)]
-  assert sorted(services) == sorted(["modelV2", "drivingModelData", "cameraOdometry", "laneChangeAssistWire", "laneObstacleWire"])
+  assert sorted(services) == sorted(["modelV2", "drivingModelData", "cameraOdometry", "laneChangeAssistWire"])
   return compile(ast.fix_missing_locations(program), "<actual modeld publication slice>", "exec")
 
 
 class TestModeldPublication(unittest.TestCase):
-  def replay(self, frames, *, model_output=True, lane_status=True, obstacle=None):
+  def replay(self, frames, *, model_output=True, lane_status=True):
     emitted = []
     namespace = {"max": max, "last_vipc_frame_id": frames[0] - 1, "model_output": object() if model_output else None,
-                 "pm": SimpleNamespace(send=lambda service, payload: emitted.append((service, payload))),
-                 "lane_obstacle": None, "model": object(), "obstacle_wire": None, "obstacle_msg": None}
-    if obstacle is not None:
-      namespace.update(obstacle)
+                 "pm": SimpleNamespace(send=lambda service, payload: emitted.append((service, payload)))}
     program = publication_program()
     for frame in frames:
       namespace["meta_main"] = SimpleNamespace(frame_id=frame)
@@ -74,21 +71,6 @@ class TestModeldPublication(unittest.TestCase):
     emitted = self.replay([1899, 1901, 1902], lane_status=False)
     self.assertEqual(len(emitted), 6)
     self.assertNotIn("laneChangeAssistWire", {service for service, _ in emitted})
-
-  def test_lane_obstacle_result_publishes_after_the_driving_model(self):
-    # Change 37: a detector result goes out after cameraOdometry on fresh frames only, never on its own.
-    model = object()
-    wire = {"lane_obstacle": SimpleNamespace(model=model), "model": model, "obstacle_wire": b"LOB1", "obstacle_msg": "msg"}
-    emitted = self.replay([1899, 1900, 1901], obstacle=wire)
-    self.assertEqual(len(emitted), 15)
-    self.assertEqual([service for service, _ in emitted][3:5], ["cameraOdometry", "laneObstacleWire"])
-    self.assertEqual(len(self.replay([1899, 1901, 1902], obstacle=wire)), 10)
-    self.assertEqual(self.replay([1899, 1900], model_output=False, obstacle=wire), [])
-
-  def test_lane_obstacle_stops_when_the_driving_model_changes(self):
-    wire = {"lane_obstacle": SimpleNamespace(model=object()), "model": object(), "obstacle_wire": b"LOB1", "obstacle_msg": "msg"}
-    emitted = self.replay([1899, 1900], obstacle=wire)
-    self.assertNotIn("laneObstacleWire", {service for service, _ in emitted})
 
   def test_pose_validity_still_rejects_missing_calibration_and_drops(self):
     tree = ast.parse((ROOT / "selfdrive/modeld/fill_model_msg.py").read_text())

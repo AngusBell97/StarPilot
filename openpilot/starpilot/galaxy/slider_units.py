@@ -56,8 +56,6 @@ def target(row, index):
   if category(row) == SPEED: return "km/h" if metric else "mph"
   if row.unit in ("km", "mi"): return "km" if metric else "mi"
   if category(row) == ROAD: return "m" if metric else "ft"
-  if row.key.startswith("LaneCenter") and (row.key.endswith(("Offset", "Clearance", "SmoothingDistance", "SingleDeadband", "OverrideStart", "OverrideFull"))):
-    return "cm" if metric else "in"
   if row.unit in ("cm", "in") and not row.key.endswith("CarWidth"): return "cm" if metric else "in"
   return "m" if metric else "ft"
 
@@ -99,19 +97,6 @@ def project(params, row, owner=None):
     default_value=number(float(row.default_value) * factor) if _numeric(row.default_value) else row.default_value,
     presets=tuple((number(float(v) * factor), convert_text(label, row.unit, dest)) if _numeric(v) else (v, label)
                   for v, label in row.presets))
-  if index and owner is not None and row.key.startswith("LaneCenter"):
-    from openpilot.starpilot.ui import lane_v4_menu as lane, lane_versions_menu as versions
-    logical = versions.REVERSE.get(row.key, row.key)
-    if logical in lane.DISTANCE_KEYS:
-      view = versions.View(owner) if row.key in versions.REVERSE else owner
-      # Reuse the existing physical bounds/peer guards and clean unit-specific grids.
-      shown = lane.present(view, replace(row, key=logical), index == 1)
-      converted = replace(converted, value=shown.value, minimum=shown.minimum, maximum=shown.maximum,
-        step=shown.step, unit=shown.unit, display_unit=shown.unit, default_value=shown.default_value,
-        available=shown.available, reason=shown.reason)
-    elif row.key in ("LaneCenteringDomOffset", "LaneCenteringV9Offset"):
-      converted = replace(converted, minimum=-30 if index == 1 else -11.5, maximum=30 if index == 1 else 11.5,
-                          step=1 if index == 1 else .25)
   return replace(converted, reason=help_text(converted.reason, converted.unit))
 
 

@@ -279,8 +279,6 @@ def feature_footer_target(x: float, y: float, state: FeatureSettingsState) -> in
 def feature_parent_page(page: str) -> str | None:
   if page == FeaturePage.HUB:
     return None
-  if page.startswith("lane/"):
-    return page.rsplit("/", 1)[0]
   if "/" in page:
     return page.split("/", maxsplit=1)[0]
   if page in (FeaturePage.AGGRESSIVE, FeaturePage.STANDARD, FeaturePage.RELAXED, FeaturePage.TRAFFIC):
@@ -290,11 +288,8 @@ def feature_parent_page(page: str) -> str | None:
 
 def feature_parent_title(page: str) -> str:
   parent = feature_parent_page(page)
-  if parent and parent.startswith("lane/"):
-    from openpilot.starpilot.ui.lane_v4_menu import SECTIONS
-    return SECTIONS[parent][0]
   return {None: "StarPilot", FeaturePage.HUB: "Driving Controls", FeaturePage.PROFILES: "Long Planner",
-          FeaturePage.LANE: "Lane Centering", FeaturePage.CONDITIONAL: "Conditional Driving Modes", FeaturePage.SLC: "Speed Limit Controller", FeaturePage.TORQUE: "Steering and Torque"}.get(parent, (parent or "").replace("_", " ").title())
+          FeaturePage.CONDITIONAL: "Conditional Driving Modes", FeaturePage.SLC: "Speed Limit Controller", FeaturePage.TORQUE: "Steering and Torque"}.get(parent, (parent or "").replace("_", " ").title())
 
 
 def boolean_value(row: FeatureRow) -> bool | None:

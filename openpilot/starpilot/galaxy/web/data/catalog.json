@@ -108,7 +108,7 @@
       "name": "Model Manager",
       "path": "/manage_models",
       "icon": "bi-cpu",
-      "description": "Models, downloads, Jetlink and Model Laboratory pairs",
+      "description": "Models, downloads, Jetlink and Model Laboratory",
       "availability": "local-only"
     },
     {

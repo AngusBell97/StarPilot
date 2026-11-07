@@ -1,7 +1,6 @@
 """Authenticated local projection of the shared saved-feature owner."""
 from openpilot.starpilot.galaxy import slider_units
 
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu, lane_v9_menu
 from openpilot.starpilot.ui.lane_change_feature import confirm_question as lane_change_question
 
 from collections.abc import Callable
@@ -17,7 +16,6 @@ from typing import Protocol, cast
 
 from openpilot.starpilot.ui.feature_settings_owner import FeatureSettingsOwner
 from openpilot.starpilot.ui.slc_menu import SLC_PAGES
-from openpilot.starpilot.ui import lane_v4_menu, lane_versions_menu, lane_v8_menu, lane_v10_menu
 from openpilot.starpilot.galaxy.setting_descriptions import description
 from openpilot.starpilot.galaxy.localization_settings import LocalizationSettingsOwner
 from openpilot.starpilot.ui.controller_feature import SETUP_ACTION, SETUP_QUESTION
@@ -43,7 +41,7 @@ from openpilot.starpilot.ui.sentry_owner import RESET as SENTRY_RESET, SentryOwn
 from openpilot.starpilot.ui.vasm_owner import ANNOTATION as VASM_ANNOTATION, RESET as VASM_RESET, VASMOwner, validated_annotation
 
 
-PAGES = frozenset((*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES, *SLC_PAGES, "hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities", "traffic", "aggressive", "standard", "relaxed",
+PAGES = frozenset((*SLC_PAGES, "hub", "localization", "developer", "vehicle", "slc", "lane", "lane_change", "profiles", "personalities", "traffic", "aggressive", "standard", "relaxed",
                    "curve", "torque", "tuning", "torque/bluepilot", "aol", "wheel", "appearance", "display", "data", "power", "sounds", "pip", "sentry", "vasm",
                    "conditional", "conditional/cem", "conditional/ccm",
                    *(f"{name}/{category}" for name in ("traffic", "aggressive", "standard", "relaxed")
@@ -397,8 +395,7 @@ def _projection(row: FeatureRow, page: str) -> dict:
                           row.key in (PIP_RESET, PIP_EDITOR, VASM_RESET, VASM_ANNOTATION) or row.key.startswith(PIP_FORMAT_PREFIX)),
           "repairValue": row.repair_value, "defaultValue": row.default_value, "resetAvailable": row_default(row) is not None,
           "unitPrecision": 3 if any(key in slider_units.SPECS for key, _ in row.dependencies) else None,
-          "displayScale": "lane-strength" if row.key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength") else None,
-          "rangePair": lane_versions_menu.range_descriptor(row) if page.startswith("lane") else None,
+          "displayScale": "lane-strength" if row.key == "LaneCenteringStrength" else None,
           **({"coordinate": row.key.removeprefix("torque:surface:")} if row.key.startswith("torque:surface:") and row.key != "torque:surface:reset" else {}),
           "heading": is_heading(row.key),
           **({"previewSound": row.key} if row.key in SOUND_SPECS else {})}
@@ -408,7 +405,7 @@ def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
   key = request.key
   if key in POWER_KEYS:
     return power_question(_power_request(request))
-  if key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength"):
+  if key == "LaneCenteringStrength":
     raw = float(request.value)
     level = (1 + (raw - row.minimum) * 4 / (100 - row.minimum) if raw <= 100 else
              5 + (raw - 100) * 5 / (row.maximum - 100))
@@ -512,7 +509,7 @@ class SettingsGateway:
     with self.lock:
       ctx = self.context.sample()
       sections = []
-      for page in ("torque", "lane", *lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES, "lane_change", "aol", "conditional", "profiles", "slc", *SLC_PAGES, "curve"):
+      for page in ("torque", "lane", "lane_change", "aol", "conditional", "profiles", "slc", *SLC_PAGES, "curve"):
         state = self._state(page, ctx)
         sections.append({"title": state.title,
                          "rows": [{"label": row.label, "value": row.value} for row in state.rows[:64]]})
@@ -673,13 +670,13 @@ class SettingsGateway:
       return self._vasm_owner(ctx).snapshot()
     state = self._owner(ctx).snapshot(page, parked=ctx.parked,
                                       system_long=_qualified(ctx, "long"),
-                                      lateral_context=_qualified(ctx, "lane") or ((page == "lane" or page in (*lane_v4_menu.PAGES, *lane_v8_menu.PAGES, *lane_v9_menu.PAGES)) and _qualified(ctx, "lane_live")),
-                                      metric=ctx.metric, configure_while_driving=True, lane_v4=True)
+                                      lateral_context=_qualified(ctx, "lane") or (page == "lane" and _qualified(ctx, "lane_live")),
+                                      metric=ctx.metric, configure_while_driving=True)
     if ctx.editing_saved_vehicle:
       from opendbc.car.values import PLATFORMS
       platform = PLATFORMS[ctx.cp.carFingerprint]
       label = platform.config.car_docs[0].name if platform.config.car_docs else str(ctx.cp.carFingerprint).replace("_", " ").title()
-      return replace(state, subtitle=f"{label} Â· Saved vehicle settings. {state.subtitle}")
+      return replace(state, subtitle=f"{label} · Saved vehicle settings. {state.subtitle}")
     return state
 
   def _clean(self) -> None:
@@ -846,26 +843,6 @@ class SettingsGateway:
         raise SettingsChanged("Unavailable choice")
       request = replace(request, confirmation=True)
     native_request = self._native_request(view.page, ctx, request)
-    if native_request.key in lane_v8_menu.KEYS:
-      error = lane_v8_menu.error(self._owner(ctx), native_request)
-      if error:
-        raise SettingsChanged(error)
-    if native_request.key in lane_v10_menu.KEYS:
-      error = lane_v10_menu.error(self._owner(ctx), native_request)
-      if error:
-        raise SettingsChanged(error)
-    if native_request.key in lane_v9_menu.KEYS:
-      error = lane_v9_menu.error(self._owner(ctx), native_request)
-      if error:
-        raise SettingsChanged(error)
-    if native_request.key in lane_versions_menu.REVERSE or native_request.key in lane_versions_menu.V51_RECOVERY or native_request.key in (lane_versions_menu.VERSION, lane_versions_menu.PREVIEW, lane_versions_menu.V6_PREVIEW, lane_versions_menu.V51_PREVIEW):
-      error = lane_versions_menu.error(self._owner(ctx), native_request)
-      if error:
-        raise SettingsChanged(error)
-    if native_request.key in lane_v4_menu.CHECK_KEYS:
-      error = lane_v4_menu.edit_error(self._owner(ctx), native_request)
-      if error:
-        raise SettingsChanged(error)
     with self.lock:
       self._clean()
       if len(self.intents) >= MAX_INTENTS:

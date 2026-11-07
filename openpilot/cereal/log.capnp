@@ -2603,7 +2603,6 @@ struct Event {
     deviceState @6 :DeviceState;
     chestnutState @152 :ChestnutState;
     chestnutGpuState @153 :ChestnutState;
-    laneObstacleWire @159 :Data;
     logMessage @18 :Text;
     errorLogMessage @85 :Text;
 
@@ -2665,13 +2664,6 @@ struct Event {
     mapdExtendedOut @143 :Custom.MapdExtendedOut;
     mapdIn @144 :Custom.MapdIn;
     mapdOut @145 :Custom.MapdOut;
-
-    # SP-016: append-only services; old Dom ordinals conflict with 7.0 SLC.
-    laneCenteringState @154 :Custom.LaneCenteringState;
-    laneCenteringGeometryRequest @155 :Custom.LaneCenteringGeometryRequest;
-    laneCenteringGeometryResult @156 :Custom.LaneCenteringGeometryResult;
-    laneCenteringControl @157 :Custom.LaneCenteringControl;
-    starpilotCarControl @158 :Custom.StarPilotCarControl;
 
     # *********** legacy + deprecated ***********
     model @9 :Deprecated.ModelData; # TODO: rename modelV2 and mark this as deprecated

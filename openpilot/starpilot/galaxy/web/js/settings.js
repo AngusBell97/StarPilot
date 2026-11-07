@@ -3,7 +3,7 @@ import { GxDialog } from "./dialog.js"
 import { GxState } from "./state.js"
 import { connectionError } from "./polling.js"
 import { reactive, nextTick } from "../vendor/vue/vue.esm-browser.js"
-import { GalaxySettingRow, GalaxyRangeSettingRow, pairedSettingRows, settingControl } from "./galaxy-setting-row.js"
+import { GalaxySettingRow, settingControl } from "./galaxy-setting-row.js"
 import { ReverseProxySettings } from "./reverse-proxy.js"
 import { OnroadLayoutPage } from "./onroad-layout.js"
 import { FavoritesPage } from "./favorites.js"
@@ -274,7 +274,7 @@ const SETTINGS_PAGE_INTRO = `
 
 export const SettingsPage = {
   emits: ["nested"],
-  components: { GxDialog, GxState, GxTrail, GalaxySettingRow, GalaxyRangeSettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
+  components: { GxDialog, GxState, GxTrail, GalaxySettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
   props: {
     mode: { type: String, required: true }, unauthorized: { type: Function, required: true },
     initialPage: { type: String, default: "hub" }, title: { type: String, default: "Toggles" },
@@ -360,7 +360,7 @@ export const SettingsPage = {
       if (inHub && section.id === "longitudinal") {
         entries.sort((a, b) => section.pages.indexOf(a.row.page) - section.pages.indexOf(b.row.page))
       }
-      return pairedSettingRows(entries).filter(({ row }) => !isPipCropRow(row)).filter(({ row, index }) => {
+      return entries.filter(({ row }) => !isPipCropRow(row)).filter(({ row, index }) => {
         const previous = rows[index - 1]
         return !(["sounds", "display"].includes(this.state.data?.page) && row.repairValue === "Auto" &&
           previous?.choices?.includes("Auto") && settingControl(previous) === "slider" && row.label === `Use Auto ${previous.label}`)
