@@ -127,6 +127,13 @@ function hardwareLabel(model) {
   return "Hardware unknown";
 }
 
+// The coloured hardware tag on each model row.
+export function hardwareTag(model) {
+  if (model?.requiresGpu === true) return { label: "eGPU", tone: "egpu", title: "Big model: runs on an external GPU" }
+  if (model?.requiresGpu === false) return { label: "Small", tone: "small", title: "Small model: runs on the comma itself" }
+  return { label: "Hardware unknown", tone: "unknown", title: "" }
+}
+
 function bytes(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
@@ -435,13 +442,11 @@ export function matchesSearch(model, query) {
   return words.every(word => text.includes(word))
 }
 
-// Model list sort orders (ties fall back to the name). Version is the model format (v8 to v16), newest first.
-const formatNumber = model => Number(String(model?.version || "").replace(/^v/i, "")) || 0
+// Model list sort orders (ties fall back to the name).
 const modelBytes = model => bytes(model?.fileSizeBytes) || bytes(model?.declaredSizeBytes || model?.artifactSize) || 0
 export const MODEL_SORTS = Object.freeze({
   release_date: (a, b) => (Date.parse(b.released) || 0) - (Date.parse(a.released) || 0),
   alphabetical: () => 0,
-  version: (a, b) => formatNumber(b) - formatNumber(a),
   size: (a, b) => modelBytes(b) - modelBytes(a),
 })
 
@@ -462,7 +467,8 @@ export const ModelsPage = {
       runtime: { status: "idle", data: null, error: "" }, dialog: null, pendingChoice: null,
       lab: null, labError: "", labDirty: false, labConfig: { enabled: false, lateralModel: "", longitudinalModel: "" }, focused: false,
       // Single model / Model pair selector: the mode being shown while a change is saving, or before a pair can switch on.
-      pairView: null }
+      pairView: null,
+      jetlinkOpen: false, filtersOpen: false }
   },
   computed: {
     currentLabel() { return this.models.find(m => m.value === this.currentModel)?.label || this.currentModel || "" },
@@ -483,13 +489,17 @@ export const ModelsPage = {
       return this.models.filter(m => matchesHardware(m, this.hardwareFilter))
         .filter(m => this.userFilter === "all" || !!m.userFavorite === (this.userFilter === "yes"))
         .filter(m => this.communityFilter === "all" || !!m.communityFavorite === (this.communityFilter === "yes"))
-        .filter(m => !this.pairableFilter || this.labRow(m)?.modelLabArtifactAvailable === true)
+        .filter(m => !this.pairableFilter || this.isPairable(m))
         .filter(m => !this.installedFilter || m.installed === true)
         .filter(m => matchesSearch(m, this.search))
         .sort((a, b) => (MODEL_SORTS[this.sortMode]?.(a, b) || 0) ||
           (a.label || a.value).localeCompare(b.label || b.value, undefined, { sensitivity: "base", numeric: true }))
     },
     driveMode() { return this.pairView ?? (this.lab?.configuration.enabled ? "pair" : "single") },
+    // Filters set in the funnel menu (search not included), shown as a count on the funnel.
+    filterCount() {
+      return [this.hardwareFilter !== "both", this.installedFilter, this.userFilter === "yes", this.communityFilter === "yes", this.pairableFilter].filter(Boolean).length
+    },
     filtersActive() { return !!(this.search || this.installedFilter || this.pairableFilter || this.userFilter !== "all" || this.communityFilter !== "all" || this.hardwareFilter !== "both") },
     // eGPU variants only matter for model pairs.
     showLabVariants() { return this.driveMode === "pair" || this.pairableFilter },
@@ -552,6 +562,7 @@ export const ModelsPage = {
   },
   beforeUnmount() {
     this.disposed = true
+    if (this.filterAway) { document.removeEventListener("pointerdown", this.filterAway); document.removeEventListener("keydown", this.filterAway) }
     this.finishDialog(false)
     document.removeEventListener("visibilitychange", this.visibility)
     this.feed.stop()
@@ -570,6 +581,26 @@ export const ModelsPage = {
       })
     },
     labRow(model) { return this.labRows.get(model?.value) },
+    isPairable(model) { return this.labRow(model)?.modelLabArtifactAvailable === true },
+    hardwareTag,
+    // The funnel menu closes on a click elsewhere or Escape.
+    toggleFilters() { this.filtersOpen ? this.closeFilters() : this.openFilters() },
+    openFilters() {
+      this.filtersOpen = true
+      this.filterAway = event => {
+        if (event.type === "keydown" ? event.key === "Escape" : !this.$refs.filterMenu?.contains(event.target)) this.closeFilters(event.type === "keydown")
+      }
+      setTimeout(() => {
+        if (!this.filtersOpen) return
+        document.addEventListener("pointerdown", this.filterAway)
+        document.addEventListener("keydown", this.filterAway)
+      })
+    },
+    closeFilters(refocus = false) {
+      this.filtersOpen = false
+      if (this.filterAway) { document.removeEventListener("pointerdown", this.filterAway); document.removeEventListener("keydown", this.filterAway); this.filterAway = null }
+      if (refocus) this.$refs.filterButton?.focus()
+    },
     labStatusLabel: laboratoryStatusLabel,
     labReason(model) { const row = this.labRow(model); return row && LAB_REASON_STATES.has(row.modelLabStatus) ? row.modelLabReason : "" },
     labModelLabel(id) { return this.lab?.models.find(m => m.value === id)?.label || id || "Not selected" },
@@ -763,15 +794,6 @@ export const ModelsPage = {
         <GxNotice v-if="error" tone="danger" title="Model Manager">{{ error }}</GxNotice>
         <GxNotice v-if="status.isOnroad" tone="warn">Selections apply next onroad cycle. Park before downloading models or changing Jetlink.</GxNotice>
         <GxNotice v-if="status.downloading" :title="(status.refreshing ? 'Checking ' : 'Downloading ') + downloadTargetLabel">{{ status.progress || 'Keep the device connected until the download finishes.' }}</GxNotice>
-        <section class="gx-card gx-model-overview">
-          <div class="gx-section__header">
-            <i aria-hidden="true" class="bi bi-cpu"></i>
-            <span class="gx-section__title">Models</span>
-            <span v-if="currentLabel" class="gx-section__count">Selected: {{ currentLabel }}</span>
-          </div>
-          <GxSummary :items="[{label: 'Installed', value: summary.installed}, {label: 'Missing', value: summary.missing}, {label: 'Total', value: summary.total}, {label: 'Running model', value: runningModelLabel}]" />
-        </section>
-
         <section class="gx-card gx-model-choose">
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-sliders"></i>
@@ -850,9 +872,13 @@ export const ModelsPage = {
           </div>
         </section>
 
-        <section v-if="status.jetlink" class="gx-card">
-          <div class="gx-section__header"><i aria-hidden="true" class="bi bi-usb-symbol"></i><span class="gx-section__title">Jetlink</span></div>
-          <div class="gx-panel gx-stack">
+        <section v-if="status.jetlink" class="gx-card gx-model-jetlink">
+          <button type="button" class="gx-section__header gx-model-collapse" :aria-expanded="String(jetlinkOpen)" aria-controls="gx-model-jetlink-panel" @click="jetlinkOpen = !jetlinkOpen">
+            <i aria-hidden="true" class="bi bi-usb-symbol"></i><span class="gx-section__title">Jetlink</span>
+            <span class="gx-chip">{{ status.jetlink.state }}</span>
+            <i aria-hidden="true" class="bi bi-chevron-down gx-model-collapse__chevron"></i>
+          </button>
+          <div v-show="jetlinkOpen" id="gx-model-jetlink-panel" class="gx-panel gx-stack">
             <div class="gx-field-group">
               <label for="gx-jetlink-mode" class="gx-row__label">Remote model connection</label>
               <GalaxySelect id="gx-jetlink-mode" class="gx-field" :value="pendingChoice?.action === 'jetlink' ? pendingChoice.value : status.jetlink.mode" :disabled="!actionAvailable('jetlink')" @change="configureJetlink($event.target.value)">
@@ -879,23 +905,28 @@ export const ModelsPage = {
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-list-ul"></i>
             <span class="gx-section__title">Browse models</span>
-            <span class="gx-section__count">Showing {{ sorted.length }} of {{ models.length }}</span>
+            <span class="gx-section__count"><span class="gx-model-count-word">Showing </span>{{ sorted.length }} of {{ models.length }}</span>
             <button v-if="status.downloading" type="button" class="gx-btn gx-btn--danger gx-model-btn" :disabled="!actionAvailable('cancel')" @click="runAction('cancel')"><i aria-hidden="true" class="bi bi-stop-circle"></i> {{ status.refreshing ? 'Stop check' : 'Cancel download' }}</button>
             <!-- The list checks for new models by itself while parked (every 5 minutes at most); this checks right now. -->
             <button type="button" class="gx-icon-btn gx-model-refresh" :disabled="!actionAvailable('refresh')" aria-label="Check for new models" title="Check for new models" @click="runAction('refresh')"><i aria-hidden="true" class="bi" :class="busy === 'refresh:' || status.refreshing ? 'bi-arrow-repeat gx-model-spin' : 'bi-arrow-clockwise'"></i></button>
           </div>
           <div class="gx-panel gx-stack gx-model-tools">
-            <input class="gx-field gx-model-search" type="search" v-model.trim="search" placeholder="Search by name, ID, series or version" aria-label="Search models">
-            <div class="gx-model-filters" role="group" aria-label="Filter models">
-              <span class="gx-model-filters__label">Filters</span>
-              <div class="gx-model-chips">
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="['both', 'comma'].includes(hardwareFilter)" @click="toggleHardware('comma', !['both', 'comma'].includes(hardwareFilter))">Small · On-device</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="['both', 'gpu'].includes(hardwareFilter)" @click="toggleHardware('gpu', !['both', 'gpu'].includes(hardwareFilter))">Big · GPU</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="installedFilter" @click="installedFilter = !installedFilter">Installed only</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="userFilter === 'yes'" @click="userFilter = userFilter === 'yes' ? 'all' : 'yes'">Your favorites only</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="communityFilter === 'yes'" @click="communityFilter = communityFilter === 'yes' ? 'all' : 'yes'">Community favorites only</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="pairableFilter" @click="pairableFilter = !pairableFilter">Pairable only</button>
-                <button v-if="filtersActive" type="button" class="gx-model-clear" @click="clearFilters">Clear</button>
+            <div class="gx-model-searchbar">
+              <input class="gx-field gx-model-search" type="search" v-model.trim="search" placeholder="Search models" aria-label="Search models">
+              <div ref="filterMenu" class="gx-model-filter">
+                <button ref="filterButton" type="button" class="gx-icon-btn gx-model-filter__button" :class="{'gx-model-filter__button--on': filterCount}" :aria-expanded="String(filtersOpen)" aria-controls="gx-model-filter-menu" aria-haspopup="true"
+                  :aria-label="filterCount ? 'Filters, ' + filterCount + ' on' : 'Filters'" title="Filters" @click="toggleFilters"><i aria-hidden="true" class="bi" :class="filterCount ? 'bi-funnel-fill' : 'bi-funnel'"></i><span v-if="filterCount" class="gx-model-filter__count" aria-hidden="true">{{ filterCount }}</span></button>
+                <div v-if="filtersOpen" id="gx-model-filter-menu" class="gx-model-filter__menu" role="group" aria-label="Filter models">
+                  <span class="gx-model-filter__heading">Hardware</span>
+                  <label class="gx-model-filter__option"><input type="checkbox" :checked="['both', 'comma'].includes(hardwareFilter)" @change="toggleHardware('comma', $event.target.checked)"><span class="gx-model-tag gx-model-tag--small">Small</span> On the comma</label>
+                  <label class="gx-model-filter__option"><input type="checkbox" :checked="['both', 'gpu'].includes(hardwareFilter)" @change="toggleHardware('gpu', $event.target.checked)"><span class="gx-model-tag gx-model-tag--egpu">eGPU</span> External GPU</label>
+                  <span class="gx-model-filter__heading">Show only</span>
+                  <label class="gx-model-filter__option"><input type="checkbox" v-model="installedFilter"> Installed</label>
+                  <label class="gx-model-filter__option"><input type="checkbox" :checked="userFilter === 'yes'" @change="userFilter = $event.target.checked ? 'yes' : 'all'"> Your favorites</label>
+                  <label class="gx-model-filter__option"><input type="checkbox" :checked="communityFilter === 'yes'" @change="communityFilter = $event.target.checked ? 'yes' : 'all'"> Community favorites</label>
+                  <label class="gx-model-filter__option"><input type="checkbox" v-model="pairableFilter"> <span class="gx-model-tag gx-model-tag--pair">Pairable</span></label>
+                  <button type="button" class="gx-model-clear" :disabled="!filterCount" @click="clearFilters">Clear filters</button>
+                </div>
               </div>
             </div>
             <div class="gx-model-filters" role="group" aria-label="Sort models">
@@ -903,7 +934,6 @@ export const ModelsPage = {
               <div class="gx-model-chips">
                 <button type="button" class="gx-chip gx-model-chip" :aria-pressed="sortMode === 'release_date'" @click="sortMode = 'release_date'">Newest</button>
                 <button type="button" class="gx-chip gx-model-chip" :aria-pressed="sortMode === 'alphabetical'" @click="sortMode = 'alphabetical'">Name</button>
-                <button type="button" class="gx-chip gx-model-chip" :aria-pressed="sortMode === 'version'" title="Model format version, newest first" @click="sortMode = 'version'">Version</button>
                 <button type="button" class="gx-chip gx-model-chip" :aria-pressed="sortMode === 'size'" title="Largest first" @click="sortMode = 'size'">Size</button>
               </div>
             </div>
@@ -917,18 +947,16 @@ export const ModelsPage = {
                   <strong v-else>{{ m.label || m.value }}</strong>
                   <span v-if="isPolaris(m)" class="gx-chip gx-polaris-badge"><span class="gx-polaris-badge__star" aria-hidden="true">✦</span> StarPilot Custom</span>
                   <button v-if="isPolaris(m)" type="button" class="gx-icon-btn gx-model-about" aria-label="About Polaris models" title="About Polaris models" @click="polarisAbout = true"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
-                  <span v-for="role in activeRoles(m)" :key="role" class="gx-chip gx-chip--selected">{{ role }}</span>
+                  <span v-for="role in activeRoles(m)" :key="role" class="gx-chip gx-chip--selected gx-model-active"><i aria-hidden="true" class="bi bi-check-circle-fill"></i> {{ role }}</span>
                   <span v-for="role in pairRoles(m)" :key="role" class="gx-chip">{{ role }}</span>
                   <span v-if="m.communityFavorite" class="gx-chip">Community Favorite</span>
                   <span v-if="m.builtin" class="gx-chip">Built-in</span>
                   <span v-if="m.partial" class="gx-chip">Partial Files</span>
                 </div>
                 <div class="gx-model-item__meta">
-                  <span :class="{'gx-model-egpu': m.requiresGpu === true}" :title="m.requiresGpu === true ? 'Runs on an external GPU' : null">{{ hardwareLabel(m) }}</span>
-                  <span v-if="m.version" :aria-label="'Version '+ m.version" :title="'Model format ' + m.version + ': how StarPilot reads this model’s inputs and outputs (v8 to v16; higher is the newer format)'">{{ m.version }}</span>
-                  <span v-if="m.released" :aria-label="'Released '+ m.released">{{ m.released }}</span>
-                  <span>{{ fileSizeText(m) }}</span>
-                  <span class="gx-model-item__id">{{ m.value }}</span>
+                  <span class="gx-model-tag" :class="'gx-model-tag--' + hardwareTag(m).tone" :title="hardwareTag(m).title || null">{{ hardwareTag(m).label }}</span>
+                  <span v-if="isPairable(m)" class="gx-model-tag gx-model-tag--pair" title="An eGPU variant is published, so this model can be part of a model pair"><i aria-hidden="true" class="bi bi-bezier2"></i> Pairable</span>
+                  <span class="gx-model-item__facts"><span v-if="m.released" :aria-label="'Released '+ m.released">{{ m.released }}</span><span>{{ fileSizeText(m) }}</span></span>
                 </div>
                 <p v-if="m.unavailableReason && !(rowState(m) === 'available' && m.downloadAvailable && m.unavailableReason === 'Download required')" class="gx-model-reason">{{ m.unavailableReason }}</p>
                 <!-- eGPU variants matter only for model pairs, so they show with Model pair or Pairable only. -->

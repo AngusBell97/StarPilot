@@ -111,9 +111,9 @@ assert.doesNotMatch(app, /togglePin|gx-drawer__pin|gx-appbar__menu/)
 assert.match(app, /<SettingsIndex v-else-if="route\.path === '\/settings'"/)
 assert.match(app, /<MenuGroupPage v-else-if="menuGroup"/)
 assert.match(app, /menu-mode embedded/)
-// Pages opened from the menu never show the old Toggles category chips (Developer Options opens the developer section).
+// No settings page shows the old Toggles category bar any more, however it is reached (Developer Options opens the developer section).
 const settingsSource = readFileSync(new URL("../web/js/settings.js", import.meta.url), "utf8")
-assert.match(settingsSource, /<div v-if="!menuMode && !navigationPath && mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs"/)
+assert.doesNotMatch(settingsSource, /class="gx-settings-tabs"/)
 assert.match(app, /v-else-if="route\.path === '\/developer\/connect'"[^>]*initial-section="developer"\s*menu-mode/)
 const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8")
 assert.match(html, /css\/menu\.css/)

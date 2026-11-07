@@ -576,9 +576,7 @@ export const SettingsPage = {
     <div class="gx-settings-shell" :class="{ 'gx-settings-shell--path': navigationPath }">
       <template v-if="navigationPath">
         <div v-if="!state.layoutOpen && !state.favoritesOpen" class="gx-settings__header gx-page-header"><h2>{{ pageTitle }}</h2></div>
-        <div v-if="mode === 'local'" class="gx-settings-tabs" aria-label="Settings sections">
-          <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :disabled="busy" :aria-pressed="section.id === activeSection.id" @click="selectCategory(section)">{{ section.label }}</button>
-        </div>
+        <!-- Galaxy menu: the side menu (menu.js) replaced the Toggles category bar, so no page shows it. -->
       </template>
     <OnroadLayoutPage ref="layoutEditor" v-if="state.layoutOpen" :mode="mode" :unauthorized="unauthorized" :initial-panel="state.layoutPanel" @target="openLayoutTarget" @close="closeLayout" />
     <FavoritesPage ref="favoritesEditor" v-else-if="state.favoritesOpen" :mode="mode" :unauthorized="unauthorized" @close="closeFavorites" />
@@ -587,9 +585,6 @@ export const SettingsPage = {
         <button v-if="state.data && state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button></div>
       <h3 v-if="embedded && heading" class="gx-menu-embed-title">{{ heading }}</h3>
       <div v-if="!menuMode && !navigationPath && title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
-        <div v-if="!menuMode && !navigationPath && mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs" aria-label="Settings sections">
-          <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :aria-pressed="section.id === activeSection.id" @click="selectSection(section)">{{ section.label }}</button>
-        </div>
       <div v-if="pageDescription && !onlyRows" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
       <GxState v-if="mode !== 'local'">Local settings are unavailable in preview.</GxState>
       <template v-else>

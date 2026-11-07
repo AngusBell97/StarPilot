@@ -72,7 +72,7 @@ assert.match(template,/aria-label="Longitudinal model"/)
 assert.ok(template.includes(`@click="setDriveMode('pair')"><i aria-hidden="true" class="bi bi-bezier2"></i> Model pair</button>`))
 assert.match(template,/Verified downloads/)
 assert.match(template,/eGPU variant/)
-assert.match(template,/Pairable only/)
+assert.match(template,/v-model="pairableFilter"> <span class="gx-model-tag gx-model-tag--pair">Pairable<\/span>/) // Galaxy: the Pairable filter lives in the funnel menu
 assert.doesNotMatch(template,/Available models|Compose a pair|Catalog models/)
 assert.equal(laboratoryStatusLabel({modelLabStatus:"runtime-unavailable"}), "Downloaded")
 assert.equal(laboratoryStatusLabel({modelLabStatus:"unsupported"}), "Not supported")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { ModelsPage, MODEL_SORTS } from "../web/js/models.js"
+import { ModelsPage, MODEL_SORTS, hardwareTag } from "../web/js/models.js"
 
 const template = ModelsPage.template
 
@@ -38,17 +38,32 @@ const page = (enabled, available = () => true) => {
   assert.equal(view.pairView, null)
 }
 
-// Compact list with Filters and Sort by; no Download Missing Models; catalog check is a small refresh button.
+// Compact list; filters sit in a funnel menu beside the search; Sort by stays a row of chips.
 assert.match(template, /<ul v-else class="gx-model-list" aria-label="Models">/)
-assert.match(template, /class="gx-model-filters__label">Filters</)
+assert.match(template, /class="gx-icon-btn gx-model-filter__button"[^>]*aria-haspopup="true"/)
+assert.match(template, /'bi-funnel-fill' : 'bi-funnel'/)
+assert.match(template, /<div v-if="filtersOpen" id="gx-model-filter-menu"/)
+assert.doesNotMatch(template, /class="gx-model-filters__label">Filters</)
 assert.match(template, /class="gx-model-filters__label">Sort by</)
+// No Download Missing Models; the catalog check is a small refresh button.
 assert.doesNotMatch(template, /Download Missing Models/)
 assert.doesNotMatch(template, /Check model catalog/)
 assert.match(template, /class="gx-icon-btn gx-model-refresh"[^>]*aria-label="Check for new models"[^>]*@click="runAction\('refresh'\)"/)
 assert.match(template, /Cancel download/)
-assert.match(template, /title="'Model format ' \+ m\.version/)
+// No overview strip at the top; Jetlink starts collapsed.
+assert.doesNotMatch(template, /gx-model-overview|label: 'Running model'/)
+assert.match(template, /class="gx-section__header gx-model-collapse" :aria-expanded="String\(jetlinkOpen\)"/)
+assert.match(template, /<div v-show="jetlinkOpen" id="gx-model-jetlink-panel"/)
+assert.equal(ModelsPage.data().jetlinkOpen, false)
+// Rows: tags instead of the hardware text, no format version or model ID; active models are marked.
+const list = template.slice(template.indexOf('<ul v-else class="gx-model-list"'))
+assert.doesNotMatch(list, /m\.version|gx-model-item__id|\{\{ m\.value \}\}/, "the pair pickers keep the version; the list does not")
+assert.match(template, /class="gx-model-tag" :class="'gx-model-tag--' \+ hardwareTag\(m\)\.tone"/)
+assert.match(template, /<span v-if="isPairable\(m\)" class="gx-model-tag gx-model-tag--pair"/)
+assert.match(template, /gx-chip--selected gx-model-active"><i aria-hidden="true" class="bi bi-check-circle-fill"><\/i>/)
+assert.deepEqual([true, false, undefined].map(requiresGpu => hardwareTag({ requiresGpu }).tone), ["egpu", "small", "unknown"])
 
-// Sorts: newest, name, model format version, size; ties fall back to the name.
+// Sorts: newest, name, size; ties fall back to the name.
 const models = [
   { value: "a", label: "Alpha", version: "v9", released: "2025-01-01", artifactSize: 300 },
   { value: "b", label: "Beta", version: "v16", released: "2026-11-05", artifactSize: 100 },
@@ -57,9 +72,13 @@ const models = [
 const order = sortMode => ModelsPage.computed.sorted.call({ ...ModelsPage.data(), hardwareFilter: "both", labRow: () => null, models, sortMode }).map(m => m.value)
 assert.deepEqual(order("release_date"), ["b", "c", "a"])
 assert.deepEqual(order("alphabetical"), ["a", "b", "c"])
-assert.deepEqual(order("version"), ["b", "c", "a"])
 assert.deepEqual(order("size"), ["c", "a", "b"])
-assert.deepEqual(Object.keys(MODEL_SORTS), ["release_date", "alphabetical", "version", "size"])
+assert.deepEqual(Object.keys(MODEL_SORTS), ["release_date", "alphabetical", "size"])
+
+// The funnel shows how many filters are on (search is separate).
+const count = state => ModelsPage.computed.filterCount.call({ hardwareFilter: "both", installedFilter: false, userFilter: "all", communityFilter: "all", pairableFilter: false, ...state })
+assert.equal(count({}), 0)
+assert.equal(count({ hardwareFilter: "gpu", installedFilter: true, pairableFilter: true }), 3)
 
 // eGPU variant details only with Model pair or Pairable only.
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pairableFilter: false }), false)
@@ -68,4 +87,4 @@ assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pai
 
 const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8")
 assert.match(html, /css\/model-list\.css/)
-console.log("Model Manager selector, compact list, filters and sorts passed")
+console.log("Model Manager selector, compact list, tags, filter menu and sorts passed")
