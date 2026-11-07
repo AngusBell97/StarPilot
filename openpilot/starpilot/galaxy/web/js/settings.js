@@ -273,7 +273,7 @@ const SETTINGS_PAGE_INTRO = `
 `
 
 export const SettingsPage = {
-  emits: ["nested"],
+  emits: ["nested", "open-page"],
   components: { GxDialog, GxState, GxTrail, GalaxySettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
   props: {
     mode: { type: String, required: true }, unauthorized: { type: Function, required: true },
@@ -282,6 +282,15 @@ export const SettingsPage = {
     navigationPath: { type: Boolean, default: false },
     // Label of the page that opened this one (e.g. "Driving"); shows the navigation tree with that page as its root.
     trailRoot: { type: String, default: "" },
+    // Opened from the Galaxy menu (menu.js): the page title sits on top, the menu shows where the page lives,
+    // and Manage opens each sub-page as its own route (emits "open-page").
+    menuMode: { type: Boolean, default: false },
+    // A second settings page shown below another page's settings (e.g. Conditional Driving Modes on Long Planner).
+    embedded: { type: Boolean, default: false },
+    heading: { type: String, default: "" },
+    // Show only, or leave out, rows with these labels (a row that now lives on another page).
+    onlyRows: { type: Array, default: null },
+    hideRows: { type: Array, default: null },
   },
   setup(props) {
     const navigation = route.view
@@ -360,7 +369,9 @@ export const SettingsPage = {
       if (inHub && section.id === "longitudinal") {
         entries.sort((a, b) => section.pages.indexOf(a.row.page) - section.pages.indexOf(b.row.page))
       }
-      return entries.filter(({ row }) => !isPipCropRow(row)).filter(({ row, index }) => {
+      return entries.filter(({ row }) => !isPipCropRow(row))
+        .filter(({ row }) => row.heading || ((!this.onlyRows || this.onlyRows.includes(row.label)) && !this.hideRows?.includes(row.label)))
+        .filter(({ row, index }) => {
         const previous = rows[index - 1]
         return !(["sounds", "display"].includes(this.state.data?.page) && row.repairValue === "Auto" &&
           previous?.choices?.includes("Auto") && settingControl(previous) === "slider" && row.label === `Use Auto ${previous.label}`)
@@ -395,6 +406,8 @@ export const SettingsPage = {
     if (this.feed.active && this.navigation.scroll) window.scrollTo(this.navigation.scroll.x, this.navigation.scroll.y)
   },
   beforeUnmount() {
+    // An embedded page shares its route with the page above it, which keeps the route's saved state.
+    if (this.embedded) { this.pathRequest?.abort(); this.feed.stop(); return }
     const { data, section, query, searchOpen, parents, developerOpen } = this.state
     this.navigation.settings = {
       key: this.navigationKey, page: data?.page || this.restoredPage || this.initialPage, section, query, searchOpen, parents: parents.slice(), developerOpen,
@@ -462,6 +475,7 @@ export const SettingsPage = {
     },
     open(page) {
       if (this.busy) return
+      if (this.menuMode) { this.$emit("open-page", page); return }
       this.$emit?.("nested")
       this.state.query = ""
       this.state.panelDirection = 1
@@ -568,12 +582,15 @@ export const SettingsPage = {
       </template>
     <OnroadLayoutPage ref="layoutEditor" v-if="state.layoutOpen" :mode="mode" :unauthorized="unauthorized" :initial-panel="state.layoutPanel" @target="openLayoutTarget" @close="closeLayout" />
     <FavoritesPage ref="favoritesEditor" v-else-if="state.favoritesOpen" :mode="mode" :unauthorized="unauthorized" @close="closeFavorites" />
-    <section v-else class="gx-settings" :class="{ 'gx-settings--path': trailEnabled }" :aria-label="title" :inert="busy" :aria-busy="busy || undefined">
-      <div v-if="!navigationPath && title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
+    <section v-else class="gx-settings" :class="{ 'gx-settings--path': trailEnabled, 'gx-settings--menu': menuMode, 'gx-settings--embedded': embedded }" :aria-label="heading || title" :inert="busy" :aria-busy="busy || undefined">
+      <div v-if="menuMode && !embedded" class="gx-settings__header gx-page-header"><h2>{{ heading || state.data?.title || title }}</h2>
+        <button v-if="state.data && state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button></div>
+      <h3 v-if="embedded && heading" class="gx-menu-embed-title">{{ heading }}</h3>
+      <div v-if="!menuMode && !navigationPath && title && (initialPage !== 'hub' || atSectionRoot)" class="gx-settings__header gx-page-header"><h2>{{ title }}</h2></div>
         <div v-if="!navigationPath && mode === 'local' && initialPage === 'hub' && atSectionRoot" class="gx-settings-tabs" aria-label="Settings sections">
           <button v-for="section in sections" :key="section.id" type="button" class="gx-chip" :aria-pressed="section.id === activeSection.id" @click="selectSection(section)">{{ section.label }}</button>
         </div>
-      <div v-if="pageDescription" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
+      <div v-if="pageDescription && !onlyRows" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
       <GxState v-if="mode !== 'local'">Local settings are unavailable in preview.</GxState>
       <template v-else>
         <GxNotice v-if="state.data && state.data.vehicleIdentified === false" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
@@ -591,7 +608,7 @@ export const SettingsPage = {
             </div>
             <section v-for="(card, cardIndex) in rowCards" :key="card.title || 'main'" class="gx-card gx-settings__section">
               <div v-if="cardIndex" class="gx-section__header"><i class="bi bi-car-front" aria-hidden="true"></i><span class="gx-section__title">{{ card.title }}</span></div>
-              <div v-else class="gx-section__header"><GxTrail v-if="trailItems.length" :items="trailItems" :disabled="busy" label="Toggle hierarchy" @select="jumpToPage" />
+              <div v-else-if="!menuMode" class="gx-section__header"><GxTrail v-if="trailItems.length" :items="trailItems" :disabled="busy" label="Toggle hierarchy" @select="jumpToPage" />
                 <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
                 <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
