@@ -3346,6 +3346,7 @@ struct Event {
     LANE_CENTERING_GEOMETRY_RESULT,
     LANE_CENTERING_CONTROL,
     STARPILOT_CAR_CONTROL,
+    LANE_OBSTACLE_WIRE,
   };
 
   struct _capnpPrivate {
@@ -23417,6 +23418,10 @@ public:
   inline bool hasStarpilotCarControl() const;
   inline  ::cereal::StarPilotCarControl::Reader getStarpilotCarControl() const;
 
+  inline bool isLaneObstacleWire() const;
+  inline bool hasLaneObstacleWire() const;
+  inline  ::capnp::Data::Reader getLaneObstacleWire() const;
+
 private:
   ::capnp::_::StructReader _reader;
   template <typename, ::capnp::Kind>
@@ -24707,6 +24712,14 @@ public:
   inline  ::cereal::StarPilotCarControl::Builder initStarpilotCarControl();
   inline void adoptStarpilotCarControl(::capnp::Orphan< ::cereal::StarPilotCarControl>&& value);
   inline ::capnp::Orphan< ::cereal::StarPilotCarControl> disownStarpilotCarControl();
+
+  inline bool isLaneObstacleWire();
+  inline bool hasLaneObstacleWire();
+  inline  ::capnp::Data::Builder getLaneObstacleWire();
+  inline void setLaneObstacleWire( ::capnp::Data::Reader value);
+  inline  ::capnp::Data::Builder initLaneObstacleWire(unsigned int size);
+  inline void adoptLaneObstacleWire(::capnp::Orphan< ::capnp::Data>&& value);
+  inline ::capnp::Orphan< ::capnp::Data> disownLaneObstacleWire();
 
 private:
   ::capnp::_::StructBuilder _builder;
@@ -60330,6 +60343,60 @@ inline ::capnp::Orphan< ::cereal::StarPilotCarControl> Event::Builder::disownSta
   KJ_IREQUIRE((which() == Event::STARPILOT_CAR_CONTROL),
               "Must check which() before get()ing a union member.");
   return ::capnp::_::PointerHelpers< ::cereal::StarPilotCarControl>::disown(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+
+inline bool Event::Reader::isLaneObstacleWire() const {
+  return which() == Event::LANE_OBSTACLE_WIRE;
+}
+inline bool Event::Builder::isLaneObstacleWire() {
+  return which() == Event::LANE_OBSTACLE_WIRE;
+}
+inline bool Event::Reader::hasLaneObstacleWire() const {
+  if (which() != Event::LANE_OBSTACLE_WIRE) return false;
+  return !_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline bool Event::Builder::hasLaneObstacleWire() {
+  if (which() != Event::LANE_OBSTACLE_WIRE) return false;
+  return !_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS).isNull();
+}
+inline  ::capnp::Data::Reader Event::Reader::getLaneObstacleWire() const {
+  KJ_IREQUIRE((which() == Event::LANE_OBSTACLE_WIRE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_reader.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline  ::capnp::Data::Builder Event::Builder::getLaneObstacleWire() {
+  KJ_IREQUIRE((which() == Event::LANE_OBSTACLE_WIRE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::get(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS));
+}
+inline void Event::Builder::setLaneObstacleWire( ::capnp::Data::Reader value) {
+  _builder.setDataField<Event::Which>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, Event::LANE_OBSTACLE_WIRE);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::set(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), value);
+}
+inline  ::capnp::Data::Builder Event::Builder::initLaneObstacleWire(unsigned int size) {
+  _builder.setDataField<Event::Which>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, Event::LANE_OBSTACLE_WIRE);
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::init(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), size);
+}
+inline void Event::Builder::adoptLaneObstacleWire(
+    ::capnp::Orphan< ::capnp::Data>&& value) {
+  _builder.setDataField<Event::Which>(
+      ::capnp::bounded<4>() * ::capnp::ELEMENTS, Event::LANE_OBSTACLE_WIRE);
+  ::capnp::_::PointerHelpers< ::capnp::Data>::adopt(_builder.getPointerField(
+      ::capnp::bounded<0>() * ::capnp::POINTERS), kj::mv(value));
+}
+inline ::capnp::Orphan< ::capnp::Data> Event::Builder::disownLaneObstacleWire() {
+  KJ_IREQUIRE((which() == Event::LANE_OBSTACLE_WIRE),
+              "Must check which() before get()ing a union member.");
+  return ::capnp::_::PointerHelpers< ::capnp::Data>::disown(_builder.getPointerField(
       ::capnp::bounded<0>() * ::capnp::POINTERS));
 }
 
