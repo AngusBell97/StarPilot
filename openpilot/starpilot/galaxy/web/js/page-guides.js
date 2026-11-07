@@ -41,23 +41,14 @@ export const PAGE_GUIDES = Object.freeze({
             help: "A nudgeless lane change only starts when the camera measures the next lane at least this wide; otherwise nudge " +
               "the wheel. 0 skips the width check." },
           { label: "Minimum lane-change speed", needs: [ALLOW],
-            help: row => "Lane changes only start above this speed. While Turn Signal Guidance is on (Turns at junctions, below), they " +
-              "start from " + LANE_TURN_SPEED(row) + " whatever this says, because a signal below that means a turn." },
-          // Conditional Experimental mode's signal settings: the device's own text, where they always were; the width
-          // is only used while detection is on.
-          { label: "Signal lane detection" },
-          { label: "Signal lane width", needs: [{ label: "Signal lane detection", value: "On" }] },
-        ],
-      },
-      {
-        id: "overtake", title: "Overtaking a slower car", icon: "bi-fast-forward",
-        intro: "For when you are following a slower car and signal to pull out and pass. Works only when you pull out to overtake " +
-          "(to the right in a right-hand-drive car) and only when StarPilot controls the speed. Moving back in works as normal.",
-        rows: [
+            help: row => "Lane changes only start above this speed. While Turn Signal Guidance is on (below), they start from " +
+              LANE_TURN_SPEED(row) + " whatever this says, because a signal below that means a turn." },
           { label: "Close lane-change gap", needs: [ALLOW],
-            help: "On: once you signal to overtake, the car stops easing back from the car in front, and can speed up as soon as it " +
-              "starts moving across rather than once it is in the new lane. In Experimental mode it runs as Chill for the overtake, then " +
-              "switches back. It still slows for a car that is close or braking, and for stops." },
+            help: "For overtaking a slower car: works only when you pull out to overtake (to the right in a right-hand-drive car) and " +
+              "only when StarPilot controls the speed; moving back in works as normal. On: once you signal to overtake, the car stops " +
+              "easing back from the car in front, and can speed up as soon as it starts moving across rather than once it is in the new " +
+              "lane. In Experimental mode it runs as Chill for the overtake, then switches back. It still slows for a car that is close " +
+              "or braking, and for stops." },
           { label: "Lane-change follow gap", needs: [ALLOW, CLOSE_GAP], sub: true,
             help: "The closest it follows the car in front while you wait to pull out, as following time. 0.75 s is the closest; " +
               "1.0 s leaves more room. It keeps more space when you are closing fast or the car in front brakes." },
@@ -65,14 +56,15 @@ export const PAGE_GUIDES = Object.freeze({
             help: "When you pull out while closing in on the car in front, use the quickest steering (Lane Change Speed 10) for that " +
               "overtake. Your saved Lane Change Speed stays as it is." },
         ],
-      },
-      {
-        id: "turns", title: "Turns at junctions", icon: "bi-sign-turn-right",
-        intro: "With Turn Signal Guidance on, a signal below 20 mph (32 km/h) means a turn, not a lane change.",
-        // Saved with the Steering and Torque page's settings, shown here.
+        // Turn Signal Guidance: saved with the Steering and Torque page's settings, shown at the end of this list.
         include: { page: "torque", rows: ["Turn Signal Guidance"] },
-        rows: [],
       },
+    ],
+    // Conditional Experimental's signal rows: served with this page but shown under Experimental conditions (menu.js
+    // PAGE_COMPANIONS); the device's own text, the width greyed while detection is off.
+    rows: [
+      { label: "Signal lane detection" },
+      { label: "Signal lane width", needs: [{ label: "Signal lane detection", value: "On" }] },
     ],
   },
   // Turn Signal Guidance is saved with Steering and Torque but shown on Lane Changes (above); only its text changes here.

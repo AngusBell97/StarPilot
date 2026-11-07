@@ -14,28 +14,36 @@ const laneRows = (overrides = {}) => [
   number("Automatic lane-change delay", "0.2"), number("Minimum adjacent lane width", "0"), row("Close lane-change gap", "Off"),
   number("Lane-change follow gap", "0.75"), row("Signal lane detection", "On"), number("Signal lane width", "1.524"),
 ].map(r => (r.label in overrides ? { ...r, ...overrides[r.label] } : r))
-const layout = (rows, query = "") => {
-  // The settings page's own search (SettingsPage.visibleRows) runs on the guided rows, then the cards are built.
-  const view = { state: { query, data: { page: "lane_change", rows } } }
+const layout = (rows, query = "", { hideRows = PAGE_HIDDEN_ROWS.lane_change } = {}) => {
+  // As the menu shows the page: its hidden rows left out, the page's own search run, then the cards built.
+  const view = { state: { query, data: { page: "lane_change", rows } }, hideRows }
   const visible = SettingsPage.computed.visibleRows.call(view)
   return guidedCards("lane_change", visible, query)
-    .map(card => [card.title, card.entries.map(({ row: r, index }) => `${index} ${r.label}=${r.value}${r.available ? "" : " grey"}${r.guideSub ? " sub" : ""}`)])
+    .map(card => [card.title, card.entries.map(({ row: r, index }) => `${index} ${r.label}=${r.value}${r.available ? "" : " grey"}${r.guideSub ? " sub" : ""}`),
+      ...(card.include ? [card.include.rows] : [])])
 }
 
-// Nudgeless (the comma's saved choice): no header on the main card; Auto lane changes on top, Wheel nudge required (off)
-// under it, the nudgeless settings indented under that, the Experimental-mode signal rows at the end as the device words them.
+// Nudgeless (the comma's saved choice): one list with no header; Auto lane changes on top, the close-gap rows after the
+// lane change rows, Turn Signal Guidance (from the Steering page) at the end. The signal-lane rows are not on this page.
 assert.deepEqual(layout(laneRows()), [
   ["", ["1 Auto lane changes=On", "3 One change per signal=On", "0 Lane Change Speed=10", "4 Wheel nudge required=Off",
-    "5 Nudgeless delay=0.2 sub", "6 Minimum adjacent lane width=0 sub", "2 Minimum lane-change speed=5", "9 Signal lane detection=On",
-    "10 Signal lane width=1.524"]],
-  ["Overtaking a slower car", ["7 Close lane-change gap=Off", "8 Lane-change follow gap=0.75 grey sub", "11 Faster lane change when close=Off grey sub"]],
-  ["Turns at junctions", []],
+    "5 Nudgeless delay=0.2 sub", "6 Minimum adjacent lane width=0 sub", "2 Minimum lane-change speed=5", "7 Close lane-change gap=Off",
+    "8 Lane-change follow gap=0.75 grey sub", "11 Faster lane change when close=Off grey sub"], ["Turn Signal Guidance"]],
 ], "rows keep their device positions (saving goes by position); the greyed stand-in for Faster comes after them")
-const signal = guidedRows("lane_change", laneRows())
-assert.equal(signal.find(r => r.label === "Signal lane width").reason, "device text", "signal rows keep the device's own text")
-const widthOff = guidedRows("lane_change", laneRows({ "Signal lane detection": { value: "Off" } })).find(r => r.label === "Signal lane width")
-assert.equal(widthOff.available, false, "the width is only used while detection is on")
-assert.equal(widthOff.reason, "Turn on Signal lane detection to use this. device text", "greyed, still in the device's own words")
+assert.match(guidedRows("lane_change", laneRows()).find(r => r.label === "Close lane-change gap").reason, /^For overtaking a slower car: works only when you pull out/)
+
+// Signal lane detection / width live under Experimental conditions: hidden here, shown there as Lane Changes rows.
+assert.deepEqual(PAGE_HIDDEN_ROWS.lane_change, ["Signal lane detection", "Signal lane width"])
+assert.deepEqual(PAGE_COMPANIONS["conditional/cem"], { page: "lane_change", heading: "Signal speed: turn or lane change",
+  onlyRows: ["Signal lane detection", "Signal lane width"] })
+const companion = { state: { query: "", data: { page: "lane_change", rows: laneRows({ "Signal lane detection": { value: "Off" } }) } },
+  onlyRows: PAGE_COMPANIONS["conditional/cem"].onlyRows }
+companion.visibleRows = SettingsPage.computed.visibleRows.call(companion)
+const companionCards = SettingsPage.computed.rowCards.call(companion)
+assert.deepEqual(companionCards.map(card => [card.title, card.entries.map(({ row: r }) => `${r.label}${r.available ? "" : " grey"}`), !!card.include]),
+  [["", ["Signal lane detection", "Signal lane width grey"], false]], "a plain list there, the width greyed while detection is off")
+assert.equal(companion.visibleRows.find(({ row: r }) => r.label === "Signal lane width").row.reason, "Turn on Signal lane detection to use this. device text")
+assert.equal(guidedRows("lane_change", laneRows()).find(r => r.label === "Signal lane detection").reason, "device text", "the device's own text")
 
 // Wheel nudge required on greys (not hides) the nudgeless settings; Auto lane changes off greys everything that needs it.
 const nudge = guidedRows("lane_change", laneRows({ "Automatic Lane Changes": { value: "Off" } }))
@@ -45,15 +53,15 @@ assert.equal(layout(laneRows({ "Automatic Lane Changes": { value: "Off" } }))[0]
 const allOff = layout(laneRows({ "Automatic Lane Changes": { value: "Off" }, "Allow lane changes": { value: "Off" } }))
 assert.deepEqual(allOff[0][1], ["1 Auto lane changes=Off", "3 One change per signal=On grey", "0 Lane Change Speed=10 grey",
   "4 Wheel nudge required=On grey", "5 Nudgeless delay=0.2 grey sub", "6 Minimum adjacent lane width=0 grey sub",
-  "2 Minimum lane-change speed=5 grey", "9 Signal lane detection=On", "10 Signal lane width=1.524"])
-assert.deepEqual(allOff[1][1], ["7 Close lane-change gap=Off grey", "8 Lane-change follow gap=0.75 grey sub", "11 Faster lane change when close=Off grey sub"])
+  "2 Minimum lane-change speed=5 grey", "7 Close lane-change gap=Off grey", "8 Lane-change follow gap=0.75 grey sub",
+  "11 Faster lane change when close=Off grey sub"])
 assert.match(guidedRows("lane_change", laneRows({ "Allow lane changes": { value: "Off" } })).find(r => r.label === "Nudgeless delay").reason,
   /^Turn on Auto lane changes to use this\./, "the main switch is named first")
 
 // Close gap on: the device sends the real Faster row, so no stand-in, and both rows are usable.
 const closeRows = laneRows({ "Close lane-change gap": { value: "On" } })
 closeRows.splice(9, 0, row("Faster lane change when close", "Off"))
-assert.deepEqual(layout(closeRows)[1][1], ["7 Close lane-change gap=On", "8 Lane-change follow gap=0.75 sub", "9 Faster lane change when close=Off sub"])
+assert.deepEqual(layout(closeRows)[0][1].slice(7), ["7 Close lane-change gap=On", "8 Lane-change follow gap=0.75 sub", "9 Faster lane change when close=Off sub"])
 
 // Greyed rows say which switch to turn on; a row the device made unavailable keeps the device's reason.
 const shown = guidedRows("lane_change", laneRows({ "Allow lane changes": { value: "Off" }, "Close lane-change gap": { available: false, reason: "Needs speed control" } }))
@@ -84,10 +92,10 @@ assert.deepEqual(layout([{ label: "Restore Lane Change defaults", value: "", ava
   ["More settings", ["0 Restore Lane Change defaults="]])
 // Search keeps one card for the search box, and matches the new wording.
 assert.deepEqual(layout(laneRows(), "zzz"), [["", []]])
-assert.deepEqual(layout(laneRows(), "blind spot").map(([title]) => title), ["", "Turns at junctions"])
+assert.deepEqual(layout(laneRows(), "guidance")[0].slice(1), [["2 Minimum lane-change speed=5"], ["Turn Signal Guidance"]], "search finds the included row")
 
 // Turn Signal Guidance: shown inside the Turns card from the Steering page, with new text there too.
-assert.deepEqual(PAGE_GUIDES.lane_change.cards.find(c => c.id === "turns").include, { page: "torque", rows: ["Turn Signal Guidance"] })
+assert.deepEqual(PAGE_GUIDES.lane_change.cards[0].include, { page: "torque", rows: ["Turn Signal Guidance"] })
 assert.equal(PAGE_COMPANIONS.lane_change, undefined)
 assert.deepEqual(PAGE_HIDDEN_ROWS.torque, ["Turn Signal Guidance"])
 assert.match(guidedRows("torque", [row("Turn Signal Guidance", "On")])[0].reason, /^On: below 20 mph/)

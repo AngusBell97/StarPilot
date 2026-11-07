@@ -29,6 +29,7 @@ export function settingsSearchPath(hit) {
   if (hit.page === "data") return page("power")
   if (hit.page === "conditional") return page("profiles")
   if (hit.page === "torque" && hit.label === "Turn Signal Guidance") return page("lane_change")
+  if (hit.page === "lane_change" && SIGNAL_LANE_ROWS.includes(hit.label)) return page("conditional/cem")
   return settingsPagePath(hit.page)
 }
 
@@ -99,14 +100,18 @@ export const MENU = Object.freeze([
   ] },
 ])
 
+// Conditional Experimental's signal-lane rows: the device serves them with Lane Changes, but they belong with
+// Experimental conditions (they only change its Signal speed rule).
+const SIGNAL_LANE_ROWS = Object.freeze(["Signal lane detection", "Signal lane width"])
 // Extra settings pages shown on another page, below its own settings.
 export const PAGE_COMPANIONS = Object.freeze({
   profiles: { page: "conditional", heading: "Conditional Driving Modes" },
   power: { page: "data", heading: "Data Uploads" },
-  // Lane Changes shows Turn Signal Guidance inside its own "Turns at junctions" card instead (page-guides.js).
+  "conditional/cem": { page: "lane_change", heading: "Signal speed: turn or lane change", onlyRows: SIGNAL_LANE_ROWS },
+  // Lane Changes shows Turn Signal Guidance in its own list instead (page-guides.js `include`).
 })
 // Rows that now live on another page.
-export const PAGE_HIDDEN_ROWS = Object.freeze({ torque: ["Turn Signal Guidance"] })
+export const PAGE_HIDDEN_ROWS = Object.freeze({ torque: ["Turn Signal Guidance"], lane_change: SIGNAL_LANE_ROWS })
 // Page titles that changed with the menu.
 export const PAGE_HEADINGS = Object.freeze({ power: "Power & Data" })
 

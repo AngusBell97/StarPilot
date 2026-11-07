@@ -386,7 +386,8 @@ export const SettingsPage = {
     },
     // A heading row starts its own card; the rows after it belong to that card even when search hides the heading.
     rowCards() {
-      const guided = guidedCards(this.state.data?.page, this.visibleRows, this.state.query)
+      // A page shown for a few of its rows under another page (onlyRows) stays a plain list.
+      const guided = this.onlyRows ? null : guidedCards(this.state.data?.page, this.visibleRows, this.state.query)
       if (guided) return guided
       const titles = []
       const owner = (this.state.data?.rows || []).map((row) => (row.heading ? titles.push(row.label) : titles.length))
