@@ -130,12 +130,6 @@ class _Scroller(Widget):
     else:
       self.scroll_panel.set_offset(scroll_offset)
 
-  def finish_auto_scroll(self) -> None:
-    """Jump to the end of a scroll_to() animation (Sleep Eyes reveal the destination, not the slide towards it)."""
-    if self._scrolling_to[0] is not None:
-      self.scroll_panel.set_offset(self._scrolling_to[0])
-      self._scrolling_to = None, False, False
-
   @property
   def is_auto_scrolling(self) -> bool:
     return self._scrolling_to[0] is not None

@@ -14,18 +14,12 @@ SCREEN_OFF = "TurnOffCommaScreen"
 PIXEL_SHIFT = "BurnInPixelShift"
 STATIC_DIM = "BurnInStaticDim"
 BURN_IN = (PIXEL_SHIFT, STATIC_DIM)
-SLEEP_EYES = "SleepEyes"
-SLEEP_EYES_PARKED = "SleepEyesParkedOnly"
-EYES = (SLEEP_EYES, SLEEP_EYES_PARKED)
 CUSTOM_KEYS = (*BRIGHTNESS, *TIMEOUTS)
-KEYS = (MASTER, *CUSTOM_KEYS, SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
+KEYS = (MASTER, *CUSTOM_KEYS, SCREEN_OFF, GPU_LOADING, *BURN_IN)
 # On/off choices, and those that work whether or not custom display settings are on.
-BOOLEAN_KEYS = (MASTER, SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
-STANDALONE_KEYS = (SCREEN_OFF, *EYES, GPU_LOADING, *BURN_IN)
+BOOLEAN_KEYS = (MASTER, SCREEN_OFF, GPU_LOADING, *BURN_IN)
+STANDALONE_KEYS = (SCREEN_OFF, GPU_LOADING, *BURN_IN)
 SCREEN_OFF_DESCRIPTION = "Pauses Comma UI rendering to save CPU/GPU. Tap once to wake."
-SLEEP_EYES_DESCRIPTION = "Turn Off Comma Screen shows animated eyes that react to driving instead of a black screen. Tap to wake."
-SLEEP_EYES_PARKED_DESCRIPTION = ("Eyes only in Park: they appear awake after the parked timeout. The screen stays on "
-                                 "while you drive.")
 PIXEL_SHIFT_DESCRIPTION = "Burn-in protection: moves the whole picture a pixel at a time, at most 2 pixels, every 45 seconds."
 STATIC_DIM_DESCRIPTION = "Burn-in protection: HUD items and the border that stay the same for 10 seconds fade slightly over 20 seconds until they change."
 MAX_RAW_BYTES = 16
@@ -97,10 +91,6 @@ class DisplayPreferences:
   driving_timeout: int = 10
   pixel_shift: bool = False
   static_dim: bool = False
-  # Effective: Sleep Eyes only runs while Turn Off Comma Screen is on (it replaces the black screen).
-  sleep_eyes: bool = False
-  # Effective: eyes only in Park (awake there); the driving screen stays on out of Park.
-  sleep_eyes_parked_only: bool = False
 
 
 def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
@@ -109,18 +99,15 @@ def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
   master = read_choice(params, MASTER, large=large)
   screen_off = read_choice(params, SCREEN_OFF, large=large)
   turn_off_screen = screen_off.valid and screen_off.value == 1
-  flags = {}
-  for key in (*BURN_IN, *EYES):
+  burn_in = {}
+  for key in BURN_IN:
     choice = read_choice(params, key, large=large)
-    flags[key] = choice.valid and choice.value == 1
-  pixel_shift, static_dim = flags[PIXEL_SHIFT], flags[STATIC_DIM]
-  sleep_eyes = flags[SLEEP_EYES] and turn_off_screen
-  parked_only = sleep_eyes and flags[SLEEP_EYES_PARKED]
+    burn_in[key] = choice.valid and choice.value == 1
+  pixel_shift, static_dim = burn_in[PIXEL_SHIFT], burn_in[STATIC_DIM]
   if not master.valid or master.value != 1:
     return DisplayPreferences(keep_screen_on_gpu_loading=keep_gpu, turn_off_screen=turn_off_screen,
                               driving_timeout=default_value("ScreenTimeoutOnroad", large=large),
-                              pixel_shift=pixel_shift, static_dim=static_dim,
-                              sleep_eyes=sleep_eyes, sleep_eyes_parked_only=parked_only)
+                              pixel_shift=pixel_shift, static_dim=static_dim)
   values = {key: read_choice(params, key, large=large) for key in CUSTOM_KEYS}
   def effective(key: str) -> int:
     saved = values[key]
@@ -130,5 +117,4 @@ def read_preferences(params: Any, *, large: bool) -> DisplayPreferences:
                             driving_brightness=effective("ScreenBrightnessOnroad"),
                             parked_timeout=effective("ScreenTimeout"),
                             driving_timeout=effective("ScreenTimeoutOnroad"),
-                            pixel_shift=pixel_shift, static_dim=static_dim,
-                            sleep_eyes=sleep_eyes, sleep_eyes_parked_only=parked_only)
+                            pixel_shift=pixel_shift, static_dim=static_dim)

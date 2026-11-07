@@ -6,8 +6,7 @@ import math
 
 from openpilot.starpilot.ui.display_preferences import (
   AUTO, GPU_LOADING, BOOLEAN_KEYS, BRIGHTNESS, CUSTOM_KEYS, KEYS, MASTER, PIXEL_SHIFT, PIXEL_SHIFT_DESCRIPTION, SCREEN_OFF,
-  SCREEN_OFF_DESCRIPTION, SLEEP_EYES, SLEEP_EYES_DESCRIPTION, SLEEP_EYES_PARKED, SLEEP_EYES_PARKED_DESCRIPTION, STANDALONE_KEYS,
-  STATIC_DIM, STATIC_DIM_DESCRIPTION, default_value, read_choice,
+  SCREEN_OFF_DESCRIPTION, STANDALONE_KEYS, STATIC_DIM, STATIC_DIM_DESCRIPTION, default_value, read_choice,
 )
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow, FeatureSettingsRequest, FeatureSettingsState
 from openpilot.starpilot.ui.presentation import Profile
@@ -20,40 +19,17 @@ LABELS = {
   "ScreenTimeout": "Parked Screen Timeout",
   "ScreenTimeoutOnroad": "Driving Interaction Timeout",
   SCREEN_OFF: "Turn Off Comma Screen",
-  SLEEP_EYES: "Sleep Eyes",
-  SLEEP_EYES_PARKED: "Sleep Eyes Only When Parked",
   GPU_LOADING: "Keep Screen On While eGPU Loads",
   PIXEL_SHIFT: "Pixel Shift",
   STATIC_DIM: "Dim Static Elements",
 }
 STANDALONE_REASONS = {
   SCREEN_OFF: SCREEN_OFF_DESCRIPTION,
-  SLEEP_EYES: SLEEP_EYES_DESCRIPTION,
-  SLEEP_EYES_PARKED: SLEEP_EYES_PARKED_DESCRIPTION,
   GPU_LOADING: "Keep the driving screen awake while an eGPU model loads. Manual Screen Off still takes priority.",
   PIXEL_SHIFT: PIXEL_SHIFT_DESCRIPTION,
   STATIC_DIM: STATIC_DIM_DESCRIPTION,
 }
 AUTO_PREFIX = "display:auto:"
-SCREEN_OFF_NEEDED_FOR_EYES = "Turn on Turn Off Comma Screen to use"
-EYES_NEEDED_FOR_PARKED = "Turn on Sleep Eyes to use"
-# Sleep Eyes replaces Turn Off Comma Screen's black screen, so it needs that option on; Only When Parked needs both.
-EYES_REQUIRES = {SLEEP_EYES: (SCREEN_OFF,), SLEEP_EYES_PARKED: (SCREEN_OFF, SLEEP_EYES)}
-
-
-def eyes_blocker(key: str, saved: dict) -> str:
-  if key not in EYES_REQUIRES:
-    return ""
-  screen_off = saved[SCREEN_OFF]
-  if not (screen_off.readable and screen_off.valid and screen_off.value == 1):
-    return SCREEN_OFF_NEEDED_FOR_EYES
-  if SLEEP_EYES in EYES_REQUIRES[key]:
-    eyes = saved[SLEEP_EYES]
-    if not (eyes.readable and eyes.valid and eyes.value == 1):
-      return EYES_NEEDED_FOR_PARKED
-  return ""
-
-
 BRIGHTNESS_CHOICES = ("Auto",) + tuple(f"{number}%" for number in range(5, 101))
 TIMEOUT_CHOICES = tuple(f"{number} s" for number in range(5, 61, 5))
 
@@ -106,14 +82,9 @@ class DisplayOwner:
       boolean = key in BOOLEAN_KEYS
       repair = "Off" if boolean else "Auto" if key in BRIGHTNESS else "30 s" if key == "ScreenTimeout" else \
         "10 s" if large else "5 s"
-      dependencies = (tuple((name, saved[name].raw) for name in EYES_REQUIRES[key]) if key in EYES_REQUIRES else
-                      () if key in STANDALONE_KEYS else tuple((name, saved[name].raw) for name in CUSTOM_KEYS) if key == MASTER else
+      dependencies = (() if key in STANDALONE_KEYS else tuple((name, saved[name].raw) for name in CUSTOM_KEYS) if key == MASTER else
                       ((MASTER, master.raw),))
       editable = parked and choice.readable and (boolean or master.valid and master.value == 1 or not valid)
-      if blocker := eyes_blocker(key, saved):
-        # Greyed out; a saved On stays visible (and inactive) until its requirement is met again.
-        editable = False
-        reason = blocker
       numeric = valid and not boolean and choice.value != AUTO
       rows.append(FeatureRow(key, LABELS[key], value, source=choice.raw,
                              choices=("Off", "On") if boolean else
@@ -169,13 +140,6 @@ class DisplayOwner:
       observed = read_choice(self.params, key, large=True)
       if not observed.readable or observed.raw != request.expected:
         return False
-      if key in EYES_REQUIRES and desired == 1:
-        expected = dict(request.dependencies)
-        if set(expected) != set(EYES_REQUIRES[key]):
-          return False
-        current = {name: read_choice(self.params, name, large=True) for name in KEYS}
-        if any(current[name].raw != expected[name] for name in EYES_REQUIRES[key]) or eyes_blocker(key, current):
-          return False
       # Turning the master off stays available even when other saved choices
       # are corrupt or have changed while the user was viewing the page.
       if key not in STANDALONE_KEYS and not (key == MASTER and desired == 0):

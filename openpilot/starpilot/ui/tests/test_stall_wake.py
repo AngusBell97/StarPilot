@@ -1,4 +1,4 @@
-"""A stalled selfdrived (the screen's own red System Unresponsive alert) wakes a sleeping screen."""
+"""A stalled selfdrived (the screen's own red System Unresponsive alert) wakes a screen Turn Off Comma Screen switched off."""
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch
 

@@ -280,8 +280,6 @@ class GuiApplication:
     self._last_mouse_event: MouseEvent = MouseEvent(MousePos(0, 0), 0, False, False, False, 0.0)
 
     self._should_render = True
-    # Sleep Eyes: an object with .needs_stack and .render(rect, draw_stack) that replaces the nav stack while set.
-    self._screen_override = None
 
     # Debug variables
     self._mouse_history: deque[MousePosWithTime] = deque(maxlen=MOUSE_THREAD_RATE)
@@ -406,11 +404,9 @@ class GuiApplication:
 
       # four display runs slightly faster than 60 FPS, let it dictate rate so we don't drift and drop frames
       vblank_control = HARDWARE.get_device_type() == 'mici'
-      self._base_fps_setting = 0 if OFFSCREEN or vblank_control else fps
-      rl.set_target_fps(self._base_fps_setting)
+      rl.set_target_fps(0 if OFFSCREEN or vblank_control else fps)
 
       self._target_fps = fps
-      self._base_target_fps = fps
       self._load_fonts()
       self._patch_text_functions()
       self._patch_scissor_mode()
@@ -539,29 +535,6 @@ class GuiApplication:
 
   def set_should_render(self, should_render: bool):
     self._should_render = should_render
-
-  def set_render_fps(self, fps: int | None) -> None:
-    """Temporarily lower the frame rate (Sleep Eyes); None restores the normal rate."""
-    base = getattr(self, "_base_target_fps", None)
-    if base is None:
-      return
-    if fps is None:
-      rl.set_target_fps(self._base_fps_setting)
-      self._target_fps = base
-    elif not OFFSCREEN:
-      rl.set_target_fps(fps)
-      self._target_fps = fps
-
-  def set_screen_override(self, override) -> None:
-    self._screen_override = override
-
-  @property
-  def screen_override(self):
-    return self._screen_override
-
-  def _render_nav_stack(self, rect: rl.Rectangle) -> None:
-    for widget in self._nav_stack[-self._nav_stack_widgets_to_render:]:
-      widget.render(rect)
 
   def texture(self, asset_path: str, width: int | None = None, height: int | None = None,
               alpha_premultiply=False, keep_aspect_ratio=True, flip_x: bool = False) -> rl.Texture:
@@ -743,10 +716,8 @@ class GuiApplication:
           yield False, 0.0, 0.0
           continue
 
-        override = self._screen_override
-        if override is None or override.needs_stack:
-          for prepare in tuple(self._render_prepare):
-            prepare()
+        for prepare in tuple(self._render_prepare):
+          prepare()
 
         if self._render_texture:
           rl.begin_texture_mode(self._render_texture)
@@ -770,11 +741,9 @@ class GuiApplication:
         for tick in self._nav_stack_ticks:
           tick()
 
-        # Only render top widgets (or Sleep Eyes in their place)
-        if override is not None:
-          override.render(rl.Rectangle(0, 0, self.width, self.height), self._render_nav_stack)
-        else:
-          self._render_nav_stack(rl.Rectangle(0, 0, self.width, self.height))
+        # Only render top widgets
+        for widget in self._nav_stack[-self._nav_stack_widgets_to_render:]:
+          widget.render(rl.Rectangle(0, 0, self.width, self.height))
 
         frame_time = rl.get_frame_time()
         cpu_time = time.monotonic() - frame_start

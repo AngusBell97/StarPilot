@@ -12,7 +12,7 @@ import unittest
 from openpilot.common.params import Params
 from openpilot.starpilot.ui import display_compact
 from openpilot.starpilot.ui.display_owner import DisplayOwner
-from openpilot.starpilot.ui.display_preferences import BURN_IN, EYES, GPU_LOADING, MASTER, SCREEN_OFF, STANDALONE_KEYS, read_choice, read_preferences
+from openpilot.starpilot.ui.display_preferences import BURN_IN, GPU_LOADING, MASTER, SCREEN_OFF, STANDALONE_KEYS, read_choice, read_preferences
 from openpilot.starpilot.ui.feature_settings_state import (
   FEATURE_CONTROL_LEFT, FEATURE_CONTROL_RIGHT, FEATURE_ROW_HEIGHT, FEATURE_VISIBLE_ROWS,
   FeatureInput, FeatureSettingsRequest, feature_row_top, row_change,
@@ -87,7 +87,7 @@ class DisplaySettingsTests(unittest.TestCase):
           # The eGPU row only exists on comma hardware.
           self.assertEqual(tuple(row.key for row in submenu.rows if row.key != GPU_LOADING),
                            (MASTER, "ScreenBrightness", "ScreenBrightnessOnroad", "ScreenTimeout", "ScreenTimeoutOnroad",
-                            SCREEN_OFF, *EYES, *BURN_IN))
+                            SCREEN_OFF, *BURN_IN))
           self.assertEqual(submenu.rows[1].source, self.row("ScreenBrightness").source)
           self.assertEqual(submenu.rows[1].dependencies, self.row("ScreenBrightness").dependencies)
           session._display_ui(FeatureUiAction("back"))
@@ -155,7 +155,7 @@ class DisplaySettingsTests(unittest.TestCase):
         inputs.release(800, y, root)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 10)
+        self.assertEqual(len([row for row in submenu.rows if row.key != GPU_LOADING]), 8)
         self.assertEqual(submenu.rows[0].key, MASTER)
         self.assertTrue(all(not row.available for row in submenu.rows[1:] if row.key not in STANDALONE_KEYS))
         self.assertTrue(submenu.rows[-1].available)
@@ -168,8 +168,7 @@ class DisplaySettingsTests(unittest.TestCase):
         self.assertTrue(read_preferences(self.params, large=True).enabled)
         submenu = session.system_snapshot()
         self.assertEqual(submenu.page, "display")
-        # Sleep Eyes needs Turn Off Comma Screen, so it starts greyed out.
-        self.assertTrue(all(row.available for row in submenu.rows if row.key not in EYES))
+        self.assertTrue(all(row.available for row in submenu.rows))
         self.assertEqual(submenu.parent_title, "System")
         session._display_ui(FeatureUiAction("open", submenu.rows[1]))
         self.assertEqual(session.system_snapshot().parent_title, "Custom Display Settings")

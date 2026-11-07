@@ -28,9 +28,6 @@ from openpilot.tools.replay.display_clock import BOOT_TIME_SERVICES, DisplayCloc
 
 BACKLIGHT_OFFROAD = 65 if HARDWARE.get_device_type() == "mici" else 50
 PARAM_UPDATE_TIME = 1 / 5.0
-
-
-_UI_START = time.monotonic()  # Sleep Eyes: a first look soon after this means the comma just booted
 SELFDRIVE_STALL_S = 5.0  # same as the alert renderer's SELFDRIVE_STATE_TIMEOUT: past this it shows System Unresponsive
 
 
@@ -538,7 +535,6 @@ class Device:
     self._screen_off = False
     self._screen_off_started = False
     self._wake_touch_active = False
-    self._sleep_eyes = None
 
   def invalidate_display_preferences(self) -> None:
     self._display_refresh_time = None
@@ -556,11 +552,6 @@ class Device:
   @property
   def awake(self) -> bool:
     return self._awake
-
-  @property
-  def sleep_eyes_visible(self) -> bool:
-    eyes = getattr(self, "_sleep_eyes", None)
-    return eyes is not None and eyes.visible
 
   def toggle_screen_off(self) -> bool:
     if ui_state.projection_read_only or not ui_state.started:
@@ -581,28 +572,11 @@ class Device:
     if self._override_interactive_timeout is not None:
       return self._override_interactive_timeout
 
-    if self._eyes_parked_only and self._in_park():
-      # Sleep Eyes Only When Parked: in Park the screen gives way to the eyes after the parked timeout.
-      return self._display_preferences.parked_timeout
-
     if self._display_preferences.enabled:
       return self._display_preferences.driving_timeout if ui_state.started else self._display_preferences.parked_timeout
 
     ignition_timeout = 10 if gui_app.big_ui() else 5
     return ignition_timeout if ui_state.started else 30
-
-  @property
-  def _eyes_parked_only(self) -> bool:
-    return bool(getattr(self._display_preferences, "sleep_eyes_parked_only", False))
-
-  @staticmethod
-  def _in_park() -> bool:
-    if not ui_state.started:
-      return False
-    try:
-      return str(ui_state.sm["carState"].gearShifter) == "park"
-    except (AttributeError, KeyError, TypeError, ValueError):
-      return False
 
   def _reset_interactive_timeout(self) -> None:
     self._interaction_time = time.monotonic() + self.interactive_timeout
@@ -677,13 +651,6 @@ class Device:
       if saved != AUTO:
         clipped_brightness = saved
     brightness = round(self._brightness_filter.update(clipped_brightness))
-    # Sleep Eyes cap the brightness; ease the cap in and out (about half a second) instead of jumping.
-    cap_target = self._sleep_eyes.brightness_cap(ui_state.started) if self.sleep_eyes_visible else 100.0
-    cap = getattr(self, "_eyes_cap", 100.0)
-    cap += (cap_target - cap) * min(1.0, 6.0 / max(gui_app.target_fps, 1))
-    self._eyes_cap = cap
-    if cap < 99.5:
-      brightness = min(brightness, round(cap))
     if not self._awake:
       brightness = 0
 
@@ -705,15 +672,6 @@ class Device:
         touched):
       self._reset_interactive_timeout()
 
-    # Sleep Eyes Only When Parked: shifting into or out of Park restarts the timeout, and out of Park (driving) the
-    # screen stays on: no eyes and no Turn Off Comma Screen.
-    in_park = self._in_park()
-    park_changed = in_park != getattr(self, "_was_in_park", in_park)
-    self._was_in_park = in_park
-    driving_on = self._eyes_parked_only and ui_state.started and not in_park
-    if self._eyes_parked_only and park_changed:
-      self._reset_interactive_timeout()
-
     road_changed = ui_state.started != self._screen_off_started
     self._screen_off_started = ui_state.started
     critical = (ui_state.sm.valid.get('selfdriveState', False) and ui_state.sm.alive.get('selfdriveState', False) and
@@ -732,12 +690,8 @@ class Device:
         callback()
     self._prev_timed_out = interaction_timeout
 
-    auto_screen_off = (ui_state.started and self._display_preferences.turn_off_screen and interaction_timeout and not critical and
-                       not gpu_loading and not driving_on)
-    awake = not self._screen_off and not auto_screen_off and (ui_state.started or not interaction_timeout or PC)
-    if self._update_sleep_eyes(touched, critical or gpu_loading or self._screen_off, interaction_timeout, driving_on):
-      awake = True
-    self._set_awake(awake)
+    auto_screen_off = ui_state.started and self._display_preferences.turn_off_screen and interaction_timeout and not critical and not gpu_loading
+    self._set_awake(not self._screen_off and not auto_screen_off and (ui_state.started or not interaction_timeout or PC))
     # The entire wake gesture belongs to the display, including its release.
     # Widgets were not rendered while asleep, so their touch state can be stale.
     if self._wake_touch_active:
@@ -749,7 +703,7 @@ class Device:
   def _selfdrive_stalled() -> bool:
     """Onroad and selfdrived has stopped publishing after being heard from: the screen then draws its own red
     TAKE CONTROL IMMEDIATELY / System Unresponsive (alert_renderer), which no selfdriveState message carries, so
-    treat it as a critical alert here to wake a sleeping screen (Turn Off Comma Screen or Sleep Eyes)."""
+    treat it as a critical alert here to wake a screen that Turn Off Comma Screen switched off."""
     if PC or not ui_state.started or getattr(ui_state, "replay_clock", None) is not None:
       return False
     try:
@@ -759,29 +713,6 @@ class Device:
       return time.monotonic() - sm.recv_time["selfdriveState"] > SELFDRIVE_STALL_S
     except (AttributeError, KeyError, TypeError):
       return False
-
-  def _update_sleep_eyes(self, touched: bool, blocked: bool, interaction_timeout: bool, driving_on: bool = False) -> bool:
-    """Sleep Eyes replace the sleeping screen. Returns True while the eyes keep the display on."""
-    prefs = self._display_preferences
-    if not getattr(prefs, "sleep_eyes", False) or ui_state.projection_read_only:
-      if getattr(self, "_sleep_eyes", None) is not None:
-        self._sleep_eyes.shutdown(gui_app)
-        self._sleep_eyes = None
-      return False
-    if getattr(self, "_sleep_eyes", None) is None:
-      from openpilot.starpilot.ui.sleep_eyes.controller import BOOT_WINDOW_S, SleepEyesController
-      self._sleep_eyes = SleepEyesController(booting=time.monotonic() - _UI_START < BOOT_WINDOW_S)
-    eyes = self._sleep_eyes
-    wake_alert = eyes.wake_alert(ui_state.sm, ui_state.started)
-    if wake_alert:
-      self._reset_interactive_timeout()
-    if touched and eyes.visible:
-      self._wake_touch_active = True  # the tap that wakes the eyes must not press anything underneath
-    want = eyes.decide(started=ui_state.started, timed_out=interaction_timeout, blocked=blocked, touched=touched,
-                       wake_alert=wake_alert, driving_on=driving_on)
-    eyes.update(gui_app, ui_state.sm, started=ui_state.started, want=want, urgent=wake_alert or blocked,
-                parked_only=self._eyes_parked_only)
-    return eyes.visible
 
   def _set_awake(self, on: bool):
     if on != self._awake:
