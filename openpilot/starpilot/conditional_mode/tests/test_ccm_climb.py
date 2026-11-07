@@ -150,6 +150,25 @@ class ClimbTests(unittest.TestCase):
     slow = replace(away, speed_mps=speed + 0.5)
     self.assertFalse(chill(Driver(replace(CLIMB, ccm_climb_lead=True)).run(5.0, lead=slow)))  # not really pulling away
 
+  def test_steady_easing_ends_a_climb_but_noise_does_not(self):
+    speed = 40 * MPH_TO_MPS
+    d = Driver()
+    d.run(1.5)
+    self.assertTrue(chill(d.run(0.4, accel=-0.15)))  # brief gentle easing: carry on
+    self.assertTrue(chill(d.run(1.0)))
+    self.assertFalse(chill(d.run(1.5, accel=-0.15)))  # sustained (about 1 s to confirm): hand back
+    self.assertEqual(d.policy.climb_end_reason, 'model easing')
+    d = Driver()
+    d.run(1.5)
+    self.assertTrue(chill(d.run(0.05, plan8=speed - 4 * MPH_TO_MPS)))  # one noisy plan dip: carry on
+    self.assertTrue(chill(d.run(1.0)))
+    self.assertFalse(chill(d.run(2.0, plan8=speed - 3 * MPH_TO_MPS)))  # a sustained falling plan: hand back
+    self.assertEqual(d.policy.climb_end_reason, 'model easing')
+    d = Driver()
+    d.run(1.5)
+    self.assertFalse(chill(d.run(0.05, accel=-0.35)))  # real braking still ends it at once
+    self.assertEqual(d.policy.climb_end_reason, 'model slowing')
+
   def test_climb_mode_off_keeps_the_frozen_speed_rule(self):
     d = Driver(replace(CLIMB, ccm_climb=False))
     entered = d.run(0.5, accel=-0.4)  # the frozen rule ignores the model
