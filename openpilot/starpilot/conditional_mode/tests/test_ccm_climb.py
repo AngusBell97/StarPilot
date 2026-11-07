@@ -75,7 +75,7 @@ class ClimbTests(unittest.TestCase):
     self.assertEqual(d.policy.climb_end_reason, 'model slowing')
     d = Driver()
     d.run(1.5)
-    lead = LeadEvidence(True, True, True, distance_m=120.0, speed_mps=20.0, accel_mps2=0.0)
+    lead = LeadEvidence(True, True, True, distance_m=40.0, speed_mps=17.0, accel_mps2=0.0)  # 2.2 s ahead
     self.assertFalse(chill(d.run(0.05, lead=lead)))
     self.assertEqual(d.policy.climb_end_reason, 'lead')
 
@@ -149,6 +149,43 @@ class ClimbTests(unittest.TestCase):
     self.assertFalse(chill(Driver(replace(CLIMB, ccm_climb_lead=True)).run(5.0, lead=near)))  # never starts within 3 s
     slow = replace(away, speed_mps=speed + 0.5)
     self.assertFalse(chill(Driver(replace(CLIMB, ccm_climb_lead=True)).run(5.0, lead=slow)))  # not really pulling away
+
+  def test_far_lead_that_is_not_slower_lets_a_climb_carry_on(self):
+    speed = 40 * MPH_TO_MPS
+    d = Driver()
+    self.assertTrue(chill(d.run(1.5)))
+    far = LeadEvidence(True, False, True, distance_m=5.0 * speed, speed_mps=speed, accel_mps2=0.0)
+    self.assertTrue(chill(d.run(2.0, lead=far)))  # 5 s ahead, same speed: carry on
+    self.assertFalse(chill(d.run(0.05, lead=replace(far, distance_m=3.0 * speed))))  # within 4 s: hand back
+    self.assertEqual(d.policy.climb_end_reason, 'lead')
+    d = Driver()
+    d.run(1.5)
+    slower = LeadEvidence(True, False, True, distance_m=5.0 * speed, speed_mps=speed - 2 * MPH_TO_MPS, accel_mps2=0.0)
+    self.assertFalse(chill(d.run(0.05, lead=slower)))  # far but slower: hand back
+    d = Driver()
+    d.run(1.5)
+    braking = replace(far, accel_mps2=-1.0)
+    self.assertFalse(chill(d.run(0.05, lead=braking)))  # far but braking: hand back
+    self.assertFalse(chill(Driver().run(3.0, lead=far)))  # a far lead still stops a new climb starting
+
+  def test_steady_easing_ends_a_climb_but_noise_does_not(self):
+    speed = 40 * MPH_TO_MPS
+    d = Driver()
+    d.run(1.5)
+    self.assertTrue(chill(d.run(0.4, accel=-0.15)))  # brief gentle easing: carry on
+    self.assertTrue(chill(d.run(1.0)))
+    self.assertFalse(chill(d.run(1.5, accel=-0.15)))  # sustained (about 1 s to confirm): hand back
+    self.assertEqual(d.policy.climb_end_reason, 'model easing')
+    d = Driver()
+    d.run(1.5)
+    self.assertTrue(chill(d.run(0.05, plan8=speed - 4 * MPH_TO_MPS)))  # one noisy plan dip: carry on
+    self.assertTrue(chill(d.run(1.0)))
+    self.assertFalse(chill(d.run(2.0, plan8=speed - 3 * MPH_TO_MPS)))  # a sustained falling plan: hand back
+    self.assertEqual(d.policy.climb_end_reason, 'model easing')
+    d = Driver()
+    d.run(1.5)
+    self.assertFalse(chill(d.run(0.05, accel=-0.35)))  # real braking still ends it at once
+    self.assertEqual(d.policy.climb_end_reason, 'model slowing')
 
   def test_climb_mode_off_keeps_the_frozen_speed_rule(self):
     d = Driver(replace(CLIMB, ccm_climb=False))

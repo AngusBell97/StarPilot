@@ -39,8 +39,18 @@ CLIMB_TARGET_RISE_MPS = 1.0 * MPH_TO_MPS
 CLIMB_CALM_ACCEL = -0.05        # model asks at least this much to start a climb
 CLIMB_CALM_3S_MPS = 0.3         # its 3 s plan may sit at most this far below current speed
 CLIMB_CALM_8S_MPS = 0.5         # and its 8 s plan at most this far
-CLIMB_SLOWING_ACCEL = -0.3      # a climb ends when the model asks for this or less
-CLIMB_SLOWING_8S_MPS = 3.0 * MPH_TO_MPS
+CLIMB_SLOWING_ACCEL = -0.3      # a climb ends at once when the model asks for this or less
+# Steady easing (7 Nov 2026): the model's request and its 8 s plan, smoothed, so gentle but sustained easing
+# ends a climb without single-sample noise doing so.
+CLIMB_EASE_ACCEL = -0.12        # smoothed request at or below this...
+CLIMB_EASE_HOLD_S = 0.5         # ...for this long ends the climb
+CLIMB_EASE_ACCEL_TAU_S = 0.3
+CLIMB_EASE_PLAN_TAU_S = 1.0     # the 8 s plan, averaged over about a second...
+CLIMB_EASE_PLAN_MPS = 2.0 * MPH_TO_MPS  # ...more than this below the car's speed ends the climb
+# A far lead that isn't slower doesn't end a climb (7 Nov 2026); it still stops a new one starting.
+CLIMB_FAR_LEAD_GAP_S = 4.0
+CLIMB_FAR_LEAD_SLOWER_MPS = 1.0 * MPH_TO_MPS
+CLIMB_FAR_LEAD_BRAKE = -0.5
 CLIMB_SIGNAL_VETO_MPS = 35.0 * MPH_TO_MPS  # below this an indicator means a turn: Experimental
 CLIMB_RECOVER_SPEED_MPS = 15.0 * MPH_TO_MPS
 # Lead pulling away (optional): only a lead well beyond the following distance that keeps moving away.
@@ -351,6 +361,10 @@ class ConditionalModePolicy:
     self.climb_end_reason = ''
     self.climb_kind = ''            # 'clear' or 'lead'
     self.climb_away_since: float | None = None
+    self.climb_ease_accel: float | None = None   # smoothed model request during a climb
+    self.climb_ease_plan: float | None = None    # smoothed (8 s plan - speed) during a climb
+    self.climb_ease_since: float | None = None
+    self.climb_ease_last: float | None = None
 
   def reset_transition(self, *, settings_edit: bool = False) -> None:
     # Preserve bend evidence across a temporary authority/data interruption.
@@ -708,6 +722,34 @@ class ConditionalModePolicy:
     return bool(confident and lead.distance_m >= gap_s * max(speed, 1.0) and
                 lead.speed_mps >= speed + away_mps and lead.accel_mps2 >= CLIMB_LEAD_BRAKE)
 
+  def _far_lead_ok(self, scene: SceneEvidence, speed: float) -> bool:
+    """A lead far ahead that is not slower than the car and not braking: a clear-road climb may carry on."""
+    lead = scene.lead
+    if (lead is None or not _lead_valid(lead) or lead.present is not True or lead.distance_m is None or
+        lead.speed_mps is None or lead.accel_mps2 is None or not _finite(lead.distance_m, high=500.0) or
+        not _finite(lead.speed_mps, high=100.0) or not _finite(lead.accel_mps2, low=-20.0, high=20.0)):
+      return False
+    return bool(lead.distance_m >= CLIMB_FAR_LEAD_GAP_S * max(speed, 1.0) and
+                lead.speed_mps >= speed - CLIMB_FAR_LEAD_SLOWER_MPS and lead.accel_mps2 >= CLIMB_FAR_LEAD_BRAKE)
+
+  def _model_easing(self, now_s: float, accel: float, plan8: float, speed: float) -> bool:
+    """Smooth the model's request and 8 s plan through a climb; True once it is easing off steadily."""
+    plan = plan8 - speed
+    dt = min(max(now_s - self.climb_ease_last, 0.0), 0.25) if self.climb_ease_last is not None else 0.0
+    self.climb_ease_last = now_s
+    if self.climb_ease_accel is None or self.climb_ease_plan is None:
+      self.climb_ease_accel, self.climb_ease_plan = accel, plan
+    else:
+      self.climb_ease_accel += dt / (CLIMB_EASE_ACCEL_TAU_S + dt) * (accel - self.climb_ease_accel)
+      self.climb_ease_plan += dt / (CLIMB_EASE_PLAN_TAU_S + dt) * (plan - self.climb_ease_plan)
+    if self.climb_ease_accel <= CLIMB_EASE_ACCEL:
+      if self.climb_ease_since is None:
+        self.climb_ease_since = now_s
+    else:
+      self.climb_ease_since = None
+    held = self.climb_ease_since is not None and now_s - self.climb_ease_since >= CLIMB_EASE_HOLD_S
+    return bool(held or self.climb_ease_plan < -CLIMB_EASE_PLAN_MPS)
+
   def _climb_step(self, now_s: float, scene: SceneEvidence, settings: ModeSettings, speed: float, signal: bool) -> bool:
     """Return True while a climb is active."""
     target = self._climb_target(scene)
@@ -728,11 +770,14 @@ class ConditionalModePolicy:
         lead_ok = (lead is not None and _lead_valid(lead) and lead.present is False or
                    self._lead_pulling_away(now_s, scene, speed, CLIMB_LEAD_END_GAP_S, CLIMB_LEAD_STOP_AWAY_MPS))
       else:
-        lead_ok = lead_clear
+        # A far lead that isn't slower lets a clear-road climb carry on; a closer or slower one ends it.
+        lead_ok = lead_clear or self._far_lead_ok(scene, speed)
+      easing = model_known and self._model_easing(now_s, accel, plan8, speed)
       reason = ('lead' if not lead_ok else
                 'unknown' if not model_known or short is None else
                 'done' if short <= CLIMB_DONE_MPS else
-                'model slowing' if accel <= CLIMB_SLOWING_ACCEL or plan8 < speed - CLIMB_SLOWING_8S_MPS else
+                'model slowing' if accel <= CLIMB_SLOWING_ACCEL else
+                'model easing' if easing else
                 '')
       if reason:
         self._end_climb(now_s, reason)
@@ -755,6 +800,7 @@ class ConditionalModePolicy:
       self.climbing = True
       self.climb_kind = kind
       self.climb_end_reason = ''
+      self.climb_ease_accel = self.climb_ease_plan = self.climb_ease_since = self.climb_ease_last = None
     return self.climbing
 
   def _ccm(self, now_s: float, authority: Authority, warm: bool, scene: SceneEvidence, settings: ModeSettings) -> Decision:
