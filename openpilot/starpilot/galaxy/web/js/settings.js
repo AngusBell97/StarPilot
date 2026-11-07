@@ -1,3 +1,4 @@
+import { requestJson } from "./startup.js"
 import { GxDialog } from "./dialog.js"
 import { GxState } from "./state.js"
 import { connectionError } from "./polling.js"
@@ -286,13 +287,13 @@ export const SettingsPage = {
     const navigation = route.view
     const navigationKey = `${props.initialPage}:${props.initialSection || ""}`
     const saved = navigation.settings?.key === navigationKey ? navigation.settings : null
-    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, parents: [], pageTitles: {}, developerOpen: props.initialSection === "developer", panelDirection: 1 })
+    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, testingSound: false, parents: [], pageTitles: {}, developerOpen: props.initialSection === "developer", panelDirection: 1 })
     if (saved) Object.assign(state, { section: saved.section, query: saved.query, searchOpen: saved.searchOpen, parents: saved.parents.slice(), developerOpen: saved.developerOpen })
     const feed = new SettingsFeed({ publish: (update) => Object.assign(state, update), unauthorized: props.unauthorized })
     return { state, feed, sections: SETTINGS_SECTIONS, navigation, navigationKey, restoredPage: saved?.page }
   },
   computed: {
-    busy() { return settingsBusy(this.state) },
+    busy() { return settingsBusy(this.state) || !!this.state.testingSound },
     pageTitle() { return this.state.data?.page && this.state.data.page !== "hub" ? this.state.data.title : this.title },
     pageDescription() {
       const page = this.state.data?.page || this.initialPage
@@ -302,7 +303,7 @@ export const SettingsPage = {
       if (page === "sentry") return this.state.data?.subtitle || "Checking motion monitor…"
       return {
         pip: "Choose when to show the camera and adjust its saved crop. Use the crop editor for a live preview.",
-        sounds: "Adjust alert and chime volumes. Immediate warnings keep their safety volume ramp.",
+        sounds: "Adjust alert and chime volumes. Test alert plays on your comma while offroad; Auto previews a quiet-cabin starting level. Immediate warnings keep their safety volume ramp.",
         display: "Adjust brightness and screen timing when custom display settings are on.",
         lane_change: "Configure lane-change assistance, signal timing, steering pace and following gap.",
         profiles: "Adjust acceleration, braking and following for each driving personality.",
@@ -447,6 +448,18 @@ export const SettingsPage = {
       this.state.parents = this.navigationPath ? ["hub", ...above] : above.slice(Math.max(0, above.indexOf(this.initialPage)))
       this.feed.load(page)
     },
+    async testAlert(key) {
+      if (this.busy) return
+      this.state.testingSound = true
+      try {
+        await requestJson("./api/sounds/preview", { timeout: 10000, request: {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key }),
+        } })
+      } catch (error) {
+        if (error?.status === 401) this.unauthorized()
+        throw error
+      } finally { this.state.testingSound = false }
+    },
     open(page) {
       if (this.busy) return
       this.$emit?.("nested")
@@ -584,7 +597,7 @@ export const SettingsPage = {
                 </div>
               <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
               <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index"
-                :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)"
+                :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)" :test-alert="state.data.page === 'sounds' ? testAlert : null"
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
               <div v-if="!cardIndex && !visibleRows.length" class="gx-empty">No matching settings.</div>
             </section>

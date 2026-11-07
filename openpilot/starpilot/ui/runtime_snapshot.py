@@ -17,11 +17,10 @@ from typing import Any
 from openpilot.starpilot.galaxy.access import AccessStatus, GalaxyAccessOwner
 from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice, OnroadAppearance, onroad_appearance
 from openpilot.starpilot.ui.brand import DISPLAY_VERSION, home_description
-from openpilot.starpilot.curve_speed.status import observation as curve_observation
+from openpilot.starpilot.curve_speed.status import CurvatureDisplay, observation as curve_observation
 from openpilot.starpilot.conditional_mode.policy import ModeChoice
 from openpilot.starpilot.conditional_mode.manual import TRAFFIC_MODE_ACTION, read_button_map
 from openpilot.starpilot.feature_capabilities import lateral_supported, longitudinal_supported
-from openpilot.starpilot.aol.runtime import current_axis
 from openpilot.starpilot.aol.wire import INTENT_SERVICE, decode_intent
 from openpilot.starpilot.conditional_mode.projection import paired_clocks_ns
 from openpilot.starpilot.conditional_mode.runtime_settings import ConditionalSettingsOwner
@@ -48,6 +47,7 @@ from openpilot.starpilot.ui.onroad_state import (AlertSize, BorderSignals, Obser
                                                 OnroadState, SpeedLimitObservation, is_personality_notice, speed_limit_from_message)
 from openpilot.starpilot.ui.unified_speed_presentation import displayed_adjusted_limit_mps, displayed_limit_mps, positive, retaining_limit
 from openpilot.starpilot.ui.onroad_stopped_timer import StoppedTimer
+from openpilot.starpilot.speed_limits.vision.stop_observation import StopConfirmation, read_stop_evidence
 from openpilot.starpilot.ui.onroad_lane_alerts import lateral_lane_alert
 from openpilot.starpilot.ui.tesla_speed_sync_warning import SpeedSyncCaption
 from openpilot.starpilot.lateral.lane_feedback import correction_feedback, STOCK_CORRECTION
@@ -60,6 +60,7 @@ from openpilot.starpilot.ui.toggles_state import Personality, ToggleKey, Toggles
 
 
 SLC_SIGN_HOLD_NS = 150_000_000
+EVENTS_DISPLAY_MAX_AGE_NS = 1_500_000_000  # selfdrived sends onroadEvents on every change and at least once a second
 
 
 def _boot_time_ns() -> int:
@@ -349,6 +350,7 @@ class RuntimeSnapshotAdapter:
     self._conditional_read_ns: int | None = None
     self._traffic = TrafficDisplayProjector()
     self._switchback = SwitchbackStatusOwner()
+    self._curve_curvature = CurvatureDisplay()
     self._traffic_settings = ConditionalSettingsOwner(ui_state.params)
     self._traffic_context_ns: int | None = None
     self._traffic_map_fingerprint: str | None = None
@@ -361,6 +363,7 @@ class RuntimeSnapshotAdapter:
     self._replay_stopped_history = False
     self._developer_metrics = DeveloperMetrics()
     self._reverse_driver_camera = ReverseDriverCamera()
+    self._vision_stop = StopConfirmation()
     self._slc_sign_cache: tuple[int, tuple[int, int], str, SpeedLimitObservation] | None = None
     self._mono_clock, self._boot_clock = mono_clock, boot_clock
     self._device_after_mono_ns = mono_clock()
@@ -479,7 +482,7 @@ class RuntimeSnapshotAdapter:
     display_model = display_message(sm, "modelV2", now_ns, after_frame=after) if started else None
     display_radar = display_message(sm, "radarState", now_ns, after_frame=after) if started else None
     display_plan = display_message(sm, 'longitudinalPlan', now_ns, after_frame=after) if started else None
-    display_events = display_message(sm, 'onroadEvents', now_ns, after_frame=after) if started else None
+    display_events = _message_at_age(sm, 'onroadEvents', now_ns, after, EVENTS_DISPLAY_MAX_AGE_NS) if started else None
     display_monitor = display_message(sm, 'driverMonitoringState', now_ns, after_frame=after) if started else None
     if display_monitor is not None:
       self._display_rhd = bool(display_monitor.isRHD)
@@ -493,7 +496,7 @@ class RuntimeSnapshotAdapter:
       alert = self.follow_gap_notice.apply(now_ns, alert)
     slc = display_message(sm, "slcState", now_ns, after_frame=after) if started else None
     curve_envelope = current_curve_message(sm, now_ns, after_frame=after) if started else None
-    curve = curve_observation(curve_envelope, now_ns) if curve_envelope is not None else None
+    curve = self._curve_curvature.update(curve_observation(curve_envelope, now_ns) if curve_envelope is not None else None, now_ns)
     conditional_envelope = display_message(sm, 'starpilotSelfdriveState', now_ns, after_frame=after) if started else None
 
     from openpilot.starpilot.navigation.wire import navigation_state
@@ -690,8 +693,10 @@ class RuntimeSnapshotAdapter:
     display_long_active = bool(display_control.longActive) if display_control is not None else False
     long_engaged = bool(display_selfdrive is not None and getattr(display_selfdrive, 'enabled', False))
     if getattr(ui, 'aol_runtime', False):
-      axis = current_axis(sm, now_ns=now_ns) if started and sm.recv_frame.get('aolAxisState', 0) > after else None
-      long_engaged = long_engaged and bool(axis is not None and axis.nativeAcknowledged and axis.desiredLongitudinal)
+      # Display only: the control-side 30 ms proof window would blink the override edge whenever a frame runs late.
+      axis = display_message(sm, 'aolAxisState', now_ns, after_frame=after) if started else None
+      long_engaged = long_engaged and bool(axis is not None and axis.qualified and axis.sessionId and
+                                           axis.nativeAcknowledged and axis.desiredLongitudinal)
     longitudinal_overridden = bool(
       display_car_valid and getattr(display_car, 'gasPressed', False) and long_engaged and
       str(getattr(display_selfdrive, 'state', '')) == 'overriding' and
@@ -714,7 +719,19 @@ class RuntimeSnapshotAdapter:
     follow_target = (self._follow_target.sample(now_ns, list(Personality).index(persona),
                                                 getattr(display_car, 'vEgo', None) if display_car_valid else None, cp,
                                                 traffic_mode=traffic_active) if started else None)
-    onroad = OnroadState(developer_metrics=developer_metrics,
+    stop_evidence = (read_stop_evidence(sm, now_ns=now_ns, now_boot_ns=now_ns + pair[2],
+                                      drive_id=drive_id, after_frame=after) if started and pair is not None else None)
+    stop_observed_ns = self._vision_stop.observe(stop_evidence, now_ns=now_ns)
+    weather_location = None
+    if (started and getattr(ui, 'replay_clock', None) is None and
+        any(layout.get('weather', {}).get('enabled', False) for layout in self._customization_value['layouts'].values())):
+      from openpilot.starpilot.ui.weather import valid_location
+      for service in ('gpsLocationExternal', 'gpsLocation'):
+        gps = current_message(sm, service, now_ns, after_frame=after)
+        if gps is not None and gps.hasFix and valid_location((gps.latitude, gps.longitude)):
+          weather_location = (gps.latitude, gps.longitude)
+          break
+    onroad = OnroadState(weather_location=weather_location, developer_metrics=developer_metrics, stop_sign_observed_ns=stop_observed_ns,
                          engaged=display_lat_active or display_long_active or longitudinal_overridden, camera_available=started,
                          speed_mps=raw_speed, cruise_kph=cruise, speed_limit=observation,
                          toyota_cruise_status=str(toyota.status) if toyota is not None else '',
@@ -742,6 +759,7 @@ class RuntimeSnapshotAdapter:
                          lane_clean_arc=self._lane_clean_arc,
                          torque_utilization=torque.utilization if torque.utilization is not None else 0.0,
                          torque_source_available=torque.utilization is not None,
+                         torque_is_demand=torque.source == "lateral_acceleration_demand",
                          torque_drive_frame=after if started else None, drive_frame=after if started else None, observed_ns=now_ns,
                          wheel_acceleration=observe_wheel_acceleration(display_car),
                          aol_latched=(display_aol_latch(sm, now_ns, after_frame=after)

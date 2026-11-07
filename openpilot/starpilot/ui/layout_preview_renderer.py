@@ -75,7 +75,8 @@ def sample_state(scene: str, document: dict) -> OnroadState:
   lateral = scene not in ('long_only', 'slc_disengaged')
   longitudinal = scene not in ('aol', 'slc_disengaged')
   pending = scene in ('slc_pending', 'slc_notice')
-  state = OnroadState(engaged=lateral or longitudinal, camera_available=False,
+  from openpilot.starpilot.ui.weather import WeatherReading
+  state = OnroadState(weather=WeatherReading(21, 2, True), engaged=lateral or longitudinal, camera_available=False,
                      speed_mps=0.0 if scene in ("cem_lead", "stopped") else 22.0, cruise_kph=88.0,
                      stopped_duration_s=PREVIEW_DURATION_S if scene == "stopped" else None,
                      speed_limit=SpeedLimitObservation(kind=ObservationKind.VALID, source="dashboard",
@@ -504,7 +505,9 @@ class LayoutPreviewRenderer:
     if profile == Profile.LARGE:
       from openpilot.starpilot.ui.navigation_state import NavigationDisplay
       state = replace(state, navigation=NavigationDisplay(("preview", 1), "Turn left onto Desert Inn Road", "turn", "left",
-                                                          152.0, 6800.0, 540.0))
+                                                          152.0, 6800.0, 540.0, False, "turn", "right", 300.0,
+                                                          ((True, ("left",), "left"), (True, ("left",), "left"), (False, ("straight",), ""),
+                                                           (False, ("straight",), ""), (False, ("right",), ""))))
     if not rl.is_window_ready():
       raise RuntimeError("Layout preview requires the UI graphics context")
     if self._canvas is None or self._canvas.profile != profile or self._canvas.viewport != viewport:

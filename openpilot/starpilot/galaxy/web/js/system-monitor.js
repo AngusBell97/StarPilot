@@ -116,9 +116,12 @@ export const SystemMonitor = {
           <section class="gx-card gx-monitor__metric"><span>Memory</span><strong>{{ number(snapshot.memory.percent, '%') }}</strong>
             <div class="gx-monitor__bar"><i :style="{ width: percentBar(snapshot.memory.percent) + '%' }"></i></div>
             <small>{{ snapshot.memory.usedMiB == null ? '—' : number(snapshot.memory.usedMiB / 1024) }} of {{ snapshot.memory.totalMiB == null ? '—' : number(snapshot.memory.totalMiB / 1024) }} GB</small></section>
-          <section class="gx-card gx-monitor__metric"><span>Storage</span><strong>{{ number(usedPercent(snapshot.storage.usedGiB, snapshot.storage.totalGiB), '%') }}</strong>
+          <section class="gx-card gx-monitor__metric"><span>{{ snapshot.deviceType === 'tici' ? 'Internal storage' : 'Storage' }}</span><strong>{{ number(usedPercent(snapshot.storage.usedGiB, snapshot.storage.totalGiB), '%') }}</strong>
             <div class="gx-monitor__bar"><i :style="{ width: percentBar(usedPercent(snapshot.storage.usedGiB, snapshot.storage.totalGiB)) + '%' }"></i></div>
-            <small>{{ number(snapshot.storage.usedGiB) }} of {{ number(snapshot.storage.totalGiB) }} GB</small></section>
+            <small>{{ number(snapshot.storage.usedGiB) }} of {{ number(snapshot.storage.totalGiB) }} GB<span v-if="snapshot.deviceType === 'tici'"> · {{ number(snapshot.storage.freeGiB) }} GB free</span></small></section>
+          <section v-if="snapshot.deviceType === 'tici' && snapshot.recordingStorage" class="gx-card gx-monitor__metric"><span>Recording drive</span><strong>{{ number(usedPercent(snapshot.recordingStorage.usedGiB, snapshot.recordingStorage.totalGiB), '%') }}</strong>
+            <div class="gx-monitor__bar"><i :style="{ width: percentBar(usedPercent(snapshot.recordingStorage.usedGiB, snapshot.recordingStorage.totalGiB)) + '%' }"></i></div>
+            <small>{{ number(snapshot.recordingStorage.usedGiB) }} of {{ number(snapshot.recordingStorage.totalGiB) }} GB · {{ number(snapshot.recordingStorage.freeGiB) }} GB free</small></section>
           <section class="gx-card gx-monitor__metric" :data-heat="commaHeat(comma)"><span>Comma temperature</span><strong>{{ comma ? whole(comma.maxTempC, ' °C') : '—' }}</strong>
             <small class="gx-monitor__heat-text">{{ comma?.statusText || 'Unavailable' }}</small><small v-if="comma?.fanPercent != null">Fan {{ whole(comma.fanPercent, '%') }}</small></section>
           <section class="gx-card gx-monitor__metric" :data-heat="batteryLow ? 'hot' : 'normal'"><span>Car battery</span><strong>{{ battery == null ? '—' : battery.toFixed(1) + ' V' }}</strong>

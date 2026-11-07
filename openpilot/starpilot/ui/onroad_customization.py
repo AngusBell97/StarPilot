@@ -136,7 +136,7 @@ for _profile, _data in PROFILES.items():
   _x, _y, _width, _height = maximum_footprint(_bounds["x"], _bounds["y"], _bounds["width"], _bounds["height"], _data["width"])
   _data["widgets"]["torque_bar"] = {
     **_widget("Torque bar", "torque_bar", _width, _height, _x, _y), "layer": "underlay",
-    "note": "Torque output, or steering-effort estimate on angle-controlled vehicles"}
+    "note": "Torque command or lateral-acceleration demand. Full width reflects the configured display scale."}
 ACTIONLESS_WIDGETS = {profile: set(data["widgets"]) - {"speed_limit_actions"} for profile, data in PROFILES.items()}
 
 RAILLESS_WIDGETS = {profile: set(data["widgets"]) for profile, data in PROFILES.items()}
@@ -178,6 +178,13 @@ for _profile, (_x, _y) in {"compact": (18, 48), "large": (600, 520)}.items():
   _timer_widget["default"]["enabled"] = False
   _timer_widget["note"] = "Counts how long you have been stopped, after the first minute of the drive"
   PROFILES[_profile]["widgets"][STOPPED_TIMER_WIDGET] = _timer_widget
+
+WEATHER_WIDGET = "weather"
+for _profile, _geometry in {"large": (280, 100, 640, 540), "compact": (112, 48, 172, 174)}.items():
+  _weather_widget = _widget("Weather", WEATHER_WIDGET, *_geometry)
+  _weather_widget["default"]["enabled"] = False
+  _weather_widget["note"] = "Outside temperature and conditions. Weather by Open-Meteo.com; requires internet and a GPS fix."
+  PROFILES[_profile]["widgets"][WEATHER_WIDGET] = _weather_widget
 
 NAV_CARD_WIDGET, NAV_MAP_WIDGET = "nav_card", "nav_map"
 NAV_CARD_SIZE = (560, 195)
@@ -260,7 +267,7 @@ for _profile, (_x, _y) in {"large": (1460, 330), "compact": (300, 186)}.items():
 ROAD_BASE_WIDTH = 1860
 SIDEBAR_EXTRA = 300
 ANCHOR_SHIFT = {"steering_wheel": 1.0, NAV_CARD_WIDGET: 1.0, NAV_MAP_WIDGET: 1.0,
-                "current_speed": .5, "torque_bar": .5, LANE_BAR_WIDGET: .5, MODE_WIDGET: .5, CLOCK_WIDGET: .5,
+                "current_speed": .5, "torque_bar": .5, LANE_BAR_WIDGET: .5, MODE_WIDGET: .5, CLOCK_WIDGET: .5, WEATHER_WIDGET: .5,
                 **dict.fromkeys(LEAD_WIDGETS, .5)}
 for _key, _widget_data in PROFILES["large"]["widgets"].items():
   if _key in ANCHOR_SHIFT:
@@ -269,7 +276,7 @@ for _key, _widget_data in PROFILES["large"]["widgets"].items():
   _widget_data["bounds"] = {**_base, "x": _base["x"] - ANCHOR_SHIFT.get(_key, 0) * SIDEBAR_EXTRA, "width": _base["width"] + SIDEBAR_EXTRA}
   _widget_data["expandable"] = True
 # Older documents retain every saved placement and gain this independent widget.
-OPTIONAL_WIDGETS = frozenset({LANE_BAR_WIDGET, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, CEM_GAUGE_WIDGET, NAV_CARD_WIDGET, NAV_MAP_WIDGET, JETLINK_WIDGET,
+OPTIONAL_WIDGETS = frozenset({WEATHER_WIDGET, LANE_BAR_WIDGET, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, CEM_GAUGE_WIDGET, NAV_CARD_WIDGET, NAV_MAP_WIDGET, JETLINK_WIDGET,
                               *LEAD_WIDGETS})
 
 # The torque arc grows when the developer sidebar closes; protect both road widths.
@@ -284,8 +291,8 @@ _torque['confirmationObstacle'] = {
 
 # These editor sprites use the runtime components and their canonical assets/fonts.
 RUNTIME_PREVIEW_WIDGETS = {
-  "large": (LANE_BAR_WIDGET, "current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "following_distance", "driver_monitor", "speed_limit_actions"),
-  "compact": (LANE_BAR_WIDGET, "max_speed", "speed_limit", "steering_wheel", "conditional_mode", "following_distance",
+  "large": (WEATHER_WIDGET, LANE_BAR_WIDGET, "current_speed", "cruise_limits", CEM_GAUGE_WIDGET, "steering_wheel", "following_distance", "driver_monitor", "speed_limit_actions"),
+  "compact": (WEATHER_WIDGET, LANE_BAR_WIDGET, "max_speed", "speed_limit", "steering_wheel", "conditional_mode", "following_distance",
               "model_confidence", "driver_monitor", "speed_limit_actions"),
 }
 
@@ -297,6 +304,7 @@ WIDGET_COLORS = {
   "large": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
     CLOCK_WIDGET: {"text": "#FFFFFFFF"},
+    WEATHER_WIDGET: {"cardFill": "#0F0D17CC", "cardBorder": "#C7AEF744", "text": "#F5F2FCFF"},
     **_LEAD_COLORS,
     CEM_GAUGE_WIDGET: {},
     "current_speed": {"text": None},
@@ -309,6 +317,7 @@ WIDGET_COLORS = {
   "compact": {
     MODE_WIDGET: {"text": "#FFFFFFFF"},
     CLOCK_WIDGET: {"text": "#FFFFFFFF"},
+    WEATHER_WIDGET: {"cardFill": "#0F0D17CC", "cardBorder": "#C7AEF744", "text": "#F5F2FCFF"},
     **_LEAD_COLORS,
     "max_speed": {"text": None},
     "speed_limit_actions": {**_ACTION_COLORS, "text": "#F1F6F3FF"},
@@ -323,10 +332,10 @@ WIDGET_COLORS = {
 # Back-to-front order used when a layout first opts into custom layers.
 DEFAULT_WIDGET_ORDER = {
   "large": (NAV_MAP_WIDGET, "pip_left", "pip_right", "cruise_limits", "speed_limit_actions", CEM_GAUGE_WIDGET, "current_speed",
-            "steering_wheel", "torque_bar", LANE_BAR_WIDGET, "following_distance", "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET,
+            "steering_wheel", "torque_bar", LANE_BAR_WIDGET, "following_distance", "driver_monitor", MODE_WIDGET, CLOCK_WIDGET, WEATHER_WIDGET, STOPPED_TIMER_WIDGET, NAV_CARD_WIDGET, JETLINK_WIDGET,
             *LEAD_WIDGETS),
   "compact": ("pip_left", "pip_right", "speed_limit", "max_speed", "steering_wheel", "torque_bar", LANE_BAR_WIDGET,
-              "speed_limit_actions", "driver_monitor", *RAIL_WIDGETS, MODE_WIDGET, CLOCK_WIDGET, STOPPED_TIMER_WIDGET, *LEAD_WIDGETS),
+              "speed_limit_actions", "driver_monitor", *RAIL_WIDGETS, MODE_WIDGET, CLOCK_WIDGET, WEATHER_WIDGET, STOPPED_TIMER_WIDGET, *LEAD_WIDGETS),
 }
 
 

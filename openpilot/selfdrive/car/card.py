@@ -68,7 +68,8 @@ from openpilot.starpilot.car.nissan.aol import (
 )
 from openpilot.starpilot.car.hyundai.aol import aol_safety_config as hyundai_aol_safety_config, pending_stock_angle_arm
 from openpilot.starpilot.car.hyundai.aol import retained_shared_long_cancel_intent as hkg_cancel_intent_retained
-from openpilot.starpilot.car.ford.aol import brake_pause_active as ford_brake_pause_active
+from openpilot.starpilot.car.ford.aol import (brake_pause_active as ford_brake_pause_active,
+                                               awaiting_initial_request as ford_awaiting_initial_request)
 from openpilot.starpilot.aol.runtime import AXIS_MAX_AGE_NS, current_axis, current_native
 from openpilot.starpilot.aol.vehicle import create_intent as create_aol_intent, native_latch_rejected, policy_for as aol_policy_for
 from openpilot.starpilot.aol.wire import IntentState, encode_intent
@@ -92,7 +93,7 @@ from openpilot.starpilot.saved_source import read_saved
 from openpilot.starpilot.common.car_control_config import software_cruise_requested
 from openpilot.starpilot.vehicle_selection import startup_candidate
 from openpilot.starpilot.vehicle_preferences import VehicleStartupPreferences
-from openpilot.starpilot.controller_extensions import configure_controller, observe_controller_can
+from openpilot.starpilot.controller_extensions import configure_controller, observe_controller_can, order_controller_can
 from openpilot.starpilot.vehicle_startup import VehicleStartupOwner
 from openpilot.starpilot.controllers.wheel_actions import WheelPublisher, key_for
 from openpilot.starpilot.controllers.cruise_action import CruiseActionConsumer, eligible as cruise_action_eligible
@@ -515,13 +516,18 @@ class Car:
   def state_update(self, *, defer_radar=False) -> tuple[car.CarState, structs.RadarDataT | None]:
     """carState update loop, driven by can"""
 
+    timing = getattr(self, '_cycle_timing', None)
     can_strs = messaging.drain_sock_raw(self.can_sock, wait_for_one=True)
     can_received_ns = time.monotonic_ns()
+    if timing is not None:
+      timing.mark('can_receive')
     can_list = can_capnp_to_list(can_strs)
 
     # Update carState from CAN
     observe_controller_can(self.CI, can_list)
     CS = self.CI.update(can_list)
+    if timing is not None:
+      timing.mark('can_parse')
     from openpilot.starpilot.car.gm.aol import f1_conventional_lateral_owner
     cancel_boot_ns = (time.clock_gettime_ns(time.CLOCK_BOOTTIME)
                       if (getattr(self.CI.CS, 'ev6_aol_source_healthy', False) or
@@ -541,6 +547,8 @@ class Car:
     RD = None if defer_radar else self.radar_update(can_list)
 
     self.sm.update(0)
+    if timing is not None:
+      timing.mark('service_update')
 
     self.update_vehicle_state_context(CS)
 
@@ -630,7 +638,12 @@ class Car:
       angle_arm_pending = pending_stock_angle_arm(self.CP, CS, self.sm, self.aol_card_intent,
         now_ns=now_ns, producer=self.slc_producer_session,
         acknowledged_arm_ns=getattr(self, '_angle_aol_acknowledged_arm_ns', 0))
-      transport_reset = not (hkg_cancel_retained or rivian_brake_retained or angle_arm_pending) and self.aol_transport_feedback.observe(
+      ford_initial_wait = bool(not self.aol_transport_feedback.ever_lateral_active and
+        self.aol_card_intent.allowed_latch and qualified_ford_aol(self.CP, marked_only=True) and
+        ford_awaiting_initial_request(self.CP, CS, self.sm,
+          current_native(self.sm, self.CP, now_ns=now_ns, axis_session_id=self.aol_axis_session()),
+          self.aol_transport_feedback, self.aol_card_intent, now_ns=now_ns, producer=self.slc_producer_session))
+      transport_reset = not (hkg_cancel_retained or rivian_brake_retained or angle_arm_pending or ford_initial_wait) and self.aol_transport_feedback.observe(
         self.sm, self.CP, CS, now_ns,
         latched=self.aol_card_intent.allowed_latch, cancel_source_ns=cancel_source_ns,
         brake_source_ns=brake_source_ns,
@@ -657,7 +670,7 @@ class Car:
           not feedback.retention_started_ns and not feedback.retention_qualified and not feedback.retention_pending and
           not any(e.immediateDisable or e.softDisable or e.userDisable for e in self.sm['onroadEvents']))
         fault_active = transport_reset or self.aol_disarming_fault(CS, event_ns, now_ns,
-          transport_observed_healthy=reuse_transport or angle_arm_pending)
+          transport_observed_healthy=reuse_transport or angle_arm_pending or ford_initial_wait)
       angle_aol, ford_aol, honda_aol, mazda_aol, preap_aol, volkswagen_aol = self.aol_permission_owners()
       nissan_aol = qualified_nissan_aol(self.CP, marked_only=True)
       rivian_aol = qualified_rivian_aol(self.CP, marked_only=True)
@@ -690,6 +703,7 @@ class Car:
           latched=self.aol_card_intent.allowed_latch,
           panda_ready=angle_panda_ready,
           restricted=(getattr(self.aol_transport_feedback, 'ordinary_warning_qualified', False) or
+            ford_initial_wait and not self.sm['aolAxisState'].desiredLateral or
             restrict(self.CP, CS) or
             ((angle_aol or ford_aol or mazda_aol or preap_aol or rivian_aol) and self.aol_card_intent.pause_lateral) or
             (angle_aol and CS.brakePressed and (not CS.standstill) and (CS.vEgo < self.aol_settings.pause_brake_mps)) or
@@ -1476,6 +1490,8 @@ class Car:
       self._clear_learning_evidence()
 
   def publish_sendcan(self, frames, valid=True):
+    if valid:
+      frames = order_controller_can(getattr(self, 'CI', None), frames)
     steering_authority = getattr(getattr(getattr(self, 'CI', None), 'CS', None), 'steering_authority', None)
     monitored_steering = (getattr(getattr(self, 'CP', None), 'brand', None) == 'gm' and
                           steering_authority is not None and steering_authority.enabled)
@@ -1843,11 +1859,16 @@ class Car:
       self.CC_prev = CC
 
   def step(self):
+    timing = getattr(self, '_cycle_timing', None)
     CS, RD = self.state_update(defer_radar=True)
+    if timing is not None:
+      timing.mark('state_decision')
 
     if self.vehicle_startup.owner is not None:
       self.vehicle_startup.maintain(configured=self.startup_panda_configured())
     self.state_publish(CS, RD)
+    if timing is not None:
+      timing.mark('publish_state')
 
     initialized = (not any(e.name == EventName.selfdriveInitializing for e in self.sm['onroadEvents']) and
                    self.sm.seen['onroadEvents'])
@@ -1861,9 +1882,13 @@ class Car:
            self.classic_startup_keepalive() or self.torque_ev_startup_keepalive() or self.mixed_startup_keepalive())):
       self.controls_update(CS, self.sm['carControl'], initialize_only=True)
 
+    if timing is not None:
+      timing.mark('apply_control')
     radar_can = self._deferred_radar_can
     self._deferred_radar_can = None
     self.radar_publish(self.radar_update(radar_can))
+    if timing is not None:
+      timing.mark('radar')
     self.initialized_prev = initialized
     self.CS_prev = CS
 
@@ -1901,16 +1926,29 @@ class Car:
       time.sleep(0.1)
 
   def card_thread(self):
+    from openpilot.starpilot.diagnostics.card_timing import CardTiming
+    self._cycle_timing = CardTiming(cloudlog.event)
     self.configure_conditional_settings_worker()
     e = threading.Event()
     t = threading.Thread(target=self.params_thread, args=(e, ))
     try:
       t.start()
       while True:
+        timing = self._cycle_timing
+        if timing is not None:
+          timing.begin()
         self.vehicle_startup.check()
+        if timing is not None:
+          timing.mark('startup')
         self.step()
+        if timing is not None:
+          timing.finish()
+          if not timing.enabled:
+            self._cycle_timing = None
         self.rk.monitor_time()
     finally:
+      if self._cycle_timing is not None:
+        self._cycle_timing.close()
       e.set()
       t.join()
       if self.ioniq6_keepalive is not None:

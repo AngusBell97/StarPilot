@@ -400,7 +400,8 @@ def _projection(row: FeatureRow, page: str) -> dict:
           "displayScale": "lane-strength" if row.key in ("LaneCenteringStrength", "LaneCenteringV5Strength", "LaneCenteringV6Strength", "LaneCenteringV9Strength") else None,
           "rangePair": lane_versions_menu.range_descriptor(row) if page.startswith("lane") else None,
           **({"coordinate": row.key.removeprefix("torque:surface:")} if row.key.startswith("torque:surface:") and row.key != "torque:surface:reset" else {}),
-          "heading": is_heading(row.key)}
+          "heading": is_heading(row.key),
+          **({"previewSound": row.key} if row.key in SOUND_SPECS else {})}
 
 
 def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
