@@ -17,7 +17,11 @@ class TestStopSignWidget(unittest.TestCase):
   def test_approved_full_screen_positions(self):
     state = self.state()
     self.assertEqual(stop_sign_bounds(Profile.COMPACT, state)[:3], (236, 28, 70.))
-    self.assertEqual(stop_sign_bounds(Profile.LARGE, state)[:3], (490, 95., 125.))
+    # Beside the Large speed sign at its own scale (your build shrinks that sign: LARGE_SIGN_SCALE .95).
+    from openpilot.starpilot.ui.large_speed_geometry import LARGE_SIGN_SCALE, LIMIT_RECTS
+    x, y, width, _ = LIMIT_RECTS[Profile.LARGE]
+    self.assertEqual(stop_sign_bounds(Profile.LARGE, state)[:3],
+                     (x + width + 24, y + 66 * LARGE_SIGN_SCALE - 50 * LARGE_SIGN_SCALE, 100 * LARGE_SIGN_SCALE))
 
   def test_camera_age_expiry_and_missing_observation_hide(self):
     state = self.state()

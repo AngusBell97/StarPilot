@@ -38,6 +38,10 @@ class Frame(dict):
     model.orientationRate.t = [float(index) / 10 for index in range(33)]
     model.velocity.x = [10.] * 33
 
+  def all_checks(self, services=None):  # your planner calls SubMaster.all_checks (3 Nov longitudinal review)
+    services = list(self) if services is None else services
+    return all(self.valid.get(s, False) and self.alive.get(s, False) for s in services)
+
 
 class ForceStopRuntimeTests(unittest.TestCase):
   def setUp(self):
