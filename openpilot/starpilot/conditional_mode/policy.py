@@ -45,12 +45,8 @@ CLIMB_SLOWING_ACCEL = -0.3      # a climb ends at once when the model asks for t
 CLIMB_EASE_ACCEL = -0.12        # smoothed request at or below this...
 CLIMB_EASE_HOLD_S = 0.5         # ...for this long ends the climb
 CLIMB_EASE_ACCEL_TAU_S = 0.3
-CLIMB_EASE_PLAN_TAU_S = 1.0     # the 8 s plan, averaged over about a second...
+CLIMB_EASE_PLAN_TAU_S = 0.5     # the 8 s plan, averaged over about half a second...
 CLIMB_EASE_PLAN_MPS = 2.0 * MPH_TO_MPS  # ...more than this below the car's speed ends the climb
-# A far lead that isn't slower doesn't end a climb (7 Nov 2026); it still stops a new one starting.
-CLIMB_FAR_LEAD_GAP_S = 4.0
-CLIMB_FAR_LEAD_SLOWER_MPS = 1.0 * MPH_TO_MPS
-CLIMB_FAR_LEAD_BRAKE = -0.5
 CLIMB_SIGNAL_VETO_MPS = 35.0 * MPH_TO_MPS  # below this an indicator means a turn: Experimental
 CLIMB_RECOVER_SPEED_MPS = 15.0 * MPH_TO_MPS
 # Lead pulling away (optional): only a lead well beyond the following distance that keeps moving away.
@@ -722,16 +718,6 @@ class ConditionalModePolicy:
     return bool(confident and lead.distance_m >= gap_s * max(speed, 1.0) and
                 lead.speed_mps >= speed + away_mps and lead.accel_mps2 >= CLIMB_LEAD_BRAKE)
 
-  def _far_lead_ok(self, scene: SceneEvidence, speed: float) -> bool:
-    """A lead far ahead that is not slower than the car and not braking: a clear-road climb may carry on."""
-    lead = scene.lead
-    if (lead is None or not _lead_valid(lead) or lead.present is not True or lead.distance_m is None or
-        lead.speed_mps is None or lead.accel_mps2 is None or not _finite(lead.distance_m, high=500.0) or
-        not _finite(lead.speed_mps, high=100.0) or not _finite(lead.accel_mps2, low=-20.0, high=20.0)):
-      return False
-    return bool(lead.distance_m >= CLIMB_FAR_LEAD_GAP_S * max(speed, 1.0) and
-                lead.speed_mps >= speed - CLIMB_FAR_LEAD_SLOWER_MPS and lead.accel_mps2 >= CLIMB_FAR_LEAD_BRAKE)
-
   def _model_easing(self, now_s: float, accel: float, plan8: float, speed: float) -> bool:
     """Smooth the model's request and 8 s plan through a climb; True once it is easing off steadily."""
     plan = plan8 - speed
@@ -770,10 +756,7 @@ class ConditionalModePolicy:
         lead_ok = (lead is not None and _lead_valid(lead) and lead.present is False or
                    self._lead_pulling_away(now_s, scene, speed, CLIMB_LEAD_END_GAP_S, CLIMB_LEAD_STOP_AWAY_MPS))
       else:
-        # A far lead that isn't slower lets a clear-road climb carry on; a closer or slower one ends it. The 1.5 s
-        # clear-road wait is for starting a climb: a far lead flickering out of detection doesn't end one.
-        no_lead_now = lead is not None and _lead_valid(lead) and lead.present is False and lead.tracked is False
-        lead_ok = no_lead_now or self._far_lead_ok(scene, speed)
+        lead_ok = lead_clear
       easing = model_known and self._model_easing(now_s, accel, plan8, speed)
       reason = ('lead' if not lead_ok else
                 'unknown' if not model_known or short is None else
