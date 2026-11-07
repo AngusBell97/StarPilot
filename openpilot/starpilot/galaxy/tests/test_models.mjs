@@ -376,7 +376,8 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
     ['', false, false, 'all', 'all', 'both'])
 
   assert.equal(ModelsPage.computed.downloadTargetLabel.call({ status: { refreshing: true, downloading: true }, models: [] }), 'model catalog')
-  assert.match(ModelsPage.template, /status.refreshing \? 'Checking ' : 'Downloading '/)
+  // Galaxy: a catalog check shows in the Browse models header, not as a banner (the banner pushed the page down).
+  assert.match(ModelsPage.template, /<template v-if="status.refreshing">Checking for new models…<\/template>/)
 
   const asked = []
   const confirmPage = { ...ModelsPage.data(), disposed: false, models: [], status: {}, laboratory: { load() {} },
