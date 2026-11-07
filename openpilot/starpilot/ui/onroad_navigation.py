@@ -4,7 +4,7 @@ import hashlib
 
 from openpilot.starpilot.ui.raylib import rl
 
-from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice
+from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice, distance_units
 from openpilot.starpilot.ui.navigation_icons import ASSETS, MANIFEST, icon_name
 from openpilot.starpilot.ui.navigation_state import distance_text
 from openpilot.starpilot.ui.presentation import FontRole, Profile
@@ -148,7 +148,7 @@ class NavigationCard:
     x = rect.x + padding * (1 if lanes else 2) + (0 if lanes else size)
     width = rect.x + rect.width - padding - x
     distance_size, text_size = (32, 20) if compact else (54, 30 if lanes else 28)
-    distance = 'Arrived' if nav.arrived else distance_text(nav.distance_m, state.metric)
+    distance = 'Arrived' if nav.arrived else distance_text(nav.distance_m, distance_units(state.metric, state.appearance.distance_metric))
     far = not nav.arrived and nav.distance_m > FAR_TURN_M
     y = rect.y + (8 if compact else 12)
     self.fonts.draw(distance, FontRole.BOLD, distance_size, x, y, rl.WHITE)
@@ -176,7 +176,7 @@ class NavigationCard:
       chip = 20 if compact else 24
       self._then(nav, rect.x + padding, top + 7, chip)
       if not compact:
-        trip = f'{distance_text(nav.remaining_distance_m, state.metric)} | {max(1, round(nav.remaining_seconds / 60))} min'
+        trip = f'{distance_text(nav.remaining_distance_m, distance_units(state.metric, state.appearance.distance_metric))} | {max(1, round(nav.remaining_seconds / 60))} min'
         trip_size = 27
         trip_width = self.fonts.measure(trip, FontRole.MEDIUM, trip_size).width
         self.fonts.draw(trip, FontRole.MEDIUM, trip_size, right - trip_width, top, rl.Color(214, 210, 226, 255))

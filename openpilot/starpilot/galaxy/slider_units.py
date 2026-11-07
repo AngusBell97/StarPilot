@@ -7,15 +7,21 @@ from openpilot.starpilot.saved_document import commit_exact
 from openpilot.starpilot.ui.feature_settings_state import FeatureRow
 
 SPEED = "GalaxySpeedUnits"
-ROAD = "GalaxyRoadDistanceUnits"
-SMALL = "GalaxySmallDistanceUnits"
+# One Galaxy distance choice covers every distance slider. It keeps the old small-measurement param.
+DISTANCE = SMALL = "GalaxySmallDistanceUnits"
+# The comma's own distance units (driving-screen distances). It reuses the old Galaxy road-distance param so no new
+# params key (and params library rebuild) is needed: 0 = same as the comma's speed units (IsMetric), 1 metric, 2 imperial.
+COMMA_DISTANCE = ROAD = "GalaxyRoadDistanceUnits"
+CHOICES = ("Same as comma", "Metric", "Imperial")
 SPECS = {
-  SPEED: ("Galaxy speed sliders", ("Same as comma", "km/h", "mph"), 0,
-          "Display speed sliders independently of the comma's speedometer and wheel units."),
-  ROAD: ("Galaxy road-distance sliders", ("Original units", "m / km", "ft / mi"), 0,
-         "Units for distances along the road, including SLC higher-limit start distance and stopping-distance adjustment."),
-  SMALL: ("Galaxy small-measurement sliders", ("Original units", "m / cm", "ft / in"), 1,
-          "Units for lane widths, clearances, offsets and bend radii. Changing units does not change your saved tune."),
+  COMMA_DISTANCE: ("Comma distance units", ("Same as speed", "Metric", "Imperial"), 0,
+                   "Distances on the comma's driving screen: navigation, the lead-distance widget and lead distance info. "
+                   "Same as speed follows Comma speed units."),
+  SPEED: ("Galaxy speed units", CHOICES, 0,
+          "How Galaxy shows speeds on its sliders. Same as comma follows Comma speed units. Galaxy only."),
+  DISTANCE: ("Galaxy distance units", CHOICES, 0,
+             "How Galaxy shows distances on its sliders (lane widths, offsets, clearances, stopping distances). Same as comma "
+             "follows Comma distance units. Galaxy only; changing units does not change your saved tune."),
 }
 SI = {"mph": .44704, "km/h": 1 / 3.6, "m": 1., "cm": .01, "in": .0254, "ft": .3048, "km": 1000., "mi": 1609.344}
 ROAD_KEYS = frozenset(("SLCHigherLimitDistance", "ForceStopDistanceOffset"))
@@ -46,16 +52,24 @@ def apply(params, request, authorized):
 
 def category(row):
   if not row.key or row.unit not in SI or not row.step or row.repair_value: return None
-  if row.unit in ("mph", "km/h"): return SPEED
-  return ROAD if row.key in ROAD_KEYS or row.unit in ("km", "mi") else SMALL
+  return SPEED if row.unit in ("mph", "km/h") else DISTANCE
 
 
-def target(row, index):
-  if index == 0: return row.unit
-  metric = index == 1
+def comma_distance(params):
+  """The comma's distance units: (metric, dependencies). Same as speed follows IsMetric."""
+  speed_raw, speed_readable = read_saved(params, "IsMetric", 8)
+  index, raw = selection(params, COMMA_DISTANCE)
+  metric = (speed_readable and speed_raw == b"1") if not index else index == 1
+  return metric, ((COMMA_DISTANCE, raw), ("IsMetric", speed_raw))
+
+
+def target(row, index, metric_comma=False):
+  # Same as comma: speed rows already follow the comma's units; distances follow them too.
+  if index == 0 and category(row) == SPEED: return row.unit
+  metric = metric_comma if index == 0 else index == 1
   if category(row) == SPEED: return "km/h" if metric else "mph"
   if row.unit in ("km", "mi"): return "km" if metric else "mi"
-  if category(row) == ROAD: return "m" if metric else "ft"
+  if row.key in ROAD_KEYS: return "m" if metric else "ft"
   if row.unit in ("cm", "in") and not row.key.endswith("CarWidth"): return "cm" if metric else "in"
   return "m" if metric else "ft"
 
@@ -88,7 +102,11 @@ def project(params, row, owner=None):
   deps = row.dependencies + ((key, raw),)
   if index is None:
     return replace(row, available=False, dependencies=deps, reason="Invalid Galaxy slider units; repair them in Localization.")
-  dest = target(row, index)
+  metric = False
+  if index == 0 and key == DISTANCE:
+    metric, comma_deps = comma_distance(params)
+    deps += comma_deps
+  dest = target(row, index, metric)
   factor = SI[row.unit] / SI[dest]
   converted = replace(row, unit=dest, display_unit=dest, dependencies=deps,
     label=convert_text(row.label, row.unit, dest),

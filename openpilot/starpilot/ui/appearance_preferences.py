@@ -166,29 +166,30 @@ class OnroadAppearance:
   show_lead_indicator: bool = False
   lead_info_mode: LeadInfoMode = LeadInfoMode.OFF
   lead_info_metric: bool | None = False
-  # Galaxy's slider distance units for the lead distance widget: True metres, False feet, None follows the driving units.
-  # Galaxy's default when nothing is saved is metres, so absent params match this default.
-  lead_distance_metric: bool | None = True
+  # Comma distance units for driving-screen distances (navigation, lead distance widget, lead distance info):
+  # True metres/km, False feet/miles, None follows the speed units (the default, "Same as speed").
+  distance_metric: bool | None = None
   camera_view: CameraViewChoice = CameraViewChoice.STANDARD
   driver_camera_on_reverse: bool = False
   hide_personality_alerts: bool = False
   wheel_pedal_feedback: bool = False
 
 
-def galaxy_distance_metric(params: Any) -> bool | None:
-  """Galaxy's distance units for the lead distance widget: the road-distance choice, else the small-measurement
-  choice (which defaults to metres), else None so the driving units apply. Mirrors galaxy.slider_units.selection."""
-  for key, default in (("GalaxyRoadDistanceUnits", b"0"), ("GalaxySmallDistanceUnits", b"1")):
-    try:
-      raw, readable = read_saved(params, key, 8)
-    except (AttributeError, OSError, TypeError, ValueError):
-      continue
-    if not readable or raw not in (None, b"0", b"1", b"2"):
-      continue
-    choice = {b"1": True, b"2": False}.get(default if raw is None else raw)
-    if choice is not None:
-      return choice
-  return None
+def comma_distance_metric(params: Any) -> bool | None:
+  """Comma distance units (Galaxy's Language & Units page; saved in the old GalaxyRoadDistanceUnits param):
+  Metric, Imperial, or None for Same as speed so IsMetric applies. Mirrors galaxy.slider_units.comma_distance."""
+  try:
+    raw, readable = read_saved(params, "GalaxyRoadDistanceUnits", 8)
+  except (AttributeError, OSError, TypeError, ValueError):
+    return None
+  if not readable:
+    return None
+  return {b"1": True, b"2": False}.get(raw)
+
+
+def distance_units(metric: bool | None, distance_metric: bool | None) -> bool | None:
+  """Units for a driving-screen distance: the comma distance choice, else the speed units."""
+  return metric if distance_metric is None else distance_metric
 
 
 def onroad_appearance(params: Any) -> OnroadAppearance:
@@ -201,7 +202,8 @@ def onroad_appearance(params: Any) -> OnroadAppearance:
   except (AttributeError, OSError, TypeError, ValueError):
     metric_raw, metric_readable = None, False
   metric = False if metric_readable and metric_raw in (None, b"0") else True if metric_readable and metric_raw == b"1" else None
-  lead_distance_metric = galaxy_distance_metric(params)
+  distance_metric = comma_distance_metric(params)
+  lead_info_mode = saved_lead_info.mode if saved_lead_info.mode is not None else LeadInfoMode.OFF
   return OnroadAppearance(
     show_developer_sidebar=values["DeveloperSidebar"] is True,
     hide_personality_alerts=values["HidePersonalityAlerts"] is True,
@@ -213,9 +215,10 @@ def onroad_appearance(params: Any) -> OnroadAppearance:
     show_stock_confidence_ball=values["StockConfidenceBallWidget"] is True,
     show_lead_indicator=values["HideLeadMarker"] is False,
     # Lead Info is its own display choice; it no longer needs the lead indicator to be shown.
-    lead_info_mode=saved_lead_info.mode if saved_lead_info.mode is not None else LeadInfoMode.OFF,
-    lead_info_metric=metric,
-    lead_distance_metric=lead_distance_metric,
+    lead_info_mode=lead_info_mode,
+    # Lead Info shows either the lead's distance (distance units) or its speed (speed units).
+    lead_info_metric=distance_units(metric, distance_metric) if lead_info_mode == LeadInfoMode.DISTANCE else metric,
+    distance_metric=distance_metric,
     camera_view=camera_view if camera_view is not None else CameraViewChoice.STANDARD,
     driver_camera_on_reverse=values["DriverCamera"] is True,
   )
