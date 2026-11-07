@@ -83,9 +83,12 @@ def convert_text(text, source, dest):
   factor = SI[source] / SI[dest]
   # SLC bands carry speed units in the label as well as the value suffix.
   pattern = r"(-?\d+(?:\.\d+)?)(?:–<(-?\d+(?:\.\d+)?))? " + re.escape(source)
+  def label_number(value):  # labels read as whole units (0.1 below 1): "0–<18 mph", not "0–<18.0197645749 mph"
+    return number(round(value) if abs(value) >= 1 else round(value, 1))
+
   def converted(match):
-    start = number(float(match[1]) * factor)
-    return start + ("–<" + number(float(match[2]) * factor) if match[2] else "") + " " + dest
+    start = label_number(float(match[1]) * factor)
+    return start + ("–<" + label_number(float(match[2]) * factor) if match[2] else "") + " " + dest
   return re.sub(pattern, converted, text)
 
 
@@ -108,20 +111,25 @@ def project(params, row, owner=None):
     deps += comma_deps
   dest = target(row, index, metric)
   factor = SI[row.unit] / SI[dest]
-  if dest == row.unit:
-    return replace(row, unit=dest, display_unit=dest, dependencies=deps)
-  # Converted: show clean steps in the new units (e.g. 0.05 m rather than 0.03048 m). The display step is never finer
-  # than the setting's own step, so each shown value saves to a distinct value on the setting's own grid (restore).
+  # Every speed/distance slider, converted or in its own units, shows clean numbers: a clean step never finer than the
+  # setting's own step (0.1 ft -> 0.05 m, 1 mph -> 2 km/h), and round range ends (4.572 m -> 5 m, 160.9 km/h -> 160).
+  # The ends stand for the setting's own limits; restore() saves them as exactly those limits.
   step = display_step(row.step * factor)
-  shown = lambda value: number(round(round(float(value) * factor / step) * step, 6)) if _numeric(value) else value
-  low = math.ceil(row.minimum * factor / step - 1e-9) * step
-  high = math.floor(row.maximum * factor / step + 1e-9) * step
+  low, high = display_range(row.minimum * factor, row.maximum * factor, step, keep_on_step=dest == row.unit)
+
+  def shown(value):
+    if not _numeric(value): return value
+    native = float(value)
+    if math.isclose(native, row.maximum, rel_tol=0, abs_tol=row.step * 1e-6): return number(high)
+    if math.isclose(native, row.minimum, rel_tol=0, abs_tol=row.step * 1e-6): return number(low)
+    return number(round(min(max(round(native * factor / step) * step, low), high), 6))
+
   converted = replace(row, unit=dest, display_unit=dest, dependencies=deps,
     label=convert_text(row.label, row.unit, dest),
-    value=shown(row.value), minimum=round(low, 6), maximum=round(high, 6), step=step,
+    value=shown(row.value), minimum=low, maximum=high, step=step,
     default_value=shown(row.default_value),
     presets=tuple((shown(v), convert_text(label, row.unit, dest)) if _numeric(v) else (v, label) for v, label in row.presets))
-  return replace(converted, reason=help_text(converted.reason, converted.unit))
+  return replace(converted, reason=help_text(converted.reason, converted.unit)) if dest != row.unit else converted
 
 
 NICE_STEPS = (0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000)
@@ -130,6 +138,23 @@ NICE_STEPS = (0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 25, 50, 10
 def display_step(converted_step):
   """The smallest clean step that is at least the setting's own step in the shown units."""
   return next((nice for nice in NICE_STEPS if nice >= converted_step * (1 - 1e-9)), converted_step)
+
+
+def sensible(value, step):
+  """The nearest round number on the step: 0.1s below 1, whole numbers below 10, 5s below 100, 10s below 1000, then 100s."""
+  size = abs(value)
+  grid = 0.1 if size < 1 else 1.0 if size < 10 else 5.0 if size < 100 else 10.0 ** (math.floor(math.log10(size)) - 1)
+  grid = max(1, math.ceil(grid / step - 1e-9)) * step
+  return round(round(value / grid) * grid, 6)
+
+
+def display_range(low, high, step, keep_on_step=False):
+  """Round range ends; falls back to the step grid if rounding would close the range. A slider in its own units keeps
+  an end that is already on its step (a deliberate 0.75 stays 0.75)."""
+  on_step = lambda value: math.isclose(value / step, round(value / step), rel_tol=0, abs_tol=1e-6)
+  ends = tuple(round(value, 6) if keep_on_step and on_step(value) else sensible(value, step) for value in (low, high))
+  if ends[0] < ends[1]: return ends
+  return round(math.ceil(low / step - 1e-9) * step, 6), round(math.floor(high / step + 1e-9) * step, 6)
 
 
 def _numeric(value):
@@ -156,10 +181,15 @@ def restore(params, row, request, owner=None):
   if not request.direction and request.value == shown.default_value:
     restored = row.default_value  # Keep the exact native reset, including off-grid SI defaults.
   else:
-    restored_value = value * SI[shown.unit] / SI[row.unit]
-    # Save on the setting's own grid: a clean shown value (1.5 m) becomes the nearest value the setting takes (4.9 ft).
-    restored_value = row.minimum + round((restored_value - row.minimum) / row.step) * row.step
-    restored_value = min(max(restored_value, row.minimum), row.maximum)
+    if math.isclose(value, shown.maximum, rel_tol=0, abs_tol=shown.step * 1e-6):
+      restored_value = row.maximum  # the round top end stands for the setting's own maximum
+    elif math.isclose(value, shown.minimum, rel_tol=0, abs_tol=shown.step * 1e-6):
+      restored_value = row.minimum
+    else:
+      # Save on the setting's own grid: a clean shown value (1.5 m) becomes the nearest value the setting takes (4.9 ft).
+      restored_value = value * SI[shown.unit] / SI[row.unit]
+      restored_value = row.minimum + round((restored_value - row.minimum) / row.step) * row.step
+      restored_value = min(max(restored_value, row.minimum), row.maximum)
     if math.isclose(restored_value, round(restored_value), abs_tol=1e-7, rel_tol=0):
       restored_value = round(restored_value)
     restored = number(restored_value)
