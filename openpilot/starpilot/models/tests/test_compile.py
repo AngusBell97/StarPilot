@@ -324,21 +324,3 @@ with Context(DEV="CPU:LLVM"):
 
 if __name__ == "__main__":
   unittest.main()
-
-
-def test_cross_device_warp_reaches_the_policy_through_host_memory(monkeypatch):
-  from tinygrad import Device, Tensor
-  import numpy as np
-  from openpilot.starpilot.models import compile as model_compile
-  hops = []
-  class Fake:
-    def __init__(self, device): self.device = device
-    def to(self, device):
-      hops.append(device)
-      return Fake(device)
-    def realize(self): return self
-  assert model_compile.to_policy_device(Fake(Device.DEFAULT)).device == Device.DEFAULT
-  assert hops == [Device.DEFAULT]
-  hops.clear()
-  assert model_compile.to_policy_device(Fake("QCOM" if Device.DEFAULT != "QCOM" else "CPU:1")).device == Device.DEFAULT
-  assert hops == ["CPU", Device.DEFAULT]

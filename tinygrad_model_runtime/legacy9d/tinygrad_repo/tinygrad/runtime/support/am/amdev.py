@@ -221,9 +221,6 @@ class AMDev:
       if (max_power:=getenv("AM_POWER_LIMIT", 0.0)) > 0:
         self.smu.set_power_limit(max_power)
         self.smu.set_clocks(level=None)
-        # StarPilot: the power cap stays; AM_MIN_CLOCK_LEVEL holds the clocks at or above that DPM level so short
-        # 20 Hz bursts don't start at idle clocks (-1 = the top level, still limited by the power cap)
-        if (floor:=getenv("AM_MIN_CLOCK_LEVEL", "")) != "": self.smu.set_min_clocks(int(floor))
       else: self.smu.set_clocks(level=-1) # last level, max perf.
       for ip in [self.soc, self.gfx]: ip.set_clockgating_state()
       self.reg("regSCRATCH_REG5").write(self.psp.tmr_size) # scratch registers are writable after GFX initialization

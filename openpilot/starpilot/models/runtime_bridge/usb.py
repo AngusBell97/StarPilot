@@ -194,7 +194,6 @@ class USBProtection(Protection):
         raise ValueError('Captured opaque runtime payload changed')
       cap._linear = proposed
       count += 1
-    # a Chestnut build fed by a comma-GPU warp may also carry run_policy_device_image (a Model Laboratory partner)
-    if count != (4 if 'run_policy_device_image' in artifact else 3):
+    if count != 3:
       raise ValueError('Expected policy and both camera captures')
     return artifact

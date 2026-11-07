@@ -2,50 +2,36 @@ from pathlib import Path
 
 from openpilot.starpilot.models.catalog import model_entries, BUNDLED_CURRENT, GENERATION
 from openpilot.starpilot.models.manager import (
-  ModelError, ModelManager, artifact_entry, artifact_path, atomic_json, catalog, preferences, read_json, state_lock,
+  ModelError, ModelManager, artifact_entry, artifact_path, atomic_json, catalog, read_json, state_lock, verified_artifact,
 )
-from openpilot.starpilot.models.model_pair import MODES, local_variant, local_variant_ids, pair_kind_error, read_status
-
-KEYS = {"enabled", "lateralModel", "longitudinalModel"}
 
 
 def configuration(root: Path) -> dict:
-  default = {"enabled": False, "lateralModel": "", "longitudinalModel": "", "mode": "drive"}
+  default = {"enabled": False, "lateralModel": "", "longitudinalModel": ""}
   try:
     saved = read_json(root / "laboratory.json", 4096)
     validate_configuration(saved, root)
-    return {"mode": "drive", **saved}
+    return saved
   except (OSError, ValueError, TypeError):
     return default
 
 
 def validate_configuration(value: dict, root: Path | None = None) -> None:
-  """Two small catalog models, or one big and one small; "mode" is drive (default) or shadow (log only)."""
   entries = model_entries(root)
-  if (not isinstance(value, dict) or not KEYS <= set(value) <= KEYS | {"mode"} or type(value["enabled"]) is not bool or
-      value.get("mode", "drive") not in MODES):
+  if (not isinstance(value, dict) or set(value) != {"enabled", "lateralModel", "longitudinalModel"} or
+      type(value["enabled"]) is not bool):
     raise ModelError("Invalid laboratory configuration")
   for key in ("lateralModel", "longitudinalModel"):
     mid = value[key]
-    if not isinstance(mid, str) or (mid and (mid not in entries or mid == BUNDLED_CURRENT)):
-      raise ModelError("Choose catalog models for the laboratory pair")
+    if not isinstance(mid, str) or (mid and (mid not in entries or mid == BUNDLED_CURRENT or entries[mid].uses_external_gpu)):
+      raise ModelError("Choose small models for the laboratory pair")
   if value["enabled"] and (not value["lateralModel"] or not value["longitudinalModel"] or
                            value["lateralModel"] == value["longitudinalModel"]):
-    raise ModelError("Choose two different models")
-  if value["lateralModel"] and value["longitudinalModel"] and (error := pair_kind_error(
-      entries[value["lateralModel"]].uses_external_gpu, entries[value["longitudinalModel"]].uses_external_gpu)):
-    raise ModelError(error)
-
-
-def running_models(owner: ModelManager) -> tuple[str, str, str]:
-  """(model modeld runs in single-model driving, Active Small, Active Big): Big when a Chestnut is present and chosen."""
-  prefs = preferences(owner.root)
-  small, big = prefs["small"], prefs["big"]
-  return (big if owner.gpu_present() and big else small), small, big
+    raise ModelError("Choose two different small models")
 
 
 class ModelLaboratory:
-  def __init__(self, manager: ModelManager, *, runtime_supported: bool = True):
+  def __init__(self, manager: ModelManager, *, runtime_supported: bool = False):
     self.manager = manager
     self.runtime_supported = runtime_supported
 
@@ -60,60 +46,45 @@ class ModelLaboratory:
       config = configuration(owner.root)
       parked, gpu = owner.parked(), owner.gpu_present()
       job = owner._job_status()
-      running, active_small, active_big = running_models(owner)
-      local_ids = local_variant_ids(owner.root)
       models = []
       for mid, row in entries.items():
         small = not row.get("uses_external_gpu", False)
         eligible = small and row.get("model_lab_eligible") is True
         artifact = artifact_entry(mid, entries, "amd") if eligible else {}
         published = "artifact_sha256" in artifact
-        amd_installed, checking = owner._snapshot_installed(mid, row, "amd") if published else (False, False)
-        installed, verifying = owner._snapshot_installed(mid, row)
-        # a Chestnut build made on this comma (size checked here; modeld checks its digest before loading)
-        local_amd = (small and mid in local_ids and not amd_installed and
-                     local_variant(mid, owner.root, verify=False) is not None)
+        installed, checking = owner._snapshot_installed(mid, row, "amd") if published else (False, False)
         if not small:
-          state, reason = "unsupported", "Big models run on the Chestnut already and need no eGPU variant."
-        elif local_amd:
-          state, reason = "installed", "A Chestnut version built on this comma. Next to a big model it runs on the comma's GPU in its own process."
+          state, reason = "unsupported", "Big models cannot be combined in this build."
         elif not eligible:
           state, reason = "unsupported", "This model is not available for combining."
         elif not published:
           state, reason = "unpublished", "A Chestnut version for combining has not been published for this model."
         elif checking:
           state, reason = "checking", "Checking the downloaded Chestnut version."
-        elif not amd_installed:
-          state, reason = "missing", "Download the Chestnut version to run this model on the Chestnut in a pair."
+        elif not installed:
+          state, reason = "missing", "Download the Chestnut version to prepare this model for combining."
+        elif not self.runtime_supported:
+          state, reason = "runtime-unavailable", "Download verified. Running two models together is unavailable in this build."
+        elif not gpu:
+          state, reason = "gpu-unavailable", "Download verified. Connect a ready Chestnut to use it."
         else:
-          state, reason = "installed", "Download verified. In a pair this model runs on the Chestnut."
+          state, reason = "installed", "Download verified. Choose another compatible model to form a pair."
         models.append({"value": mid, "label": row["name"], "version": row["version"], "series": row.get("series", ""),
                        "small": small, "modelSize": "small" if small else "big", "modelLabEligible": eligible,
-                       "modelLabArtifactAvailable": published, "modelLabArtifactInstalled": amd_installed, "checking": checking,
+                       "modelLabArtifactAvailable": published, "modelLabArtifactInstalled": installed, "checking": checking,
                        "modelLabStatus": state, "modelLabReason": reason,
-                       "installed": installed, "pairable": installed or verifying or amd_installed or local_amd,
-                       # next to a big model a small one runs on the comma's GPU in its own process (pair_partner.py)
-                       "placement": "chestnut" if not small else "comma", "localBuild": local_amd,
                        "artifactSize": artifact.get("artifact_size", 0)})
-      status = read_status()
-      live = status is not None and status.get("fresh") and status.get("state") in ("testing", "driving", "probing")
-      runtime = {"requested": config["enabled"], "active": bool(live), "state": (status or {}).get("state", "off"),
-                 "lateralModel": (status or {}).get("lateralModel", "") if live else "",
-                 "longitudinalModel": (status or {}).get("longitudinalModel", "") if live else "",
-                 "error": (status or {}).get("reason", "") if status and status.get("state") in ("refused", "stopped") else "",
-                 "health": "active" if live else "unavailable", "stats": status or {}}
       return {"schemaVersion": 1, "chestnutReady": gpu, "isOnroad": not parked, "configuration": config,
-              "configurationError": "",
-              "runningModel": running, "activeSmallModel": active_small, "activeBigModel": active_big,
+              "configurationError": self.runtime_unavailable_reason if config["enabled"] else "",
               "runtimeSupported": self.runtime_supported, "runtimeUnavailableReason": self.runtime_unavailable_reason,
-              "runtime": runtime,
+              "runtime": {"requested": config["enabled"], "active": False, "lateralModel": "", "longitudinalModel": "",
+                          "error": "", "health": "unavailable"},
               "download": {"model": job.get("model", ""), "progress": job.get("progress", ""),
                            "downloading": job["downloading"], "jobId": job.get("jobId", ""),
                            "variant": job.get("variant", "standard")},
               "summary": {"catalog": len(models), "eligible": sum(row["modelLabEligible"] is True for row in models),
                           "ready": sum(row["modelLabArtifactInstalled"] is True for row in models),
                           "published": sum(row["modelLabArtifactAvailable"] is True for row in models),
-                          "pairable": sum(row["pairable"] is True for row in models),
                           "declaredSize": sum(int(row["artifactSize"]) for row in models)},
               "models": models, "manifest": {"version": GENERATION},
               "capabilities": {"configure": parked, "download": parked,
@@ -140,14 +111,14 @@ class ModelLaboratory:
           if payload["enabled"]:
             if not self.runtime_supported:
               raise ModelError(self.runtime_unavailable_reason)
+            if not owner.gpu_present():
+              raise ModelError("Connect a firmware-ready Chestnut to enable this pair")
             entries = catalog(owner.root)
             for role in ("lateralModel", "longitudinalModel"):
-              mid = payload[role]
-              # installed, or still being checked after its download: modeld verifies the digest again when it loads
-              if not any(any(owner._snapshot_installed(mid, entries[mid], variant)) for variant in ("standard", "amd")):
-                raise ModelError(f"Download {entries[mid]['name']} before pairing it")
+              if verified_artifact(payload[role], entries, owner.root, "amd") is None:
+                raise ModelError("Download and verify both eGPU variants first")
             owner._require_parked()
-          atomic_json(owner.root / "laboratory.json", {"mode": "drive", **payload})
+          atomic_json(owner.root / "laboratory.json", payload)
           message = "Model Laboratory configuration saved"
         else:
           if set(payload) != {"model"} or not isinstance(payload["model"], str):

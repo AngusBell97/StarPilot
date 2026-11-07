@@ -53,8 +53,7 @@ def test_actual_modeld_startup_rejects_host_cable(monkeypatch, present, cable, l
       break
   namespace = {'cloudlog': Mock(), 'ModelReceiptOwner': Mock(), 'chestnut_present': lambda: present,
                'cable_connected': lambda: cable, 'usb_host_connected': lambda: host,
-               'jetlink_adapter': SimpleNamespace(link_on=lambda: link), 'os': __import__('os'),
-               'pair_selection': Mock(return_value=None)}
+               'jetlink_adapter': SimpleNamespace(link_on=lambda: link), 'os': __import__('os')}
   with pytest.raises(SelectionReached):
     exec(compile(ast.Module(body=prefix, type_ignores=[]), str(source), 'exec'), namespace)
-  selection.assert_called_once_with(chestnut_available=available, randomize=True, overrides=None)
+  selection.assert_called_once_with(chestnut_available=available, randomize=True)

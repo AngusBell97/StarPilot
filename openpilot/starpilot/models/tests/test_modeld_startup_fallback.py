@@ -117,8 +117,6 @@ def execute(statements, env):
     raise SystemExit(code)
   env.setdefault("os", SimpleNamespace(getenv=lambda key: None, _exit=exit_process))
   env.setdefault("recovery_small_only", False)
-  env.setdefault("remote_pair", False)
-  env.setdefault("start_partner_spare", Mock(return_value=None))
   env.setdefault("coherent_warp", None)
   env.setdefault("set_core_affinity", Mock())
   from openpilot.starpilot.models.recovery import STARTUP_FALLBACK_EXIT
@@ -142,7 +140,7 @@ def test_observed_availability_and_big_eligibility(monkeypatch, present, cable, 
   import sys
 
   manager = ModuleType("openpilot.starpilot.models.manager")
-  manager.resolve_runtime = Mock(side_effect=lambda chestnut_available, randomize, overrides:
+  manager.resolve_runtime = Mock(side_effect=lambda chestnut_available, randomize:
                                  SimpleNamespace(allow_big=allow_big and chestnut_available, big_path=big_path))
   manager.requested_runtime_id = Mock(return_value="selected")
   amd = ModuleType("tinygrad.runtime.ops_amd")
@@ -155,11 +153,11 @@ def test_observed_availability_and_big_eligibility(monkeypatch, present, cable, 
   params = Mock()
   env: dict = {"chestnut_present": Mock(return_value=present), "cable_connected": Mock(return_value=cable), "usb_host_connected": Mock(return_value=False),
          "chestnut_compiled": Mock(return_value=compiled), "Params": lambda: params,
-         "jetlink_adapter": SimpleNamespace(link_on=lambda: link), "cloudlog": Mock(), "pair_selection": Mock(return_value=None)}
+         "jetlink_adapter": SimpleNamespace(link_on=lambda: link)}
   execute(body[start:end], env)
   available = present or (cable and not link)
-  manager.resolve_runtime.assert_called_once_with(chestnut_available=available, randomize=True, overrides=None)
-  manager.requested_runtime_id.assert_called_once_with(available, overrides=None)
+  manager.resolve_runtime.assert_called_once_with(chestnut_available=available, randomize=True)
+  manager.requested_runtime_id.assert_called_once_with(available)
   env["chestnut_present"].assert_called_once_with()
   assert env["cable_connected"].call_count == (0 if present else 1)
   assert env["CHESTNUT"] is expected
@@ -229,9 +227,7 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
          "wait_for_chestnut_power": lambda CP, timeout: events.append("power"),
          "jetlink_adapter": SimpleNamespace(hooks=lambda: hooks, coherent_warp=lambda: None), "drop_chestnut": Mock(),
          "release_compile_pool": Mock(), "gc": Mock(),
-         "LaneObstacleDetector": SimpleNamespace(create=Mock(return_value=None)),
-         "setup_pair": Mock(side_effect=lambda model, small, w, h, report, streams: (model, "off")), "write_pair_status": Mock(),
-         "main_wide_camera": False, "use_extra_client": True}
+         "LaneObstacleDetector": SimpleNamespace(create=Mock(return_value=None))}
   wrapper = ast.parse("def startup():\n  pass").body[0]
   wrapper.body = body[start:end] + [ast.Return(value=ast.Call(func=ast.Name(id="locals", ctx=ast.Load()), args=[], keywords=[]))]
   env["cam_w"], env["cam_h"] = env["vipc_client_main"].width, env["vipc_client_main"].height
@@ -273,11 +269,6 @@ def test_big_worker_waits_before_load_and_failure_requests_fresh_small_process(c
   else:
     create.assert_not_called()
   assert env["lane_obstacle"] is None
-  # Model Laboratory: offered the loaded model and the small spare once, after the detector, never with Jetlink
-  env["setup_pair"].assert_called_once()
-  assert env["setup_pair"].call_args.args[:2] == (env["model"], env["small_model"])
-  # a small partner process reads the same camera streams modeld uses
-  assert env["setup_pair"].call_args.kwargs["streams"] == (False, True)
 
 
 def test_wait_for_enumeration_succeeds_without_real_sleep(monkeypatch):
@@ -355,52 +346,13 @@ def test_recovery_child_resolves_small_without_randomizer_or_amd(monkeypatch):
   params = Mock()
   env: dict = {"chestnut_present": lambda: True, "cable_connected": lambda: True,
          "chestnut_compiled": Mock(side_effect=AssertionError("Big compiled probe forbidden")),
-         "Params": lambda: params, "os": SimpleNamespace(getenv=lambda key: "1"),
-         "jetlink_adapter": SimpleNamespace(link_on=lambda: False), "cloudlog": Mock(), "pair_selection": Mock(return_value=None)}
+         "Params": lambda: params, "os": SimpleNamespace(getenv=lambda key: "1")}
   execute(body[start:end], env)
-  manager.resolve_runtime.assert_called_once_with(chestnut_available=False, randomize=False, overrides=None)
-  manager.requested_runtime_id.assert_called_once_with(True, overrides=None)
+  manager.resolve_runtime.assert_called_once_with(chestnut_available=False, randomize=False)
+  manager.requested_runtime_id.assert_called_once_with(True)
   assert env["CHESTNUT"] is False
   assert "AMDDevice" not in env
   assert params.put_bool.call_args_list == [(("ChestnutLoading", False),)]
-
-
-@pytest.mark.parametrize("link", [False, True])
-def test_pair_driving_loads_the_pair_models_without_randomizing(monkeypatch, link):
-  from types import ModuleType
-  import sys
-  manager = ModuleType("openpilot.starpilot.models.manager")
-  manager.ROOT, manager.catalog = Path("models"), Mock(return_value={"catalog": True})
-  manager.resolve_runtime = Mock(return_value=SimpleNamespace(allow_big=True, big_path="big"))
-  manager.requested_runtime_id = Mock(return_value="lightspeed")
-  laboratory = ModuleType("openpilot.starpilot.models.laboratory")
-  laboratory.configuration = Mock(return_value={"enabled": True})
-  amd = ModuleType("tinygrad.runtime.ops_amd")
-  amd.AMDDevice = type("FakeAMDDevice", (), {"wait_timeout_ms": 123})
-  for module in (manager, laboratory, amd):
-    monkeypatch.setitem(sys.modules, module.__name__, module)
-  body = main_body()
-  start = next(i for i, node in enumerate(body) if isinstance(node, ast.ImportFrom) and node.module == manager.__name__)
-  end = next(i for i, node in enumerate(body) if ast.unparse(node) == "gc.disable()")
-  pair = {"big": "lightspeed", "small": "rdf43"}
-  environ = {"QCOM_PRIORITY": "12"}
-  env: dict = {"chestnut_present": lambda: True, "cable_connected": lambda: False, "usb_host_connected": lambda: False,
-               "Params": lambda: Mock(), "jetlink_adapter": SimpleNamespace(link_on=lambda: link), "cloudlog": Mock(),
-               "pair_selection": Mock(return_value=pair),
-               "os": SimpleNamespace(getenv=lambda key: None, environ=environ)}
-  execute(body[start:end], env)
-  expected = None if link else pair
-  manager.resolve_runtime.assert_called_once_with(chestnut_available=True, randomize=link, overrides=expected)
-  manager.requested_runtime_id.assert_called_once_with(True, overrides=expected)
-  if not link:
-    env["pair_selection"].assert_called_once_with({"enabled": True}, {"catalog": True})
-  # a big + small pair raises modeld's comma-GPU priority above the small model's process before any GPU work
-  from openpilot.starpilot.models.pair_partner import PRIMARY_GPU_PRIORITY
-  assert environ["QCOM_PRIORITY"] == ("12" if link else str(PRIMARY_GPU_PRIORITY))
-  environ["QCOM_PRIORITY"] = "12"
-  env["pair_selection"] = Mock(return_value={"big": "", "small": "rdf43"})
-  execute(body[start:end], env)
-  assert environ["QCOM_PRIORITY"] == "12"      # small + small: unchanged
 
 
 def test_recovery_small_receipt_reports_runtime_stall_not_load_failure():

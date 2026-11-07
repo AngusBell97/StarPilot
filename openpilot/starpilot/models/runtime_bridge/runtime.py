@@ -1,6 +1,5 @@
 """Load existing bank and stock artifacts with one explicitly selected runtime."""
 import hashlib
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -11,12 +10,12 @@ if TYPE_CHECKING:
   from openpilot.starpilot.models.runtime_bridge.legacy_types import LegacyBuffer, LegacyBufferFactory, LegacyHCQModule, LegacyPersistentUnpickler
 
 BUNDLE = Path(__file__).resolve().parents[4] / 'tinygrad_model_runtime/legacy9d'
-MANIFEST_SHA256 = "6e992322e4671f10c191d6e2bfa8acaf3187e96b798b66c3e29190bbfd3f4611"
+MANIFEST_SHA256 = "20ca9e77010c1ab788f2adb824103db3d595b0da8c4069d6e32b1266f7977b1f"
 _GUARD_HASHES = {
   'libbounded_wait.so': '24ed559861c8636c1026cad9a244854bb2236b5ee8b91bf21c5efbf688fa4a69',
   'libusb_guards.so': '66a3dfe48ac17899862ab80160cf6dac2c9b9707234527ba0d808f3b68404114',
 }
-_POLICY_SHA256 = '2f59f3cbd0d110796a528f94a5ee1c453932b26cc24ef870b8642ad9ecffe593'
+_POLICY_SHA256 = 'ff9a762b130207dcf9919714bccd7aabc6d3f6e9d707e0b3a0dbd7fce5858aed'
 _selection = None
 _protection = None
 
@@ -44,10 +43,8 @@ def prepare_compiler():
   if _selection is not None:
     raise RuntimeError('Select the compiler runtime before model inference')
   import tempfile
-  # STARPILOT_COMPILER_CACHE keeps tinygrad's cache (BEAM kernel search results) between builds; model_compiler.py
-  # points TMPDIR at a directory it deletes after each build
-  cache_root = os.environ.get('STARPILOT_COMPILER_CACHE') or (Path(tempfile.gettempdir()).resolve() / 'starpilot-model-compiler')
-  selection = activate(BUNDLE, MANIFEST_SHA256, LEGACY_REVISION, 'driving', Path(cache_root))
+  selection = activate(BUNDLE, MANIFEST_SHA256, LEGACY_REVISION, 'driving',
+                       Path(tempfile.gettempdir()).resolve() / 'starpilot-model-compiler')
   selection['purpose'] = 'compiler'
   _selection = selection
   return _selection

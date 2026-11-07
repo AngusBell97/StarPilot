@@ -326,9 +326,6 @@ export class ModelManagerFeed {
 // It reads the same catalog and download job as the manager, through ./api/models/laboratory.
 export const laboratoryModels = data => data?.models || []
 export const laboratoryReady = data => laboratoryModels(data).filter(m => m.small === true && m.modelLabEligible === true && m.modelLabArtifactAvailable === true && m.modelLabArtifactInstalled === true)
-// Any downloaded model can be paired: big ones run on the Chestnut, small ones on the comma (or the Chestnut with an eGPU variant).
-export const laboratoryPairable = data => laboratoryModels(data).filter(m => m.pairable === true)
-export const laboratoryPlacement = model => model.small === false ? "Big · eGPU" : model.placement === "chestnut" ? "Small · eGPU" : "Small · comma"
 
 export const laboratoryStatusLabel = model => ({
   unsupported: "Not supported", unpublished: "Not published", checking: "Checking download",
@@ -340,13 +337,12 @@ export function laboratorySelectionError(data, configuration) {
   if (!data) return "Waiting for parked device status"
   if (data.isOnroad !== false) return "Turn off the vehicle before changing the model pair"
   if (!data.runtimeSupported) return data.runtimeUnavailableReason || "Model Laboratory runtime is unavailable"
-  const pairable = laboratoryPairable(data)
-  if (pairable.length < 2) return "Download at least two models to compose a pair"
-  if (!configuration.lateralModel || !configuration.longitudinalModel) return "Choose two downloaded models"
+  if (!data.chestnutReady) return "Connect a firmware-ready Chestnut to enable a pair"
+  const ready = laboratoryReady(data)
+  if (ready.length < 2) return "Download at least two eGPU variants to compose a pair"
+  if (!configuration.lateralModel || !configuration.longitudinalModel) return "Choose two downloaded eGPU variants"
   if (configuration.lateralModel === configuration.longitudinalModel) return "Choose two different models"
-  const picks = [configuration.lateralModel, configuration.longitudinalModel].map(id => pairable.find(m => m.value === id))
-  if (!picks.every(Boolean)) return "Both models must be downloaded"
-  if (picks.every(m => m.small === false)) return "Choose two small models, or one big and one small"
+  if (![configuration.lateralModel, configuration.longitudinalModel].every(id => ready.some(m => m.value === id))) return "Both models must have downloaded eGPU variants"
   return ""
 }
 
@@ -362,25 +358,19 @@ export function laboratoryActionAllowed(data, action, model, configuration = dat
   if (action === "save") {
     // keep the pair's state, change only its models; an enabled pair must stay valid
     if (data.configuration.enabled) return !laboratorySelectionError(data, configuration)
-    const pairable = laboratoryPairable(data)
+    const ready = laboratoryReady(data)
     const picks = [configuration?.lateralModel, configuration?.longitudinalModel]
-    const rows = picks.map(id => pairable.find(m => m.value === id))
-    return ["shadow", "drive"].includes(configuration?.mode || "drive") && picks.every((id, i) => id === "" || rows[i]) &&
-      (picks[0] === "" || picks[0] !== picks[1]) && !(rows[0]?.small === false && rows[1]?.small === false)
+    return picks.every(id => id === "" || ready.some(m => m.value === id)) && (picks[0] === "" || picks[0] !== picks[1])
   }
   return action === "refresh"
 }
 
 export function laboratoryDraft(data, draft, dirty) {
-  const configuration = { mode: "drive", ...data.configuration, ...(dirty ? { lateralModel: draft.lateralModel, longitudinalModel: draft.longitudinalModel, mode: "drive" } : {}) }
+  const configuration = { ...data.configuration, ...(dirty ? { lateralModel: draft.lateralModel, longitudinalModel: draft.longitudinalModel } : {}) }
   if (!dirty) {
-    const pairable = laboratoryPairable(data)
-    const running = pairable.find(m => m.value === data.runningModel)
-    const ready = running ? [running, ...pairable.filter(m => m !== running)] : pairable
+    const ready = laboratoryReady(data)
     if (!configuration.lateralModel) configuration.lateralModel = ready[0]?.value || ""
-    const lateral = pairable.find(m => m.value === configuration.lateralModel)
-    if (!configuration.longitudinalModel)
-      configuration.longitudinalModel = ready.find(m => m.value !== configuration.lateralModel && !(lateral?.small === false && m.small === false))?.value || ""
+    if (!configuration.longitudinalModel) configuration.longitudinalModel = ready.find(m => m.value !== configuration.lateralModel)?.value || ""
   }
   return configuration
 }
@@ -420,7 +410,7 @@ export class LaboratoryFeed extends ModelManagerFeed {
   async action(action, model = null, configuration) {
     if (!this.active || this.saving || !laboratoryActionAllowed(this.data, action, model, configuration)) return null
     const paths = { enable: "laboratory", disable: "laboratory", save: "laboratory", download: "laboratory/download", delete: "laboratory/delete", cancel: "cancel", refresh: "refresh_manifest" }
-    const pair = { lateralModel: configuration?.lateralModel, longitudinalModel: configuration?.longitudinalModel, mode: "drive" }
+    const pair = { lateralModel: configuration?.lateralModel, longitudinalModel: configuration?.longitudinalModel }
     const payload = action === "enable" || action === "disable" ? { ...pair, enabled: action === "enable" } :
       action === "save" ? { ...pair, enabled: this.data.configuration.enabled } :
       action === "cancel" ? { jobId: this.data.download.jobId } : model ? { model: model.value } : {}
@@ -436,9 +426,7 @@ export class LaboratoryFeed extends ModelManagerFeed {
 }
 
 // Selection errors that come from the chosen pair; the others are things the device or build still needs.
-const LAB_CHOICE_PROBLEMS = new Set(["Choose two different models", "Both models must be downloaded", "Choose two downloaded models",
-  "Choose two small models, or one big and one small"])
-const LAB_STATES = { testing: "Testing in background", driving: "Driving with the pair", stopped: "Stopped", refused: "Not running", off: "Off" }
+const LAB_CHOICE_PROBLEMS = new Set(["Choose two different models", "Both models must have downloaded eGPU variants", "Choose two downloaded eGPU variants"])
 
 export function matchesSearch(model, query) {
   const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean)
@@ -462,8 +450,7 @@ export const ModelsPage = {
       models: [], currentModel: "", activeSmallModel: "", activeBigModel: "", capabilities: {},
       summary: { installed: 0, missing: 0, total: 0 }, status: { isOnroad: true },
       runtime: { status: "idle", data: null, error: "" }, dialog: null, pendingChoice: null,
-      lab: null, labError: "", labDirty: false, labConfig: { enabled: false, lateralModel: "", longitudinalModel: "", mode: "drive" }, focused: false,
-      pairView: null }
+      lab: null, labError: "", labDirty: false, labConfig: { enabled: false, lateralModel: "", longitudinalModel: "" }, focused: false }
   },
   computed: {
     currentLabel() { return this.models.find(m => m.value === this.currentModel)?.label || this.currentModel || "" },
@@ -498,44 +485,15 @@ export const ModelsPage = {
     },
     labRows() { return new Map(laboratoryModels(this.lab).map(m => [m.value, m])) },
     labReady() { return laboratoryReady(this.lab) },
-    labPairable() { return laboratoryPairable(this.lab) },
-    labCandidates() {
-      const lateral = this.labPairable.find(m => m.value === this.labConfig.lateralModel)
-      return this.labPairable.filter(m => m.value !== this.labConfig.lateralModel && !(lateral?.small === false && m.small === false))
-    },
-    // the toggle follows the saved pair, or what was just clicked while picks are being chosen
-    driveMode() { return this.pairView ?? (this.lab?.configuration.enabled ? "pair" : "single") },
-    labPairRows() { return [this.labConfig.lateralModel, this.labConfig.longitudinalModel].map(id => this.labPairable.find(m => m.value === id)) },
-    // both pickers list every downloaded model; a big one is greyed out while the other role holds a big one
-    labLateralOptions() {
-      const other = this.labPairRows[1]
-      return this.labPairable.map(m => ({ ...m, blocked: m.small === false && other?.small === false && m.value !== other.value }))
-    },
-    labLongitudinalOptions() {
-      const other = this.labPairRows[0]
-      return this.labPairable.filter(m => m.value !== this.labConfig.lateralModel)
-        .map(m => ({ ...m, blocked: m.small === false && other?.small === false }))
-    },
-    labPairHasBig() { return this.labPairRows.some(m => m?.small === false) },
-    // the model that keeps driving when the pair stops: the big one, or the lateral one of two small models (modeld's running model)
-    labFallbackModel() { return this.labPairRows.find(m => m?.small === false)?.value || this.labConfig.lateralModel || "" },
-    labPairSmall() { return this.labPairRows.find(m => m?.small === true)?.value || "" },
-    labStats() { return this.lab?.runtime?.stats || {} },
-    labShowsVariants() { return (this.lab?.summary?.published || 0) > 0 },
+    labCandidates() { return this.labReady.filter(m => m.value !== this.labConfig.lateralModel) },
     labSelectionError() { return laboratorySelectionError(this.lab, this.labConfig) },
-    labRuntimeState() {
-      if (!this.lab) return "Status unavailable"
-      if (!this.lab.runtimeSupported) return "Unavailable"
-      const state = this.lab.runtime.active || this.lab.runtime.stats?.fresh ? this.lab.runtime.state : this.lab.runtime.requested ? "requested" : "off"
-      return state === "requested" ? "Starts with the next drive" : LAB_STATES[state] || "Off"
-    },
+    labRuntimeState() { return !this.lab ? "Status unavailable" : !this.lab.runtimeSupported ? "Unavailable" : this.lab.runtime.active ? "Pair active" : this.lab.runtime.requested ? "Pair requested" : "Inactive" },
     labChoiceProblem() { return LAB_CHOICE_PROBLEMS.has(this.labSelectionError) },
     missingDownloads() { return this.models.filter(m => !m.installed && m.downloadAvailable === true) },
     labLocked() { return !this.lab || this.lab.isOnroad || this.lab.download.downloading },
   },
   watch: {
     loading(value) { if (!value) this.focusLaboratory() },
-    "lab.configuration.enabled"() { if (this.focus !== "laboratory" || this.focused) this.pairView = null },
   },
   created() {
     this.feed = new ModelStatusFeed({ publish: update => { this.runtime = update }, unauthorized: this.unauthorized })
@@ -587,7 +545,6 @@ export const ModelsPage = {
   methods: {
     focusLaboratory() {
       if (this.focus !== "laboratory" || this.focused) return
-      this.pairView = this.pairView ?? "pair"
       this.$nextTick(() => {
         const card = this.$refs.laboratory
         if (!card) return
@@ -597,50 +554,19 @@ export const ModelsPage = {
     },
     labRow(model) { return this.labRows.get(model?.value) },
     labStatusLabel: laboratoryStatusLabel,
-    placement: laboratoryPlacement,
     labReason(model) { const row = this.labRow(model); return row && LAB_REASON_STATES.has(row.modelLabStatus) ? row.modelLabReason : "" },
-    labModelLabel(id) { return this.lab?.models?.find(m => m.value === id)?.label || id || "Not selected" },
+    labModelLabel(id) { return this.lab?.models.find(m => m.value === id)?.label || id || "Not selected" },
     labActionAvailable(action, model = null) { return laboratoryActionAllowed(this.lab, action, model, this.labConfig) },
     changeLateral(value) {
-      if (this.labLateralOptions.find(m => m.value === value)?.blocked) return null
       this.labConfig.lateralModel = value
-      const longitudinal = this.labPairable.find(m => m.value === this.labConfig.longitudinalModel)
-      if (this.labConfig.longitudinalModel === value || !this.labCandidates.includes(longitudinal))
-        this.labConfig.longitudinalModel = this.labCandidates.find(m => m.small)?.value || this.labCandidates[0]?.value || ""
+      if (this.labConfig.longitudinalModel === value) this.labConfig.longitudinalModel = this.labCandidates[0]?.value || ""
       this.labDirty = true
-      return this.afterPairPick()
-    },
-    changeLongitudinal(value) {
-      if (this.labLongitudinalOptions.find(m => m.value === value)?.blocked) return null
-      this.labConfig.longitudinalModel = value
-      this.labDirty = true
-      return this.afterPairPick()
-    },
-    // picks save straight away; in pair mode with no pair on yet, a valid pair switches it on
-    afterPairPick() {
-      if (this.driveMode === "pair" && !this.lab?.configuration.enabled && this.labActionAvailable("enable")) return this.enablePair()
       return this.saveLabPair()
     },
-    async enablePair() {
-      if (!await this.confirmAction({ title: "Drive with a model pair", confirmLabel: "Drive with the pair",
-        message: `From the next drive, ${this.labModelLabel(this.labConfig.lateralModel)} steers and ${this.labModelLabel(this.labConfig.longitudinalModel)} sets the speed. If the pair errors or runs too slowly, ${this.labModelLabel(this.labFallbackModel)} carries on alone. Watch the road closely on the first drive.` })) {
-        this.pairView = null
-        return null
-      }
-      const result = await reportSave(() => this.runLabAction("enable"))
-      this.pairView = null
-      return result
-    },
-    async setDriveMode(mode) {
-      if (mode === this.driveMode) return null
-      if (mode === "single") {
-        this.pairView = "single"
-        const result = this.lab?.configuration.enabled ? await reportSave(() => this.runLabAction("disable")) : true
-        this.pairView = null
-        return result
-      }
-      this.pairView = "pair"
-      return this.labActionAvailable("enable") ? this.enablePair() : null
+    changeLongitudinal(value) {
+      this.labConfig.longitudinalModel = value
+      this.labDirty = true
+      return this.saveLabPair()
     },
     // Saves the pair's models; a choice the device refuses goes back to the saved pair.
     async saveLabPair() {
@@ -661,7 +587,7 @@ export const ModelsPage = {
     },
     pairRoles(model) {
       const pair = this.lab?.configuration
-      if (!pair?.enabled) return []
+      if (!pair) return []
       return [[pair.lateralModel, "Pair · lateral"], [pair.longitudinalModel, "Pair · longitudinal"]]
         .filter(([id]) => id && id === model.value).map(([, role]) => role)
     },
@@ -672,6 +598,11 @@ export const ModelsPage = {
     clearFilters() {
       Object.assign(this, { search: "", installedFilter: false, pairableFilter: false, userFilter: "all", communityFilter: "all" })
       this.setHardwareFilter("both")
+    },
+    toggleLabPair(event) {
+      const enabled = this.lab?.configuration.enabled === true
+      event.target.checked = enabled
+      return reportSave(() => this.runLabAction(enabled ? "disable" : "enable"))
     },
     async runLabAction(action, model = null) {
       if (this.disposed || this.busy || !this.labActionAvailable(action, model)) return
@@ -803,7 +734,7 @@ export const ModelsPage = {
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-cpu"></i>
             <span class="gx-section__title">Models</span>
-            <span v-if="currentLabel && !lab?.configuration.enabled" class="gx-section__count">Selected: {{ currentLabel }}</span>
+            <span v-if="currentLabel" class="gx-section__count">Selected: {{ currentLabel }}</span>
           </div>
           <GxSummary :items="[{label: 'Installed', value: summary.installed}, {label: 'Missing', value: summary.missing}, {label: 'Total', value: summary.total}, {label: 'Running model', value: runningModelLabel}]" />
         </section>
@@ -814,14 +745,9 @@ export const ModelsPage = {
             <span class="gx-section__title">Choose models</span>
             <span class="gx-section__count">Applies at the next start</span>
           </div>
-          <div class="gx-panel gx-stack">
-            <div class="gx-tabs gx-model-mode" role="group" aria-label="Driving models">
-              <button type="button" :aria-pressed="driveMode === 'single'" :disabled="!!busy || labLocked && driveMode !== 'single'" @click="setDriveMode('single')"><i aria-hidden="true" class="bi bi-cpu"></i> Single model</button>
-              <button type="button" :aria-pressed="driveMode === 'pair'" :disabled="!!busy || labLocked" @click="setDriveMode('pair')"><i aria-hidden="true" class="bi bi-bezier2"></i> Model pair</button>
-            </div>
-
-            <template v-if="driveMode === 'single'">
-              <small class="gx-model-mode__hint">One model steers and sets the speed.</small>
+          <div class="gx-model-choose__groups">
+            <div class="gx-panel gx-stack gx-model-choose__group">
+              <div class="gx-model-choose__heading"><h3>Single model</h3><small>One model steers and sets the speed.</small></div>
               <div class="gx-model-control">
                 <label class="gx-row__label" for="gx-model-small">Active Small · On-device</label>
                 <GalaxySelect id="gx-model-small" class="gx-field" :value="pendingChoice?.action === 'select-small' ? pendingChoice.value : activeSmallModel" :disabled="selectionUncertain || capabilities.select !== true || status.randomizer" @change="runAction('select-small', installedSmallModels.find(m => m.value === $event.target.value))">
@@ -842,13 +768,16 @@ export const ModelsPage = {
                 <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Model Randomizer" :checked="status.randomizer === true" :disabled="!actionAvailable(status.randomizer ? 'disable-randomizer' : 'enable-randomizer')" @change="toggleRandomizer($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
               </div>
               <p v-if="status.randomizer" class="gx-model-reason">A different verified model is chosen each start. {{ status.gpuAvailable && activeBigModel ? 'Big GPU' : 'Small on-device' }} models are used. {{ (status.blacklistedModels || []).length }} excluded. Favorites only mark your preferred models.</p>
-            </template>
+            </div>
 
-            <div v-else id="gx-model-laboratory" ref="laboratory" class="gx-stack gx-model-laboratory">
-              <small class="gx-model-mode__hint">Steering from one model, speed from the other: two small models, or one big and one small. If the pair errors or runs too slowly, <template v-if="labFallbackModel">{{ labModelLabel(labFallbackModel) }}</template><template v-else>the big model (or, with two small models, the lateral one)</template> carries on alone and drives by itself.</small>
-              <div class="gx-actions gx-tags">
-                <span class="gx-chip">{{ lab ? (lab.chestnutReady ? 'Chestnut ready' : 'Chestnut not connected') : 'Waiting for device status' }}</span>
-                <span v-if="lab" class="gx-chip" :class="{'gx-chip--selected': lab.runtime.active}">{{ labRuntimeState }}</span>
+            <div id="gx-model-laboratory" ref="laboratory" class="gx-panel gx-stack gx-model-choose__group gx-model-laboratory">
+              <div class="gx-model-choose__heading">
+                <h3><i aria-hidden="true" class="bi bi-bezier2"></i> Model pair · Laboratory</h3>
+                <small>Pair lateral judgment from one model with longitudinal judgment from another. Enabling applies when modeld next starts, when it loads and verifies the model weights, input tensors and GPU state.</small>
+                <div class="gx-actions gx-tags">
+                  <span class="gx-chip">{{ lab ? (lab.chestnutReady ? 'Chestnut ready' : 'Chestnut required') : 'Waiting for device status' }}</span>
+                  <span v-if="lab" class="gx-chip" :class="{'gx-chip--selected': labRuntimeState === 'Pair active'}">{{ labRuntimeState }}</span>
+                </div>
               </div>
               <GxNotice v-if="labError" tone="danger" title="Model Laboratory">{{ labError }}</GxNotice>
               <GxNotice v-if="lab?.configurationError" tone="danger">{{ lab.configurationError }}</GxNotice>
@@ -858,30 +787,33 @@ export const ModelsPage = {
                   <label class="gx-row__label" for="gx-lab-lateral">Lateral model<small>Path shape, curvature, lane geometry, and driving desire</small></label>
                   <GalaxySelect id="gx-lab-lateral" class="gx-field" aria-label="Lateral model" :disabled="labLocked" :value="labConfig.lateralModel" @change="changeLateral($event.target.value)">
                     <option value="">Choose a model</option>
-                    <option v-for="m in labLateralOptions" :key="m.value" :value="m.value" :disabled="m.blocked">{{ m.label }} · {{ m.version }} · {{ placement(m) }}{{ m.blocked ? ' · not with another big model' : '' }}</option>
+                    <option v-for="m in labReady" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
                   </GalaxySelect>
                 </div>
                 <div class="gx-model-control">
                   <label class="gx-row__label" for="gx-lab-longitudinal">Longitudinal model<small>Speed, acceleration, stopping, leads, and scene confidence</small></label>
                   <GalaxySelect id="gx-lab-longitudinal" class="gx-field" aria-label="Longitudinal model" :disabled="labLocked" :value="labConfig.longitudinalModel" @change="changeLongitudinal($event.target.value)">
                     <option value="">Choose a model</option>
-                    <option v-for="m in labLongitudinalOptions" :key="m.value" :value="m.value" :disabled="m.blocked">{{ m.label }} · {{ m.version }} · {{ placement(m) }}{{ m.blocked ? ' · not with another big model' : '' }}</option>
+                    <option v-for="m in labCandidates" :key="m.value" :value="m.value">{{ m.label }} · {{ m.version }}</option>
                   </GalaxySelect>
                 </div>
+                <p class="gx-row__desc">{{ labModelLabel(labConfig.lateralModel) }} steers · {{ labModelLabel(labConfig.longitudinalModel) }} paces</p>
                 <GxNotice v-if="labSelectionError" :tone="labChoiceProblem ? 'danger' : 'info'">{{ labSelectionError }}</GxNotice>
-                <GxNotice v-else-if="lab.configuration.enabled && labPairHasBig && !lab.chestnutReady" tone="warn">The Chestnut is not connected, so {{ labModelLabel(labPairSmall) }} drives alone until it is.</GxNotice>
+                <div class="gx-row gx-row--borderless" :class="{disabled: !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')}">
+                  <span class="gx-row__info gx-row__label">Enable model pair</span>
+                  <label class="gx-switch"><input type="checkbox" role="switch" aria-label="Enable model pair" :checked="lab.configuration.enabled === true"
+                    :disabled="!!busy || !labActionAvailable(lab.configuration.enabled ? 'disable' : 'enable')" @change="toggleLabPair($event)"><span class="gx-switch__track"></span><span class="gx-switch__thumb"></span></label>
+                </div>
                 <div class="gx-row gx-row--borderless">
                   <div class="gx-row__info">
-                    <span class="gx-row__label">Last pair run</span>
-                    <span v-if="labStats.frames && labStats.partner" class="gx-row__desc">{{ labModelLabel(labStats.partner) }} ran on the {{ labStats.partnerDevice === 'chestnut' ? 'Chestnut' : 'comma GPU' }}{{ labStats.partnerProcess ? ' in its own process' : labStats.sharedWarp ? ' (shared camera image)' : '' }}</span>
-                    <span v-if="labStats.frames" class="gx-row__desc">Model time {{ labStats.runMsP50 }} ms typical, {{ labStats.runMsP95 }} ms at 95% (frame is 50 ms) · {{ labModelLabel(labStats.partner) }} {{ labStats.partnerMsP50 ?? '–' }} ms · {{ labStats.frames }} frames</span>
-                    <span v-if="labStats.curvatureDiffP50 != null" class="gx-row__desc">Disagreement: steering {{ labStats.curvatureDiffP50 }} (95%: {{ labStats.curvatureDiffP95 }}) 1/m · speed {{ labStats.accelDiffP50 }} (95%: {{ labStats.accelDiffP95 }}) m/s²</span>
-                    <span v-if="!labStats.frames" class="gx-row__desc">No pair has run yet. A pair starts when the driving model next starts.</span>
+                    <span class="gx-row__label">Running pair</span>
+                    <span class="gx-row__desc">Lateral: {{ labModelLabel(lab.runtime.lateralModel) }} · Longitudinal: {{ labModelLabel(lab.runtime.longitudinalModel) }}</span>
+                    <span v-if="!lab.runtimeSupported && labSelectionError !== lab.runtimeUnavailableReason" class="gx-row__desc">{{ lab.runtimeUnavailableReason || 'Pair runtime is unavailable.' }}</span>
                   </div>
                 </div>
-                <GxNotice v-if="lab.runtime.error" :tone="lab.runtime.state === 'stopped' ? 'warn' : 'danger'"><template v-if="lab.runtime.state === 'stopped'">The pair stopped and {{ labModelLabel(labStats.primary) }} carried on alone: </template><template v-else>The pair did not start: </template>{{ lab.runtime.error }}</GxNotice>
+                <GxNotice v-if="lab.runtime.error" tone="danger">{{ lab.runtime.error }}</GxNotice>
                 <div class="gx-row gx-row--borderless gx-row--wrap">
-                  <div class="gx-row__info"><span class="gx-row__desc">{{ labPairable.length }} downloaded models can be paired. <template v-if="labShowsVariants">eGPU variants downloaded: {{ labReady.length }} of {{ lab.summary.published }} published; get them from the Small model cards.</template><template v-else>No eGPU variants of small models are published yet, so small models pair on the comma GPU.</template></span></div>
+                  <div class="gx-row__info"><span class="gx-row__desc">Verified downloads: {{ labReady.length }} of {{ lab.summary?.published || 0 }} published eGPU variants. Download them from the Small model cards.</span></div>
                   <button type="button" class="gx-btn gx-btn--tonal" @click="showPairable"><i aria-hidden="true" class="bi bi-funnel"></i> Show pairable models</button>
                 </div>
               </template>
@@ -979,13 +911,13 @@ export const ModelsPage = {
                   <span v-if="m.partial" class="gx-chip">Partial Files</span>
                   <span class="gx-chip">{{ fileSizeText(m) }}</span>
                 </div>
-                <div v-if="labShowsVariants && labRow(m)?.small" class="gx-model-lab">
+                <div v-if="labRow(m)?.small" class="gx-model-lab">
                   <span class="gx-model-lab__label"><i aria-hidden="true" class="bi bi-bezier2"></i> eGPU variant</span>
                   <span class="gx-chip">{{ labStatusLabel(labRow(m)) }}</span>
                   <button v-if="labRow(m).modelLabEligible && labRow(m).modelLabArtifactAvailable && !labRow(m).modelLabArtifactInstalled" type="button" class="gx-icon-btn" :disabled="!labActionAvailable('download', labRow(m))" :aria-label="'Download eGPU variant: ' + m.label" title="Download eGPU variant" @click="runLabAction('download', labRow(m))"><i class="bi bi-download" aria-hidden="true"></i></button>
                   <button v-else-if="labRow(m).modelLabArtifactInstalled" type="button" class="gx-icon-btn gx-text-danger" :disabled="!labActionAvailable('delete', labRow(m))" :aria-label="'Delete eGPU variant: ' + m.label" title="Delete eGPU variant" @click="runLabAction('delete', labRow(m))"><i class="bi bi-trash" aria-hidden="true"></i></button>
                 </div>
-                <p v-if="labShowsVariants && labRow(m)?.small && labReason(m)" class="gx-model-reason gx-model-lab__reason">{{ labReason(m) }}</p>
+                <p v-if="labRow(m)?.small && labReason(m)" class="gx-model-reason gx-model-lab__reason">{{ labReason(m) }}</p>
               </div>
               <p v-if="m.unavailableReason && !(rowState(m) === 'available' && m.downloadAvailable && m.unavailableReason === 'Download required')" class="gx-model-reason gx-model-card__reason">{{ m.unavailableReason }}</p>
               <div v-if="status.randomizer || m.blacklisted || ['busy', 'cancellable', 'installed'].includes(rowState(m))" class="gx-panel-footer gx-actions">

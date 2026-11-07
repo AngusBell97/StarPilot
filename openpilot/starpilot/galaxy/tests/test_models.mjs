@@ -245,7 +245,7 @@ console.log('Randomizer and exclusion interactions passed')
 
 assert.match(ModelsPage.template, /Selections apply next onroad cycle/)
 assert.doesNotMatch(ModelsPage.template, /Onroad: switching/)
-// Active Small and Active Big (single model), lateral and longitudinal (model pair)
+// Active Small, Active Big, and the Laboratory pair's lateral and longitudinal pickers
 assert.equal((ModelsPage.template.match(/class="gx-model-control"/g) || []).length, 4)
 assert.equal(ModelsPage.data().hardwareFilter, 'both')
 const hardware = { hardwareFilter: 'both', setHardwareFilter(value) { this.hardwareFilter = value } }
@@ -358,7 +358,7 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
   assert.equal(matchesSearch(row, 'v9'), false)
 
   const page = { ...ModelsPage.data(), activeSmallModel: 'a', activeBigModel: 'b', currentModel: 'a',
-    lab: { configuration: { enabled: true, lateralModel: 'a', longitudinalModel: 'c' } } }
+    lab: { configuration: { enabled: false, lateralModel: 'a', longitudinalModel: 'c' } } }
   assert.deepEqual(ModelsPage.methods.activeRoles.call(page, { value: 'a' }), ['Active Small'])
   assert.deepEqual(ModelsPage.methods.activeRoles.call(page, { value: 'b' }), ['Active Big'])
   assert.deepEqual(ModelsPage.methods.activeRoles.call(page, { value: 'c' }), [])
@@ -387,8 +387,8 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
 
   const lab = { schemaVersion: 1, isOnroad: false, chestnutReady: false, runtimeSupported: false,
     configuration: { enabled: false, lateralModel: '', longitudinalModel: '' }, download: { downloading: false },
-    capabilities: { configure: true }, models: ['a', 'b'].map(value => ({ value, label: value, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true, pairable: true })) }
-  // a disabled pair saves its picks
+    capabilities: { configure: true }, models: ['a', 'b'].map(value => ({ value, label: value, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true })) }
+  // a disabled pair saves its picks even while pairing cannot run in this build
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'b' }), true)
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'a' }), false)
   assert.equal(laboratoryActionAllowed(lab, 'save', null, { lateralModel: 'a', longitudinalModel: 'missing' }), false)
@@ -411,67 +411,4 @@ assert.deepEqual(ModelsPage.methods.polarisTitleParts({value: "spz_polaris_r3a"}
   assert.equal(updates.slice(firstData).some(update => update.loading), false)
   feed.stop()
   console.log('Model actions keep the page in place')
-}
-
-// Single model / Model pair toggle, and big+small rules in the pickers
-{
-  const rows = [{ value: 'ls', small: false, pairable: true }, { value: 'rf', small: false, pairable: true },
-    { value: 'rdf', small: true, pairable: true }, { value: 'tr', small: true, pairable: true }]
-  const page = (extra = {}) => {
-    const vm = { ...ModelsPage.data(), busy: '', labConfig: { lateralModel: 'ls', longitudinalModel: 'rdf', mode: 'drive' }, calls: [], asked: [],
-      lab: { configuration: { enabled: false, lateralModel: 'ls', longitudinalModel: 'rdf', mode: 'drive' } }, ...extra }
-    for (const [name, fn] of Object.entries(ModelsPage.methods)) vm[name] = fn.bind(vm)
-    Object.defineProperty(vm, 'labPairable', { get: () => rows })
-    Object.defineProperty(vm, 'labCandidates', { get: () => ModelsPage.computed.labCandidates.call(vm) })
-    Object.defineProperty(vm, 'labPairRows', { get: () => ModelsPage.computed.labPairRows.call(vm) })
-    Object.defineProperty(vm, 'driveMode', { get: () => ModelsPage.computed.driveMode.call(vm) })
-    Object.defineProperty(vm, 'labLateralOptions', { get: () => ModelsPage.computed.labLateralOptions.call(vm), configurable: true })
-    Object.defineProperty(vm, 'labLongitudinalOptions', { get: () => ModelsPage.computed.labLongitudinalOptions.call(vm), configurable: true })
-    vm.labActionAvailable = action => action !== 'enable' || vm.labConfig.lateralModel !== vm.labConfig.longitudinalModel
-    vm.runLabAction = async action => { vm.calls.push(action); return { message: action } }
-    vm.confirmAction = async dialog => { vm.asked.push(dialog.title); return vm.accept !== false }
-    return vm
-  }
-  const big = page()
-  assert.deepEqual(big.labCandidates.map(m => m.value), ['rdf', 'tr'])        // a big lateral pairs only with small ones
-  const small = page({ labConfig: { lateralModel: 'rdf', longitudinalModel: 'tr', mode: 'drive' } })
-  assert.deepEqual(small.labCandidates.map(m => m.value), ['ls', 'rf', 'tr'])
-  // a big model is greyed out in either picker while the other role holds a big one
-  const blocked = page({ labConfig: { lateralModel: 'rdf', longitudinalModel: 'rf', mode: 'drive' } })
-  assert.deepEqual(blocked.labLateralOptions.filter(m => m.blocked).map(m => m.value), ['ls'])
-  assert.equal(await blocked.changeLateral('ls'), null)
-  assert.deepEqual([blocked.labConfig.lateralModel, blocked.labConfig.longitudinalModel, blocked.calls], ['rdf', 'rf', []])
-  const bigLateral = page()
-  assert.deepEqual(bigLateral.labLongitudinalOptions.map(m => [m.value, m.blocked]), [['rf', true], ['rdf', false], ['tr', false]])
-  assert.equal(await bigLateral.changeLongitudinal('rf'), null)
-  assert.equal(bigLateral.labConfig.longitudinalModel, 'rdf')
-  assert.match(ModelsPage.template, /:disabled="m.blocked"/)
-
-  const toPair = page()
-  assert.equal(toPair.driveMode, 'single')
-  await toPair.setDriveMode('pair')
-  assert.deepEqual([toPair.asked, toPair.calls], [['Drive with a model pair'], ['enable']])
-  const declined = page({ accept: false })
-  await declined.setDriveMode('pair')
-  assert.deepEqual([declined.calls, declined.driveMode], [[], 'single'])
-  const toSingle = page({ lab: { configuration: { enabled: true, lateralModel: 'ls', longitudinalModel: 'rdf', mode: 'drive' } } })
-  assert.equal(toSingle.driveMode, 'pair')
-  await toSingle.setDriveMode('single')
-  assert.deepEqual([toSingle.asked, toSingle.calls], [[], ['disable']])
-  assert.match(ModelsPage.template, /v-if="driveMode === 'single'"/)
-  assert.match(ModelsPage.template, /v-else id="gx-model-laboratory"/)
-  console.log('Single model / Model pair toggle and big+small picker rules passed')
-}
-
-// the page names the model that carries on alone: the big one, or the lateral one of two small models
-{
-  const rows = [{ value: 'ls', small: false }, { value: 'pol', small: true }, { value: 'rdf', small: true }]
-  const fallback = (lateral, longitudinal) => ModelsPage.computed.labFallbackModel.call({
-    labPairRows: [lateral, longitudinal].map(id => rows.find(m => m.value === id)), labConfig: { lateralModel: lateral, longitudinalModel: longitudinal } })
-  assert.equal(fallback('pol', 'ls'), 'ls')
-  assert.equal(fallback('ls', 'pol'), 'ls')
-  assert.equal(fallback('pol', 'rdf'), 'pol')
-  assert.doesNotMatch(ModelsPage.template, /steers ·|the first model/)
-  assert.match(ModelsPage.template, /labModelLabel\(labFallbackModel\)/)
-  console.log('Pair fallback model is named')
 }

@@ -1,28 +1,16 @@
 import assert from "node:assert/strict"
-import { LaboratoryFeed, ModelsPage, laboratoryModels, laboratoryReady, laboratoryPairable, laboratoryPlacement, laboratorySelectionError, laboratoryActionAllowed, laboratoryDraft, laboratoryStatusLabel } from "../web/js/models.js"
+import { LaboratoryFeed, ModelsPage, laboratoryModels, laboratoryReady, laboratorySelectionError, laboratoryActionAllowed, laboratoryDraft, laboratoryStatusLabel } from "../web/js/models.js"
 
-const model = (value, version = 'v9') => ({ value, label: `Model ${value}`, version, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true, pairable: true, placement: 'chestnut' })
+const model = (value, version = 'v9') => ({ value, label: `Model ${value}`, version, small: true, modelLabEligible: true, modelLabArtifactAvailable: true, modelLabArtifactInstalled: true })
 const payload = () => ({ schemaVersion: 1, isOnroad: false, chestnutReady: true, runtimeSupported: true,
-  configuration: { enabled: false, lateralModel: 'a', longitudinalModel: 'b', mode: 'drive' }, runtime: { active: false, requested: false },
-  runningModel: 'a', activeSmallModel: 'a', activeBigModel: '',
+  configuration: { enabled: false, lateralModel: 'a', longitudinalModel: 'b' }, runtime: { active: false, requested: false },
   download: { downloading: false, jobId: null, progress: '' }, models: [model('a','v8'), model('b','v9')],
   capabilities: { configure: true, download: true, delete: true, cancel: true, refresh: true } })
 const p = payload()
 assert.equal(laboratorySelectionError(p,p.configuration), '') // mixed versions allowed
 assert.equal(laboratoryActionAllowed(p,'enable',null,p.configuration), true)
 assert.match(laboratorySelectionError({...p,runtimeSupported:false,runtimeUnavailableReason:'Pair runtime pending'},p.configuration), /Pair runtime pending/)
-// a Chestnut is not needed to choose a pair: small models pair on the comma GPU
-assert.equal(laboratorySelectionError({...p,chestnutReady:false},p.configuration), '')
-assert.equal(laboratorySelectionError({...p,activeSmallModel:'x'},p.configuration), '') // the pair decides what loads
-const normal = {...model('n'), modelLabArtifactInstalled: false, placement: 'comma'}, big = {...model('g','v16'), small: false, modelLabEligible: false, modelLabArtifactAvailable: false, modelLabArtifactInstalled: false}
-assert.deepEqual(laboratoryPairable({...p,models:[normal,big,{...model('z'),pairable:false}]}).map(m => m.value), ['n','g'])
-assert.deepEqual([normal,big,model('a')].map(laboratoryPlacement), ['Small · comma','Big · eGPU','Small · eGPU'])
-assert.equal(laboratorySelectionError({...p,models:[model('a'),big]},{lateralModel:'a',longitudinalModel:'g'}), '')
-const big2 = {...big, value: 'h'}
-assert.match(laboratorySelectionError({...p,models:[big,big2]},{lateralModel:'g',longitudinalModel:'h'}), /one big and one small/)
-assert.equal(laboratoryActionAllowed({...p,models:[big,big2]},'save',null,{lateralModel:'g',longitudinalModel:'h'}), false)
-assert.equal(laboratoryActionAllowed(p,'save',null,{lateralModel:'a',longitudinalModel:'b',mode:'drive'}), true)
-assert.equal(laboratoryActionAllowed(p,'save',null,{lateralModel:'a',longitudinalModel:'b',mode:'fast'}), false)
+assert.match(laboratorySelectionError({...p,chestnutReady:false},p.configuration), /Chestnut/)
 assert.match(laboratorySelectionError({...p,isOnroad:true},p.configuration), /Turn off the vehicle/)
 assert.match(laboratorySelectionError(p,{lateralModel:'a',longitudinalModel:'a'}), /different/)
 assert.match(laboratorySelectionError(p,{lateralModel:'a',longitudinalModel:'unknown'}), /downloaded/)
@@ -39,10 +27,8 @@ const missing = {...model('c'),modelLabArtifactInstalled:false}
 assert.equal(laboratoryActionAllowed({...p,chestnutReady:false,models:[missing]},'download',missing),true)
 assert.equal(laboratoryActionAllowed({...p,download:{downloading:true,jobId:'job'}},'cancel'),true)
 assert.equal(laboratoryActionAllowed({...p,download:{downloading:true,jobId:'job'}},'enable'),false)
-assert.deepEqual(laboratoryDraft(p,{lateralModel:'b',longitudinalModel:'a',mode:'drive'},true),{enabled:false,lateralModel:'b',longitudinalModel:'a',mode:'drive'})
+assert.deepEqual(laboratoryDraft(p,{lateralModel:'b',longitudinalModel:'a'},true),{enabled:false,lateralModel:'b',longitudinalModel:'a'})
 assert.deepEqual(laboratoryDraft({...p,configuration:{enabled:false,lateralModel:'',longitudinalModel:''}},null,false),p.configuration)
-// the running model is offered first
-assert.equal(laboratoryDraft({...p,runningModel:'b',configuration:{enabled:false,lateralModel:'',longitudinalModel:''}},null,false).lateralModel,'b')
 
 function fixture() {
   const requests=[],updates=[],timers=new Map();let next=0,unauthorized=0
@@ -59,7 +45,7 @@ const action=f.feed.action('enable',null,{enabled:false,lateralModel:'b',longitu
 assert.equal(f.requests[1].url,'./api/models/laboratory')
 assert.equal(f.requests[1].options.method,'POST')
 assert.equal(f.requests[1].options.credentials,'same-origin')
-assert.deepEqual(JSON.parse(f.requests[1].options.body),{enabled:true,lateralModel:'b',longitudinalModel:'a',mode:'drive'})
+assert.deepEqual(JSON.parse(f.requests[1].options.body),{enabled:true,lateralModel:'b',longitudinalModel:'a'})
 await f.reply(1,{...p,message:'Pair requested'});assert.equal(f.requests[2].url,'./api/models/laboratory');await f.reply(2,p);await action
 const expiry=[...f.timers.values()].find(t=>t.ms===6000);expiry.fn()
 assert.equal(f.feed.data,null);assert.match(f.updates.at(-1).error,/refresh delayed/)
@@ -82,10 +68,8 @@ assert.ok(template.indexOf('>Choose models<') < template.indexOf('Single model')
 assert.doesNotMatch(template, />Controls</)
 assert.match(template,/aria-label="Lateral model"/)
 assert.match(template,/aria-label="Longitudinal model"/)
-assert.match(template,/downloaded models can be paired/)
-assert.match(template,/aria-label="Driving models"/)
-assert.doesNotMatch(template,/Pair mode|Test in background|Enable model pair/)
-assert.match(template,/Last pair run/)
+assert.match(template,/Enable model pair/)
+assert.match(template,/Verified downloads/)
 assert.match(template,/eGPU variant/)
 assert.match(template,/Pairable only/)
 assert.doesNotMatch(template,/Available models|Compose a pair|Catalog models/)
@@ -95,6 +79,6 @@ assert.doesNotMatch(template,/20 Hz/)
 const save=fixture();save.feed.start();await save.reply(0,p)
 const saving=save.feed.action('save',null,{enabled:true,lateralModel:'b',longitudinalModel:'a'})
 assert.equal(save.requests[1].url,'./api/models/laboratory')
-assert.deepEqual(JSON.parse(save.requests[1].options.body),{enabled:false,lateralModel:'b',longitudinalModel:'a',mode:'drive'})
+assert.deepEqual(JSON.parse(save.requests[1].options.body),{enabled:false,lateralModel:'b',longitudinalModel:'a'})
 await save.reply(1,{...p,message:'saved'});await save.reply(2,p);await saving;save.feed.stop()
 console.log('Model Laboratory contracts passed')

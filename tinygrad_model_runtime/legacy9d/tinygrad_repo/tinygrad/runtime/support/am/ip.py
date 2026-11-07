@@ -243,13 +243,6 @@ class AM_SMU(AM_IP):
       with contextlib.suppress(TimeoutError): self._send_msg(self.smu_mod.PPSMC_MSG_SetSoftMinByFreq, clck << 16 | (vals[level]), timeout=20)
       if self.adev.ip_ver[am.GC_HWIP] >= (10,0,0): self._send_msg(self.smu_mod.PPSMC_MSG_SetSoftMaxByFreq, clck << 16 | (vals[level]))
 
-  def set_min_clocks(self, level:int):
-    clks = tuple([self.smu_mod.PPCLK_UCLK, self.smu_mod.PPCLK_FCLK, self.smu_mod.PPCLK_SOCCLK])
-    if self.adev.ip_ver[am.MP0_HWIP] not in {(13,0,6), (13,0,12), (13,0,15)}: clks += (self.smu_mod.PPCLK_GFXCLK,)
-    for clck, vals in self.read_clocks(clks).items():
-      with contextlib.suppress(TimeoutError): self._send_msg(self.smu_mod.PPSMC_MSG_SetSoftMinByFreq, clck << 16 | (vals[level]), timeout=20)
-    if DEBUG >= 2: print(f"am {self.adev.devfmt}: clock floor at DPM level {level}")
-
   def set_power_limit(self, watts:float):
     ppt_limit = max(int(round(watts)), 1)
     self._send_msg(self.smu_mod.PPSMC_MSG_SetPptLimit, ppt_limit)

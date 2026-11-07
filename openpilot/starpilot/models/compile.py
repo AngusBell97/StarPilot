@@ -321,15 +321,6 @@ def make_warp(nv12, model_w, model_h, frame_skip, image_history_pipeline=IMAGE_H
   return warp_enqueue
 
 
-def to_policy_device(warped):
-  """The warped image on the policy's device. A Chestnut policy fed by a comma-GPU warp (WARP_DEV=QCOM) goes through
-  host memory: the pinned runtime cannot copy QCOM buffers straight into AMD ("need copyin"), as the stateful path
-  already does for big models. Same-device builds are unchanged."""
-  if str(warped.device) != str(Device.DEFAULT):
-    return warped.to("CPU").realize().to(Device.DEFAULT)
-  return warped.to(Device.DEFAULT)
-
-
 def make_run_split_policy(vision_runner, policy_runners, metadata, policy_order, frame_skip,
                           image_history_pipeline=IMAGE_HISTORY_IN_POLICY):
   sample_desire_fn = partial(sample_desire, frame_skip=frame_skip)
@@ -370,7 +361,7 @@ def make_run_split_policy(vision_runner, policy_runners, metadata, policy_order,
   if image_history_pipeline == IMAGE_HISTORY_IN_POLICY:
     def run_policy(warped, img_q, big_img_q, feat_q, desire_q, packed_npy_inputs):
       packed_npy_inputs = packed_npy_inputs.to(Device.DEFAULT)
-      warped = to_policy_device(warped)
+      warped = warped.to(Device.DEFAULT)
       Tensor.realize(packed_npy_inputs, warped)
       img = shift_and_sample(img_q, warped[0:1], sample_skip_fn)
       big_img = shift_and_sample(big_img_q, warped[1:2], sample_skip_fn)
@@ -421,7 +412,7 @@ def make_run_supercombo(model_runner, metadata, frame_skip, image_history_pipeli
   if image_history_pipeline == IMAGE_HISTORY_IN_POLICY:
     def run_policy(warped, img_q, big_img_q, feat_q, desire_q, packed_npy_inputs):
       packed_npy_inputs = packed_npy_inputs.to(Device.DEFAULT)
-      warped = to_policy_device(warped)
+      warped = warped.to(Device.DEFAULT)
       Tensor.realize(packed_npy_inputs, warped)
       img = shift_and_sample(img_q, warped[0:1], sample_skip_fn)
       big_img = shift_and_sample(big_img_q, warped[1:2], sample_skip_fn)
@@ -712,16 +703,6 @@ def main():
     run_policy_jit, make_random_model_inputs, policy_input_keys, make_policy_queues,
     validation_runs=5 if output['metadata'].get('model', {}).get('state_pairs') else 1,
   )
-  # A Chestnut policy fed by a comma-GPU warp also gets an entry fed by an image already on the Chestnut: a Model
-  # Laboratory partner reads the image its primary uploaded this frame, skipping its own host-memory copy.
-  if (args.image_history_pipeline == IMAGE_HISTORY_IN_POLICY and WARP_DEV and str(WARP_DEV) != str(Device.DEFAULT)
-      and not output['metadata'].get('model', {}).get('state_pairs')):
-    print("policy on an image already on the policy device")
-    output["run_policy_device_image"] = compile_jit(
-      TinyJit(run_policy, prune=True),
-      partial(make_random_images, keys=["warped"], shape=(2, 6, *image_shapes[road_key][2:]), device=Device.DEFAULT),
-      policy_input_keys, make_policy_queues,
-    )
 
   model_w, model_h = args.model_size
   for cam_w, cam_h in args.camera_resolutions:

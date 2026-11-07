@@ -350,11 +350,6 @@ input[type="range"].gx-slider:active::-moz-range-thumb {
 /* External GPU models get a green chip */
 .gx-chip--egpu { --egpu: #3ddc84; background: color-mix(in srgb, var(--egpu) 30%, transparent); color: color-mix(in srgb, var(--egpu) 70%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--egpu) 55%, transparent); font-weight: 600; }
 [data-theme="light"] .gx-chip--egpu { --egpu: #1b8a3f; background: color-mix(in srgb, var(--egpu) 18%, transparent); color: #14632d; }
-/* Choose models: Single model / Model pair toggle, then only that mode's pickers */
-.gx-model-mode { display: flex; gap: var(--sp-1); padding: var(--sp-1); border-radius: var(--radius-full); background: var(--surface-container-high); }
-.gx-model-mode > button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--on-surface); font: inherit; font-weight: 600; cursor: pointer; }
-.gx-model-mode > button:disabled { opacity: .5; cursor: not-allowed; }
-.gx-model-mode__hint { color: var(--text-muted); }
 /* Choose models: single model and Laboratory pair side by side, stacked on narrow screens */
 .gx-model-choose__groups { display: grid; grid-template-columns: 1fr; }
 .gx-model-choose__group { min-width: 0; align-content: start; }
@@ -367,7 +362,6 @@ input[type="range"].gx-slider:active::-moz-range-thumb {
 .gx-model-choose__heading h3 { margin: 0; font-size: var(--fs-md, 1.05rem); }
 .gx-model-choose__heading small, .gx-model-control small { color: var(--text-muted); font-weight: normal; }
 .gx-model-control label small { display: block; margin-top: 2px; font-size: var(--fs-sm); }
-.gx-model-control > label.gx-row__label { display: flex; flex-direction: column; align-items: flex-start; }
 .gx-model-choose__heading .gx-tags { margin-top: var(--sp-1); }
 .gx-model-search { width: 100%; }
 .gx-model-browse { scroll-margin-top: 100px; }

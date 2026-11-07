@@ -164,8 +164,6 @@ class CatalogModelState:
     self.warp_input_keys = tuple(artifact["warp_input_keys"])
     self.policy_input_keys = tuple(artifact["policy_input_keys"])
     self.run_policy = artifact["run_policy"]
-    # Chestnut builds fed by a comma-GPU warp: the same policy on an image already on the Chestnut (a pair partner)
-    self.run_policy_device_image = artifact.get("run_policy_device_image")
     self.warp_enqueue = artifact[(cam_w, cam_h)]
     self.onnx_history = self.model_type == "supercombo" and bool(self.metadata["model"].get("state_pairs"))
     self.queue_device = artifact["execution_device"]
@@ -292,50 +290,6 @@ class CatalogModelState:
     return self.warp_enqueue(**{key: self.input_queues[key] for key in self.warp_input_keys},
                              frame=frames["img"], big_frame=frames["big_img"])
 
-  def _set_frame_inputs(self, inputs: dict[str, np.ndarray]) -> None:
-    desire = inputs["desire_pulse"].copy()
-    desire[0] = 0
-    self.npy["desire"][:] = np.where(desire - self.prev_desire > 0.99, desire, 0)
-    self.prev_desire[:] = desire
-    for name, value in self.npy.items():
-      if name not in ("desire", "tfm", "big_tfm", "prev_feat") and name in inputs:
-        value[:] = inputs[name]
-
-  def _read_outputs(self, output_tensors) -> dict[str, np.ndarray]:
-    outputs = [output.numpy().flatten() for output in output_tensors]
-    if not all(np.isfinite(output).all() for output in outputs):
-      raise ValueError("catalog model output not finite")
-    parsed = self._parse(outputs)
-    if not REQUIRED_OUTPUTS <= parsed.keys() or not all(np.isfinite(value).all() for value in parsed.values()):
-      raise ValueError("catalog model parsed outputs invalid")
-    if os.getenv("SEND_RAW_PRED"):
-      parsed["raw_pred"] = np.concatenate(outputs)
-    return parsed
-
-  def accepts_device_image(self, image) -> bool:
-    """Whether run_on_device_image can take this image: an entry for it, on this model's device, in its warp's shape."""
-    return (self.run_policy_device_image is not None and self.camera_warp_descriptor is not None and image is not None and
-            str(image.device) == str(self.queue_device) and tuple(image.shape) == tuple(self.camera_warp_descriptor.output_shape) and
-            image.dtype == self.camera_warp_descriptor.dtype)
-
-  def run_on_device_image(self, image, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    """This frame's policy on a warped image already on the policy device: a Model Laboratory partner reading the
-    image its primary uploaded this frame (same warp, checked by the pair), instead of its own host-memory copy."""
-    return self.read_queued(self.enqueue_on_device_image(image, inputs))
-
-  def enqueue_on_device_image(self, image, inputs: dict[str, np.ndarray]):
-    """run_on_device_image without waiting: the policy is queued on the device (behind whatever the primary queued
-    there) and its output tensors returned; read_queued() waits for them."""
-    if not self.accepts_device_image(image):
-      raise ValueError("this model cannot take a device image")
-    self.last_warp = None
-    self._set_frame_inputs(inputs)
-    policy_inputs = {key: self.input_queues[key] for key in self.policy_input_keys}
-    return self.run_policy_device_image(**policy_inputs, warped=image)
-
-  def read_queued(self, output_tensors) -> dict[str, np.ndarray]:
-    return self._read_outputs(output_tensors)
-
   def run(self, bufs: dict, transforms: dict[str, np.ndarray], inputs: dict[str, np.ndarray],
           after_enqueue: Callable[[], None] | None = None, *, shared_warp: SharedCameraWarp | None = None) -> dict[str, np.ndarray]:
     self.last_warp = None
@@ -346,7 +300,13 @@ class CatalogModelState:
     if shared_warp is not None:
       self._validate_shared_warp(shared_warp, pointers, transform_signature)
       self._last_shared_warp = shared_warp
-    self._set_frame_inputs(inputs)
+    desire = inputs["desire_pulse"].copy()
+    desire[0] = 0
+    self.npy["desire"][:] = np.where(desire - self.prev_desire > 0.99, desire, 0)
+    self.prev_desire[:] = desire
+    for name, value in self.npy.items():
+      if name not in ("desire", "tfm", "big_tfm", "prev_feat") and name in inputs:
+        value[:] = inputs[name]
     if shared_warp is None:
       warped = self.warp_frames(pointers, transforms["img"], transforms["big_img"])
     else:
@@ -356,7 +316,14 @@ class CatalogModelState:
                       self.run_policy(**policy_inputs, img=warped[0], big_img=warped[1]))
     if after_enqueue is not None:
       after_enqueue()
-    parsed = self._read_outputs(output_tensors)
+    outputs = [output.numpy().flatten() for output in output_tensors]
+    if not all(np.isfinite(output).all() for output in outputs):
+      raise ValueError("catalog model output not finite")
+    parsed = self._parse(outputs)
+    if not REQUIRED_OUTPUTS <= parsed.keys() or not all(np.isfinite(value).all() for value in parsed.values()):
+      raise ValueError("catalog model parsed outputs invalid")
+    if os.getenv("SEND_RAW_PRED"):
+      parsed["raw_pred"] = np.concatenate(outputs)
     if self.camera_warp_descriptor is not None:
       self.last_warp = (shared_warp if shared_warp is not None else
                         SharedCameraWarp(warped, self.camera_warp_descriptor, pointers, transform_signature, weakref.ref(self)))
