@@ -1048,7 +1048,8 @@ class FeatureSettingsOwner:
       rows.extend(numeric_rows)
     elif page == FeaturePage.AOL:
       title = "Always On Lateral"
-      rows.extend(self._lateral_pause_rows(configurable))
+      # The switch leads the page. The steering-pause rows follow it but never grey with it: they pause all steering.
+      pause_rows = self._lateral_pause_rows(configurable)
       capability = self._capability("aol")
       vehicle_cp = self.vehicle_params()
       policy = self.aol_settings_policy(vehicle_cp)
@@ -1072,16 +1073,22 @@ class FeatureSettingsOwner:
                                  "Keep steering assistance available independently of cruise control"))
       threshold_available = allowed and unit_valid and all(self._readable(key) for key in
                                                           (AOL_THRESHOLD, AOL_LEGACY_THRESHOLD, "IsMetric"))
+      # Brake pause only acts while AOL is on, so it greys with the switch; an invalid saved value stays repairable
+      # (AOL cannot be switched on until it is repaired). Restore defaults can still reset it while greyed.
+      aol_greyed = threshold_available and threshold_valid and not (master_valid and master == "1")
       source_label = "Current saved threshold" if canonical is not None else "Prior saved threshold" if legacy is not None else "Default threshold"
       rows.append(FeatureRow(AOL_THRESHOLD, "Brake pause below", str(round((threshold or 0.0) * multiplier, 2)) if threshold_valid and unit_valid else
                              "Invalid saved threshold" if not threshold_valid else "Invalid saved units", canonical,
                              step=1.0 if threshold_valid and unit_valid else 0.0, minimum=0.0, maximum=round(100 * multiplier, 2),
-                             unit=unit if unit_valid else "", available=threshold_available,
-                             reason=source_label if threshold_valid else "Choose zero to repair the saved threshold",
+                             unit=unit if unit_valid else "", available=threshold_available and not aol_greyed,
+                             reason="Turn on Always On Lateral first" if aol_greyed else
+                                    source_label if threshold_valid else "Choose zero to repair the saved threshold",
                              capability=capability,
                              dependencies=(("IsMetric", unit_raw), (AOL_LEGACY_THRESHOLD, legacy),
                                            ("AlwaysOnLateral", self._raw("AlwaysOnLateral"))), display_unit=unit if unit_valid else "",
-                             repair_value="0" if not threshold_valid and unit_valid else "", default_value="0"))
+                             repair_value="0" if not threshold_valid and unit_valid else "", default_value="0",
+                             default_reset_available=aol_greyed and parked))
+      rows.extend(pause_rows)
     elif page == FeaturePage.WHEEL:
       title = "Wheel Controls"
       if self.show_cruise_intervals or toyota_cruise_capability(self.vehicle_params()) is not None:
@@ -1606,6 +1613,8 @@ class FeatureSettingsOwner:
         mps = number / 3.6 if units == "1" else number * MPH_TO_MPS
         if not math.isfinite(mps) or not 0.0 <= mps <= 100.0:
           return False
+        if self._value("AlwaysOnLateral")[0] != "1" and self._aol_threshold()[1] and not (reset_default and mps == 0.0):
+          return False  # greyed while AOL is off; repairing an invalid value and Restore defaults stay allowed
         encoded = mps
       elif key in AOL_BUTTONS:
         cp = self.vehicle_params()

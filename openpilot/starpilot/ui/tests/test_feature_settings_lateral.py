@@ -255,6 +255,7 @@ class LateralFeatureSettingsTests(unittest.TestCase):
 
   def test_aol_explicit_metric_to_si_write_preserves_legacy(self):
     self.honda()
+    self.params.put_bool("AlwaysOnLateral", True, block=True)  # the threshold is greyed while AOL is off
     self.params.put_bool("IsMetric", True, block=True)
     self.params.put("PauseAOLOnBrake", 10.0, block=True)
     legacy = Path(self.params.get_param_path("PauseAOLOnBrake")).read_bytes()
@@ -266,6 +267,7 @@ class LateralFeatureSettingsTests(unittest.TestCase):
 
   def test_aol_threshold_source_and_units_stale_release(self):
     self.honda()
+    self.params.put_bool("AlwaysOnLateral", True, block=True)  # the threshold is greyed while AOL is off
     self.params.put("PauseAOLOnBrake", 10.0, block=True)
     request = required_change(self.row("aol", "AolBrakePauseSpeedMps"))
     self.params.put_bool("IsMetric", True, block=True)
