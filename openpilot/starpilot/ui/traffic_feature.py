@@ -78,7 +78,7 @@ class TrafficFeature:
                                      "Invalid saved value; original bytes remain unchanged"),
                              vehicle_fingerprint=fingerprint, capability=capability, dependencies=dependencies))
     rows.append(FeatureRow("", "Higher-speed values", "Inherited from Relaxed follow and jerk settings",
-                           reason="Above slow speeds, Traffic blends to Relaxed's values"))
+                           reason="With Custom Driving Profiles On, blends toward saved Relaxed values; otherwise defaults apply"))
     return rows
 
   def apply(self, request: FeatureSettingsRequest) -> bool:

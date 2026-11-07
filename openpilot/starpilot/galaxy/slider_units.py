@@ -15,11 +15,13 @@ COMMA_DISTANCE = ROAD = "GalaxyRoadDistanceUnits"
 CHOICES = ("Same as comma", "Metric", "Imperial")
 SPECS = {
   COMMA_DISTANCE: ("Comma distance units", ("Same as speed", "Metric", "Imperial"), 0,
-                   "Units for distances on the comma's driving screen."),
+                   "Distances on the comma's driving screen: navigation, the lead-distance widget and lead distance info. "
+                   "Same as speed follows Comma speed units."),
   SPEED: ("Galaxy speed units", CHOICES, 0,
-          'Units for speeds in Galaxy.'),
+          "How Galaxy shows speeds on its sliders. Same as comma follows Comma speed units. Galaxy only."),
   DISTANCE: ("Galaxy distance units", CHOICES, 0,
-             "Units for distances in Galaxy. Your saved settings don't change."),
+             "How Galaxy shows distances on its sliders (lane widths, offsets, clearances, stopping distances). Same as comma "
+             "follows Comma distance units. Galaxy only; changing units does not change your saved tune."),
 }
 SI = {"mph": .44704, "km/h": 1 / 3.6, "m": 1., "cm": .01, "in": .0254, "ft": .3048, "km": 1000., "mi": 1609.344}
 ROAD_KEYS = frozenset(("SLCHigherLimitDistance", "ForceStopDistanceOffset"))

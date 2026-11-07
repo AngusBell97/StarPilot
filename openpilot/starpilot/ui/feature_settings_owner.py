@@ -1029,22 +1029,22 @@ class FeatureSettingsOwner:
                           reason=no_lead_row.reason if no_lead_row.value not in ("On", "Off") else
                                  "Invalid saved learning" if not learning.valid else
                                  curve_off_reason if allowed and not curve_on else
-                                 "Doesn't slow for curves while following a car" if allowed else
+                                 "Pauses curve speed adjustments while following a lead vehicle" if allowed else
                                  "Unavailable with the current vehicle or feature settings"))
       status_row = self._bool_row("ShowCSCStatus", "Show Curve status", allowed and curve_on,
                                   reason="Display preference only; it does not enable control")
       rows.append(replace(status_row, default_reset_available=allowed and parked and status_row.value in ("On", "Off"),
                           reason=curve_off_reason if allowed and not curve_on and status_row.value in ("On", "Off") else status_row.reason))
       rows.append(FeatureRow("", "Saved learning", "Valid" if learning.valid else "Unavailable",
-                             reason='Used when CSC is on' if learning.valid else
+                             reason="Used automatically when Curve Speed Controller is on" if learning.valid else
                                     "Saved data remains untouched; runtime control is disabled"))
       rows.append(FeatureRow("", "Learning progress", f"{learning.progress:.1f}%" if learning.progress is not None else "Unavailable",
-                             reason='How much it has learned, from your own cornering with no car ahead'
+                             reason="Saved coverage across curve types, learned while you control speed without a lead vehicle"
                                     if learning.progress is not None else learning.reason))
       rows.append(FeatureRow("", "Saved cornering comfort",
                              f"{learning.comfort:.2f} m/s²" if learning.has_samples and learning.comfort is not None else
                              "No learned samples" if learning.valid else "Unavailable",
-                             reason='Learned value, not a live reading' if learning.valid else learning.reason))
+                             reason="Saved calibration, not a live reading" if learning.valid else learning.reason))
       rows.append(FeatureRow("curve_reset", "Reset Saved Curve Learning", "", learning.sources[0][1],
                              available=parked and allowed and learning.resettable,
                              reason="" if learning.resettable else "No saved learning" if learning.valid and not learning.has_samples else
@@ -1145,8 +1145,8 @@ class FeatureSettingsOwner:
       elif not offsets_ready:
         control_reason = "Repair invalid saved speed-limit offsets or units before enabling control"
       else:
-        control_reason = (("On: StarPilot sets the speed from the speed limit, even above Tesla's cruise speed. Off: " +
-                            "Tesla's set speed is used.")
+        control_reason = ("On uses an independent comma set speed for accepted limits, including above Tesla cruise speed. "
+                          "Off follows Tesla's selected speed. Saved Tesla speed-control assignments use an independent target only while SLC is on."
                           if self.vehicle_params().carFingerprint in ("TESLA_MODEL_3", "TESLA_MODEL_Y") else
                           "On adjusts cruise speed to accepted limits; Off keeps speed control unchanged")
       control_row = self._bool_row("SpeedLimitController", "Speed Limit Controller",
@@ -1160,8 +1160,8 @@ class FeatureSettingsOwner:
       source_allowed = configurable and self.authority("preferences")
       choices = self._source_choices(source_capability)
       for key, label, help_text in (
-          (SLC_PRIORITY, "Primary source", 'Checked first for the speed limit.'),
-          (SLC_SECONDARY, "Secondary source", 'Used when the primary source has no limit.')):
+          (SLC_PRIORITY, "Primary source", "Use this source first; try the secondary source when it is unavailable"),
+          (SLC_SECONDARY, "Secondary source", "Use this source when the primary source is unavailable")):
         source, raw, valid = self._value(key)
         source = "Maps" if source == "Map Data" else source
         readable = self._readable(key)
@@ -1225,12 +1225,14 @@ class FeatureSettingsOwner:
                           reason="Positive values stop farther forward; negative values stop earlier"))
       approach_row = self._bool_row(LEAD_APPROACH_KEY, "Approaching lead buffer",
                                     self.authority("preferences"),
-                                    reason='Adds following distance when closing on a slower or braking car.')
+                                    reason="Gradually adds following distance when approaching a slower or braking lead")
       rows.append(approach_row)
       rows.append(self._bool_row(LEAD_TAKEOFF_KEY, "Faster Takeoffs", self.authority("preferences"),
-                                reason='Pulls away from a stop sooner and quicker when the car ahead moves.'))
+                                reason="Improves launches from a stop and responds sooner when a lead starts moving. " +
+                                       "Selected acceleration profiles, stop detection and vehicle limits still apply."))
       rows.append(self._bool_row(NUDGE_KEY, "Experimental Speed Nudge", self.authority("preferences"),
-                                reason='Eases Experimental back up to your set speed when it hesitates on a clear road.'))
+                                reason="Gently recovers toward set speed when Experimental mode hesitates on a clear road. " +
+                                       "Leads, stops, curve limits and driver overrides retain priority."))
       if self._galaxy():
         rows.append(self._bool_row("DisengageOnAccelerator", "Disengage on Accelerator Pedal", self.authority("preferences")))
       document, raw, valid = self._document()

@@ -292,7 +292,7 @@ createApp({
           <SettingsPage v-if="menuCompanion && state.monitorMode === 'local'" :key="menuSettingsPage + ':' + menuCompanion.page" menu-mode embedded :mode="state.monitorMode" :unauthorized="sessionExpired"
             :initial-page="menuCompanion.page" :title="menuCompanion.heading" :heading="menuCompanion.heading" :only-rows="menuCompanion.onlyRows || null" @open-page="openSettingsPage" />
           <section v-if="menuSettingsPage === 'personalities' && state.monitorMode === 'local'" class="gx-card gx-settings__section gx-menu-extra" aria-label="Longitudinal Curves">
-            <div class="gx-row"><div class="gx-row__info"><span class="gx-row__label">Longitudinal Curves</span><span class="gx-row__desc">Edit the acceleration, braking and following curves.</span></div>
+            <div class="gx-row"><div class="gx-row__info"><span class="gx-row__label">Longitudinal Curves</span><span class="gx-row__desc">Adjust acceleration, braking, and following curves for each driving personality.</span></div>
               <button type="button" class="gx-btn gx-btn--tonal" @click="go('/driving/longitudinal-curves')">Manage</button></div>
           </section>
         </template>

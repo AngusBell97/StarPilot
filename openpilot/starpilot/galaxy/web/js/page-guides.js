@@ -26,33 +26,46 @@ const FOLLOWING_ROWS = ["Following preset", "Low-speed follow", "High-speed foll
 
 export const PAGE_GUIDES = Object.freeze({
   lane_change: {
-    intro: "Signal, and StarPilot steers you into the lane on that side without disengaging.",
+    intro: "Signal, and StarPilot steers you into the lane on that side. Changes save straight away; a lane change that has " +
+      "already started finishes on the settings it started with.",
     cards: [
       {
         id: "lane-changes", title: "",
         rows: [
           { label: "Allow lane changes", display: "Auto lane changes",
-            help: "Main switch. On: signalling can start a lane change. Off: it never does, and the settings below do nothing." },
+            help: "The main switch. On: when you signal, StarPilot can move the car into the next lane. Off: signalling never starts " +
+              "a lane change, and the settings below do nothing. Called Allow lane changes on the comma's screen." },
           { label: "One change per signal", needs: [ALLOW],
-            help: "On: one lane change per signal; signal again for the next lane. Off: keeps moving over while you keep signalling." },
+            help: "On: one lane change each time you signal. To cross another lane, cancel the signal and signal again. " +
+              "Off: keep signalling and it carries on into the next lane (with Wheel nudge required on, nudge again for each lane)." },
           { label: "Lane Change Speed", needs: [ALLOW],
-            help: "How quickly the car moves across. 10 is the quickest (about 3 s); 5 takes about 6 s, 1 about 8 s." },
+            help: "How fast the car moves across once a lane change starts (not a road speed). 10 is the quickest: the driving model's " +
+              "own pace, about 3 seconds. Lower numbers soften the steering so it takes longer: 5 is about 6 seconds, 1 about 8." },
           { label: "Automatic Lane Changes", display: "Wheel nudge required", values: { Off: "On", On: "Off" }, needs: [ALLOW],
-            help: "On: nudge the wheel toward the new lane to start. Off: it starts by itself after the Nudgeless delay. " +
-              "Never starts with a car in the blind spot." },
+            help: "On: after you signal, nudge the wheel towards the new lane to start. Off (nudgeless): it starts by itself after the " +
+              "Nudgeless delay, if the camera sees a lane there. Neither starts with a car in the blind spot. On the comma's screen " +
+              "this is Automatic Lane Changes, the other way round (Automatic on = no nudge needed)." },
           { label: "Automatic lane-change delay", display: "Nudgeless delay", needs: [ALLOW, NUDGELESS], sub: true,
-            help: "How long after you signal before it starts, so you can cancel. 0 starts straight away." },
+            help: "How long after you signal before the lane change starts, giving you time to cancel. The wait starts again if the " +
+              "lane or blind spot stops being clear. 0 starts straight away." },
           { label: "Minimum adjacent lane width", needs: [ALLOW, NUDGELESS], sub: true,
-            help: "Only starts if the next lane is at least this wide; otherwise nudge the wheel. 0 skips the check." },
+            help: "A nudgeless lane change only starts when the camera measures the next lane at least this wide; otherwise nudge " +
+              "the wheel. 0 skips the width check." },
           { label: "Minimum lane-change speed", needs: [ALLOW],
-            help: row => "Lane changes only start above this speed (from " + LANE_TURN_SPEED(row) + " while Turn Signal Guidance is on)." },
+            help: row => "Lane changes only start above this speed. While Turn Signal Guidance is on (below), they start from " +
+              LANE_TURN_SPEED(row) + " whatever this says, because a signal below that means a turn." },
           { label: "Close lane-change gap", needs: [ALLOW],
-            help: "When you signal to overtake, the car stops dropping back and can speed up as it moves across. " +
-              "Still slows for close or braking cars. Needs StarPilot speed control." },
+            help: "For overtaking a slower car: works only when you pull out to overtake (to the right in a right-hand-drive car) and " +
+              "only when StarPilot controls the speed; moving back in works as normal. On: once you signal to overtake, the car stops " +
+              "easing back from the car in front, and can speed up as soon as it starts moving across rather than once it is in the new " +
+              "lane. In Experimental mode it runs as Chill for the overtake, then switches back. It still slows for a car that is close " +
+              "or braking, and for stops." },
           { label: "Lane-change follow gap", needs: [ALLOW, CLOSE_GAP], sub: true,
-            help: "Closest following time while you wait to pull out. 0.75 s is closest; 1.0 s leaves more room." },
+            help: "The closest it follows the car in front while you wait to pull out, as following time. 0.75 s is the closest; " +
+              "1.0 s leaves more room. It keeps more space when you are closing fast or the car in front brakes." },
           { label: "Faster lane change when close", needs: [ALLOW, CLOSE_GAP], sub: true, placeholder: { value: "Off", choices: ["Off", "On"] },
-            help: "Uses the quickest steering when you pull out while closing on the car ahead." },
+            help: "When you pull out while closing in on the car in front, use the quickest steering (Lane Change Speed 10) for that " +
+              "overtake. Your saved Lane Change Speed stays as it is." },
         ],
         // Turn Signal Guidance: saved with the Steering and Torque page's settings, shown at the end of this list.
         include: { page: "torque", rows: ["Turn Signal Guidance"] },
@@ -67,7 +80,7 @@ export const PAGE_GUIDES = Object.freeze({
   },
   // Visuals: the comma screen options, grouped as the layout editor grouped them. Device text, saved straight away.
   appearance: {
-    intro: "Options for the comma's driving screen. Widget positions and colours are on Colors & Layout.",
+    intro: "Options for the comma's driving screen. Changes save straight away. Widget positions and colours are on Colors & Layout.",
     cards: [
       // One card, no sub-headings (the user's choice, 7 Nov); rows keep the layout editor's order.
       { id: "appearance", title: "", rows: ["Developer Sidebar", "Use StarPilot Widgets", "Wheel brake and acceleration colors",
@@ -94,20 +107,21 @@ export const PAGE_GUIDES = Object.freeze({
   torque: {
     rows: [
       { label: "Turn Signal Guidance",
-        help: "On: below 20 mph (32 km/h), your signal tells the model which way you're turning so it follows that path. " +
-          "Lane changes then start from 20 mph." },
+        help: "On: below 20 mph (32 km/h), your signal tells the driving model which way you are turning at a junction, so it steers " +
+          "along that path (not while the blind spot on that side shows a car). Lane changes then only start from 20 mph. " +
+          "Off: the signal does not guide turns, and lane changes can start from the Minimum lane-change speed." },
     ],
   },
   personalities: {
-    intro: "One personality drives at a time; switch on the comma or the wheel. Each has its own following, smoothness, " +
-      "acceleration and braking.",
+    intro: "StarPilot drives with one personality at a time; switch between them on the comma or the wheel. Each one has its own " +
+      "following distance, smoothness, acceleration and braking.",
     cards: [
       {
         id: "custom-following", title: "",
         rows: [
           { label: "Custom Following and Jerk",
-            help: "On: Aggressive, Standard and Relaxed use your own following distance and smoothness, set below. " +
-              "Off: StarPilot's defaults." },
+            help: "On: Aggressive, Standard and Relaxed use your own following distance and smoothness, set below. Off: StarPilot's " +
+              "standard following and smoothness, and those settings are hidden. Acceleration and braking choices work either way." },
           { label: "Restore saved profiles switch to Off" },
           { label: "Invalid profile document" },
         ],
@@ -128,7 +142,8 @@ export const PAGE_GUIDES = Object.freeze({
 function personalityGuide(name) {
   const points = (category, extra = {}) => SPEEDS.map(speed => ({ label: `${category} at ${speed} mph`, sub: true, ...extra }))
   return {
-    intro: `How ${TITLE(name)} speeds up and brakes. Following and smoothness are on Driving Personalities.`,
+    intro: `How ${TITLE(name)} speeds up and brakes. Its following distance and smoothness are on Driving Personalities, ` +
+      "under Custom Following and Jerk.",
     cards: [
       {
         id: "acceleration", title: "Acceleration", icon: "bi-speedometer2",
@@ -143,8 +158,8 @@ function personalityGuide(name) {
     // screen shows "Following" / "Acceleration" / "Braking" as section titles, which the cards replace here.
     rows: [
       { label: "Following preset", hide: true,
-        help: "How the gap to the car ahead is set. StarPilot Default uses Low- and High-speed follow; Close, Medium, Far and " +
-          "Traffic are ready-made; Custom sets the gap at each speed." },
+        help: "How the gap to the car in front is set. StarPilot Default uses Low-speed and High-speed follow; Close, Medium, Far " +
+          "and Traffic are ready-made gaps by speed; Custom lets you set the gap at each speed. Legacy keeps older curves." },
       { label: "Low-speed follow", sub: true, hide: true },
       { label: "High-speed follow", sub: true, hide: true },
       ...points("Following", { hide: true }),

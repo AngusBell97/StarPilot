@@ -466,7 +466,7 @@ class SettingsGatewayTest(unittest.TestCase):
         self.assertNotIn("require your confirmation", primary["reason"])
         confirmation = next(row for row in self.page("slc/timing")["rows"] if row["label"] == "Confirm higher limits")
         self.assertEqual(confirmation["value"], "Off")
-        self.assertIn("speeds up on its own", confirmation["reason"])
+        self.assertIn("mapped distance timing", confirmation["reason"])
 
     with mock.patch.dict(os.environ, {"SLC_REPLAY_RUNTIME": "0", "SLC_VISION_DEVELOPMENT": "0"}):
       # A normal finalized car offers Vision without development/replay flags.

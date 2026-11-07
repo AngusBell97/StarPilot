@@ -9,16 +9,14 @@ CONFIRM = ('SLCConfirmationLower','SLCConfirmationHigher')
 MOVED = frozenset(("SLCWarningVolume", "SLCChangeWarning"))
 KEYS = (frozenset(SPECS) | frozenset(BOOLS) | frozenset(CONFIRM)) - MOVED
 LABELS = {
- 'SLCTransitionOffsets': ('Use SLC speed-change limits','','','When SLC changes speed, use the acceleration and braking limits set in each personality.'),
- 'SLCWarningLeadTime': ('SLC Warning Lead Time','s',.5,'Warns this many seconds before slowing or speeding up for a mapped limit.'),
- 'SLCLowerLimitTiming': ('Lower-limit timing','s',.5,'Moves when braking for a lower limit starts. 0 is calculated; positive is earlier, negative later.'),
- 'SLCHigherLimitDistance': ('Higher-limit start distance','m',10.,'Starts speeding up this far before a higher limit begins.'),
- 'SLCRememberManualOffset': ('Remember manual speed for each limit','','',('Remembers the speed you set for each limit, for Restore SLC speed on re-engagement. Each ' +
-                                                                            'expires after 30 s in other limits.')),
- 'SLCReengageSpeed': ('Restore SLC speed on re-engagement','','',('When you re-engage, go back to your remembered speed for this limit, or else the limit (never ' +
-                                                                   'below your engage speed).')),
- 'SLCConfirmationLower': ('Confirm lower limits','','','On: waits for you to confirm before slowing for a lower limit. Off: slows on its own.'),
- 'SLCConfirmationHigher': ('Confirm higher limits','','','On: waits for you to confirm before speeding up for a higher limit. Off: speeds up on its own.'),
+ 'SLCTransitionOffsets': ('Use SLC speed-change limits','','','Use the fixed acceleration and braking limits set in each driving profile. Existing SLC activation and protective bypass rules still apply.'),
+ 'SLCWarningLeadTime': ('SLC Warning Lead Time','s',.5,'Seconds before the planned start of slowing or speeding up for a mapped limit. Sudden accepted limit changes warn immediately.'),
+ 'SLCLowerLimitTiming': ('Lower-limit timing','s',.5,'Offset the calculated braking point so the selected deceleration profile aims to reach the new target at the boundary. 0 uses the calculation; negative later, positive earlier.'),
+ 'SLCHigherLimitDistance': ('Higher-limit start distance','m',10.,'Begin adopting a higher mapped limit this far before its boundary.'),
+ 'SLCRememberManualOffset': ('Remember manual speed for each limit','','','Used by Restore SLC speed on re-engagement. Remembers a separate manual target for each posted limit. Each expires after 30 seconds in other valid limits, even while disengaged. Missing map data pauses expiry; a restart clears memory.'),
+ 'SLCReengageSpeed': ('Restore SLC speed on re-engagement','','','Recall an enabled same-zone manual memory; otherwise match the limit without lowering a faster engagement speed.'),
+ 'SLCConfirmationLower': ('Confirm lower limits','','','Off uses mapped braking timing for map limits.'),
+ 'SLCConfirmationHigher': ('Confirm higher limits','','','Off uses mapped distance timing for map limits.'),
 }
 
 class SlcCustomFeature:

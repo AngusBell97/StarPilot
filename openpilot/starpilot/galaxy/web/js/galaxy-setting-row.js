@@ -54,7 +54,7 @@ export function presentedSetting(row) {
   return { ...row, value: laneStrengthDisplay(row.value, row),
     defaultValue: row.defaultValue == null ? row.defaultValue : laneStrengthDisplay(row.defaultValue, row),
     minimum: 1, maximum: 10, step: row.step > 0 ? 1 : 0, unit: "",
-    reason: row.available ? "How much correction centring adds. Higher is stronger." : row.reason }
+    reason: row.available ? "Set how much correction lane centering requests. Higher values request more correction; lower values request less. Strength controls the amount requested, while Correction response time controls how quickly it changes. Increasing strength does not raise the maximum correction limit." : row.reason }
 }
 
 export const GalaxySettingRow = {

@@ -35,10 +35,12 @@ def bend_fields(choice: str) -> dict[str, bool]:
   return {"allow_chill_in_bends": allow, "climb_on_bend_exit": on_exit}
 
 
-USE_HELP = ('Climbing to set speed: Experimental drives, and Chill only brings you up to set speed. Classic: ' +
-              'Chill above a speed and behind steady leads.')
-MANUAL_HELP = 'Keeps your manual mode choice across drives.'
-LAUNCH_HELP = ("Uses Chill to pull away from a stop when it's clear. Off: Experimental handles stops.")
+USE_HELP = ("Chooses what Conditional Chill uses Chill for. Climbing to set speed keeps Experimental driving and uses "
+            "Chill only to bring the car up to your set speed. Classic conditions uses Chill above a speed and behind "
+            "steady leads.")
+MANUAL_HELP = "Keeps your manual driving-mode choice across drives. Changing this resets that choice to Automatic."
+LAUNCH_HELP = ("Uses Chill to pull away from a stop when the driving model and the lead show it is clear to go. "
+               "Off keeps Experimental for stops and departures.")
 
 # (field, label, help) in display order.
 CLIMB_LAYOUT = (
@@ -46,18 +48,20 @@ CLIMB_LAYOUT = (
   ("speed_mps", "Climb from",
    "Climbs only start at or above this speed. Below it, Experimental always drives."),
   ("set_speed_margin_mps", "Climb when below set speed by",
-   ('Starts a climb once this far below set speed on a clear road. Hands back at set speed, or for a ' +
-     'lead, bend or slowdown.')),
+   "A climb starts once the car is this far below the set speed (as the dash shows it) on a clear road, while the "
+   "driving model is not slowing. It hands back to Experimental at the set speed, or as soon as a lead appears, a "
+   "bend starts or the model slows."),
   (AFTER_BEND, "After a bend",
-   ('When Chill may climb again after Experimental slows for a bend: 2 s after, at the end of the ' +
-     'bend, or straight through.')),
+   "Experimental slows for bends. Choose when Chill may bring the speed back: 2 seconds after the bend, as soon as "
+   "the bend ends, or stay in Chill through bends. Chill itself only slows for bends when Curve Speed Control is on."),
   ("climb_lead", "Keep up with a lead pulling away",
-   'Also climbs when a distant car ahead keeps pulling away.'),
+   "Also climbs when a lead far ahead (3 seconds or more) keeps pulling away and Experimental is not keeping up. "
+   "Hands back once the gap closes to 2.5 seconds or the lead stops pulling away."),
   ("launch_assist", "Launch assist from a stop", LAUNCH_HELP),
   ("lead", "Also use Chill behind a steady lead",
-   'Also uses Chill while following a steady car.'),
+   "Adds Chill while following a steady lead, outside climbs. Off keeps Experimental whenever you follow a lead."),
   ("speed_with_lead_mps", "Chill behind a lead above",
-   'Lowest speed for Chill behind a steady car. 0 means any speed.'),
+   "Minimum speed for Chill behind a steady lead. 0 allows it at any speed."),
   ("persist_manual", "Remember manual choice", MANUAL_HELP),
 )
 CLASSIC_LAYOUT = (
