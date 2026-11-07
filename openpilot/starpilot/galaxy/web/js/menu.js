@@ -103,7 +103,7 @@ export const MENU = Object.freeze([
 export const PAGE_COMPANIONS = Object.freeze({
   profiles: { page: "conditional", heading: "Conditional Driving Modes" },
   power: { page: "data", heading: "Data Uploads" },
-  lane_change: { page: "torque", heading: "Turns", onlyRows: ["Turn Signal Guidance"] },
+  // Lane Changes shows Turn Signal Guidance inside its own "Turns at junctions" card instead (page-guides.js).
 })
 // Rows that now live on another page.
 export const PAGE_HIDDEN_ROWS = Object.freeze({ torque: ["Turn Signal Guidance"] })
