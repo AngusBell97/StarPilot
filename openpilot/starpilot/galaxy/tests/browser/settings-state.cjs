@@ -133,7 +133,6 @@ const { execFileSync } = require('node:child_process')
           const data = { ...snapshot('vasm'), editorRow: 0, editor: { width: 1344, height: 760, cameraLeft: [[100, 100], [500, 100], [500, 500]], cameraRight: [[800, 100], [1000, 100], [1000, 500]] } }
           vm.feed.publish({ status: 'ready', data }); vm.state.imageName = 'Cabin snapshot'
         }],
-        ['longitudinal-curves', 'LongitudinalCurvesPage', vm => vm.feed.publish({ status: 'ready', data: snapshot('standard/acceleration') })],
         ['favorites', 'FavoritesPage', vm => vm.feed.publish({ status: 'ready', data: { editable: true, valid: true,
           slots: Array.from({ length: 3 }, () => ({ key: 'test', label: 'Test', enabled: true, show_onroad: true })),
           options: [{ key: 'test', label: 'Test', section: 'Visual' }], states: Array.from({ length: 3 }, () => ({ stateLabel: 'Off', reason: '' })) } })],

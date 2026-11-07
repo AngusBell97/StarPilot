@@ -35,7 +35,6 @@ const SentryEventsPage = page(() => import("./sentry.js").then((module) => modul
 const VasmPage = page(() => import("./vasm.js").then((module) => module.VasmPage))
 const PipPage = page(() => import("./pip.js").then((module) => module.PipPage))
 import { DrivingPage, drivingPage } from "./driving.js"
-const LongitudinalCurvesPage = page(() => import("./longitudinal-curves.js").then((module) => module.LongitudinalCurvesPage))
 import { DevicePreferencesPage, devicePage } from "./device-preferences.js"
 const BluetoothPage = page(() => import("./bluetooth.js").then((module) => module.BluetoothPage))
 const StarPortPage = page(() => import("./starport.js").then((module) => module.StarPortPage))
@@ -89,7 +88,7 @@ const auth = new LocalAuth({ publish: (update) => {
 
 
 createApp({
-  components: { GxTrail, BottomNav, Home, LocalAccess, Tools, Logs, SoftwarePage, NavigationPage, ModelsPage, SettingsPage, SettingsRecoveryPage, ToggleSearch, SaveFeedback, FlmPage, LocalRecordingsPage, CamerasPage, SentryEventsPage, VasmPage, PipPage, DrivingPage, DevicePreferencesPage, BluetoothPage, StarPortPage, SpotifyPage, LongitudinalCurvesPage, VehicleControlsPage, OnroadLayoutPage, GalaxyPage, DevicePicker, DeviceState, MenuTile, MenuTree, SettingsIndex, MenuGroupPage, FavoritesPage },
+  components: { GxTrail, BottomNav, Home, LocalAccess, Tools, Logs, SoftwarePage, NavigationPage, ModelsPage, SettingsPage, SettingsRecoveryPage, ToggleSearch, SaveFeedback, FlmPage, LocalRecordingsPage, CamerasPage, SentryEventsPage, VasmPage, PipPage, DrivingPage, DevicePreferencesPage, BluetoothPage, StarPortPage, SpotifyPage, VehicleControlsPage, OnroadLayoutPage, GalaxyPage, DevicePicker, DeviceState, MenuTile, MenuTree, SettingsIndex, MenuGroupPage, FavoritesPage },
   data: () => ({ state, authState, authForm, route, NAV, routeDirection: 1, updateRestart, deviceRestart, nextLayoutLeavePresentation: "inline" }),
   computed: {
     visibleTools() { return state.tools.filter(tool => tool.visibility !== "authenticated" ||
@@ -113,7 +112,6 @@ createApp({
       if (state.loading || state.error || state.pageError || (state.monitorMode === "local" && authState.status !== "authenticated")) return []
       const trail = menuTrail(route.path)
       if (trail.length) return trail
-      if (route.path === "/driving/longitudinal-curves") return [{ id: "/driving", label: "Driving" }, { id: route.path, label: "Longitudinal Curves" }]
       return toolTrail(route.path, this.visibleTools)
     },
     pageName() {
@@ -281,7 +279,6 @@ createApp({
         <DevicePreferencesPage v-else-if="route.path === '/device-preferences'" :mode="state.monitorMode" :go="go" />
         <SettingsPage @nested="ensureBackEntry" ref="activeSettings" v-else-if="deviceSettingsPage" :key="deviceSettingsPage" :mode="state.monitorMode" :unauthorized="sessionExpired" :initial-page="deviceSettingsPage" :title="deviceSettingsPage === 'sounds' ? 'Sounds & Alerts' : 'Display'" :return-to="returnToDevice" />
         <DrivingPage v-else-if="route.path === '/driving'" :mode="state.monitorMode" :go="go" />
-        <LongitudinalCurvesPage v-else-if="route.path === '/driving/longitudinal-curves'" :mode="state.monitorMode" :unauthorized="sessionExpired" :go="go" />
         <SettingsPage @nested="ensureBackEntry" ref="activeSettings" v-else-if="drivingSettingsPage" :key="drivingSettingsPage" :mode="state.monitorMode" :unauthorized="sessionExpired" :initial-page="drivingSettingsPage" :title="'Driving settings · ' + drivingSettingsPage.replaceAll('_', ' ')" :return-to="returnToDriving" trail-root="Driving" />
         <MenuGroupPage v-else-if="menuGroup" :key="menuGroup.id" :group="menuGroup" :go="go" :hidden-paths="hiddenToolPaths" />
         <FavoritesPage v-else-if="route.path === '/quick-select'" :mode="state.monitorMode" :unauthorized="sessionExpired" @close="routeBack" />
@@ -291,10 +288,6 @@ createApp({
             :initial-page="menuSettingsPage" :title="menuHeading || menuTitle" :heading="menuHeading" :hide-rows="menuHiddenRows" @open-page="openSettingsPage" />
           <SettingsPage v-if="menuCompanion && state.monitorMode === 'local'" :key="menuSettingsPage + ':' + menuCompanion.page" menu-mode embedded :mode="state.monitorMode" :unauthorized="sessionExpired"
             :initial-page="menuCompanion.page" :title="menuCompanion.heading" :heading="menuCompanion.heading" :only-rows="menuCompanion.onlyRows || null" @open-page="openSettingsPage" />
-          <section v-if="menuSettingsPage === 'personalities' && state.monitorMode === 'local'" class="gx-card gx-settings__section gx-menu-extra" aria-label="Longitudinal Curves">
-            <div class="gx-row"><div class="gx-row__info"><span class="gx-row__label">Longitudinal Curves</span><span class="gx-row__desc">Adjust acceleration, braking, and following curves for each driving personality.</span></div>
-              <button type="button" class="gx-btn gx-btn--tonal" @click="go('/driving/longitudinal-curves')">Manage</button></div>
-          </section>
         </template>
         <SettingsPage @nested="ensureBackEntry" ref="activeSettings" v-else-if="route.path === '/settings' && state.searchPage" :key="state.searchPage || 'hub'" :mode="state.monitorMode" :unauthorized="sessionExpired"
           navigation-path :initial-page="state.searchPage || 'hub'" :return-to="state.searchPage ? returnFromSearch : null" />

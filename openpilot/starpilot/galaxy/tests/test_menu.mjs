@@ -19,7 +19,7 @@ for (const tool of tools) {
   assert.ok(menuLocation(tool.path), `tool ${tool.path} has no place in the menu`)
   for (const child of tool.children || []) assert.ok(menuLocation(child.path), `tool page ${child.path} has no place in the menu`)
 }
-for (const path of ["/settings/recovery", "/developer/connect", "/quick-select", "/driving/longitudinal-curves", "/theme_maker/starport",
+for (const path of ["/settings/recovery", "/developer/connect", "/quick-select", "/theme_maker/starport",
   "/cameras/sentry-settings", "/model_laboratory", "/spotify", "/troubleshoot", "/manage_tmux"]) assert.ok(menuLocation(path), `${path} has no place in the menu`)
 
 // Where things live.
@@ -29,7 +29,6 @@ assert.deepEqual(at("/settings/page/slc"), ["Driving", "Speed Limit Controller",
 assert.deepEqual(at("/settings/page/slc/offsets"), ["Driving", "Speed Limit Controller", "Speed-limit offsets"])
 assert.deepEqual(at("/settings/page/conditional/cem"), ["Driving", "Long Planner", "Experimental Conditions"])
 assert.deepEqual(at("/settings/page/traffic"), ["Driving", "Driving Personalities", "Traffic"])
-assert.deepEqual(at("/driving/longitudinal-curves"), ["Driving", "Driving Personalities", "Longitudinal Curves"])
 assert.deepEqual(at("/theme_maker/starport"), ["Controls & Connections", "StarPort", "StarPort layout"])
 assert.deepEqual(at("/cameras/pip"), ["Device & Visuals", "Cameras & Monitoring", "Blind Spot Camera and Preview"])
 assert.deepEqual(at("/settings/page/data"), ["Device & Visuals", "Power & Data", ""])

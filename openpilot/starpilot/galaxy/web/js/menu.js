@@ -54,7 +54,7 @@ export const MENU = Object.freeze([
         subs: { [page("conditional/cem")]: "Experimental Conditions", [page("conditional/ccm")]: "Chill Conditions" } },
       { id: "personalities", label: "Driving Personalities", path: page("personalities"),
         subs: { [page("aggressive")]: "Aggressive", [page("standard")]: "Standard", [page("relaxed")]: "Relaxed",
-          [page("traffic")]: "Traffic", "/driving/traffic": "Traffic", "/driving/longitudinal-curves": "Longitudinal Curves" } },
+          [page("traffic")]: "Traffic", "/driving/traffic": "Traffic" } },
       { id: "csc", label: "Curve Speed Controller", path: page("curve"), also: ["/driving/curve"] },
       { id: "slc", label: "Speed Limit Controller", path: page("slc"), also: ["/driving/slc"],
         subs: { [page("slc/offsets")]: "Speed-limit offsets", [page("slc/sources")]: "Limit sources",
