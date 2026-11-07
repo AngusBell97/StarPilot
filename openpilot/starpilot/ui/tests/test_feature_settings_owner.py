@@ -603,7 +603,9 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.assertEqual(document.read_bytes(), b"{invalid")
     self.assertFalse(self._row("curve", "CurveSpeedControllerNoLead").available)
     self.assertFalse(self._row("curve", "CurveSpeedController").available)
-    self.assertTrue(self._row("curve", "ShowCSCStatus").available)
+    status = self._row("curve", "ShowCSCStatus")  # Galaxy: greyed while Curve Speed Controller is off
+    self.assertFalse(status.available)
+    self.assertEqual(status.reason, "Turn on Curve Speed Controller first")
     Path(self.params.get_param_path("CurveSpeedController")).write_bytes(b"maybe")
     invalid_master = self._row("curve", "CurveSpeedController")
     self.assertFalse(invalid_master.available)

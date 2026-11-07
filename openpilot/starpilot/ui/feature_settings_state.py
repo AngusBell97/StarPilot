@@ -71,10 +71,9 @@ TORQUE_CONFIRM_ACTIONS = frozenset(("torque_adopt", "torque_reset", "torque_rese
 SLC_CONFIRM_ACTIONS = frozenset(("slc_reset",))
 SLC_OFFSET_KEYS = tuple(f"slc:offset:{index}" for index in range(1, 8))
 LANE_CHANGE_CONFIRM_ACTIONS = frozenset(("lane_change:reset",))
-CURVE_CONFIRM_ACTIONS = frozenset(("curve_reset", "map_memory:refresh", "map_memory:undo", "map_memory:clear", "map_memory:forget"))
+CURVE_CONFIRM_ACTIONS = frozenset(("curve_reset",))
 CONDITIONAL_CONFIRM_ACTIONS = frozenset(("conditional:reset", "conditional:manual_reset"))
-PORT_CONFIRM_ACTIONS = frozenset('map_memory:forget:'+str(i) for i in range(64))
-FEATURE_CONFIRM_ACTIONS = (PORT_CONFIRM_ACTIONS | TORQUE_CONFIRM_ACTIONS | SLC_CONFIRM_ACTIONS | LANE_CHANGE_CONFIRM_ACTIONS |
+FEATURE_CONFIRM_ACTIONS = (TORQUE_CONFIRM_ACTIONS | SLC_CONFIRM_ACTIONS | LANE_CHANGE_CONFIRM_ACTIONS |
                            CURVE_CONFIRM_ACTIONS | CONDITIONAL_CONFIRM_ACTIONS | {"reset_profiles", "pip:reset", "sentry:reset"})
 
 

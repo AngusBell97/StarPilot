@@ -42,7 +42,6 @@ from openpilot.starpilot.feature_capabilities import longitudinal_supported
 from openpilot.starpilot.conditional_mode.projection import paired_clocks_ns
 from openpilot.starpilot.conditional_mode.ui_action import observation as ui_manual_observation
 from openpilot.starpilot.longitudinal.cruise_ceiling import CurveCeiling
-from openpilot.starpilot.controls.lib.map_corner.host_v7 import MapHost
 from openpilot.starpilot.speed_limits.mapped_timing import profile_from_host
 from openpilot.starpilot.feature_runtime import (enabled as feature_enabled, requested as feature_requested,
                                                slc_runtime_settings, slc_transport_capable, vision_control_enabled)
@@ -300,7 +299,7 @@ def update_curve_frame(planner: LongitudinalPlanner, sm, CP, now_ns: int, *, hos
                        event: CurveDriverEvent | None = None, lane_change_policy=None,
                        global_braking_response: str | None = None, selected_profiles=None, conditional_handoff: ConditionalHandoff | None = None,
                        lead_approach_key: LeadApproachKey | None = None, force_stop_provider=None,
-                       faster_lead_takeoff: bool = False, wheel_coast=None, map_host: MapHost | None = None, slc_comfort=None, slc_easing=None, experimental_speed_nudge: bool = True):
+                       faster_lead_takeoff: bool = False, wheel_coast=None, slc_comfort=None, slc_easing=None, experimental_speed_nudge: bool = True):
   """One model cycle: MPC chooses follow time, then Curve samples and receives winner feedback."""
   if host is None:
     planner.update(sm, cruise_ceiling=cruise_ceiling, profile_tuning=profile_tuning, traffic_mode=traffic_mode,
@@ -310,27 +309,19 @@ def update_curve_frame(planner: LongitudinalPlanner, sm, CP, now_ns: int, *, hos
                    takeoff_drive_id=drive_id, now_ns=now_ns, drive_id=drive_id, slc_comfort=slc_comfort, slc_easing=slc_easing, experimental_speed_nudge=experimental_speed_nudge)
     return None
   results = []
-  if map_host is not None:
-    map_host.begin(drive_id)
   def provider(follow_time_s: float | None):
     def before_learning(frame, visual):
-      excluded = map_host.sample(sm, host, planner, frame, visual, event=event) if map_host is not None else False
-      return excluded or planner.steering_load.exclude_learning or planner.mode_recovery.applied
+      return planner.mode_recovery.applied
     ceiling, result = curve_for_frame(host, sm, CP, now_ns, drive_id=drive_id,
                                       event=event, follow_time_s=follow_time_s, before_learning=before_learning)
     results.append(result)
-    return map_host.select(ceiling) if map_host is not None else ceiling
+    return ceiling
   planner.update(sm, cruise_ceiling=cruise_ceiling, profile_tuning=profile_tuning,
                  curve_provider=provider, traffic_mode=traffic_mode, lane_change_policy=lane_change_policy,
                  global_braking_response=global_braking_response, selected_profiles=selected_profiles, conditional_handoff=conditional_handoff,
                  lead_approach_key=lead_approach_key, force_stop_provider=force_stop_provider, faster_lead_takeoff=faster_lead_takeoff, wheel_coast=wheel_coast,
-                   takeoff_drive_id=drive_id, now_ns=now_ns, drive_id=drive_id, slc_comfort=slc_comfort, slc_easing=slc_easing, experimental_speed_nudge=experimental_speed_nudge,
-                   steering_load_enabled=bool(host.runtime.enabled and host.runtime.document_valid and host.runtime.steering_load_enabled))
-  if map_host is not None:
-    map_host.confirm(planner)
-    host.runtime.confirm_applied(now_ns, applied=bool(planner.last_curve_ceiling_applied and map_host.winner == "visual"))
-  else:
-    confirm_curve_frame(host, planner, now_ns)
+                   takeoff_drive_id=drive_id, now_ns=now_ns, drive_id=drive_id, slc_comfort=slc_comfort, slc_easing=slc_easing, experimental_speed_nudge=experimental_speed_nudge)
+  confirm_curve_frame(host, planner, now_ns)
   host.diagnostics.update(now_ns, host.runtime, planner)
   return results[0] if results else None
 
@@ -435,7 +426,6 @@ def starpilot_main():
   approach_preferences = LeadApproachPreferences(params) if CP.openpilotLongitudinalControl else None
   curve_preferences = CurvePreferenceHost(params) if curve_replay else None
   curve_host = curve_preferences.make_host(replay='REPLAY' in os.environ) if curve_preferences is not None else None
-  map_host = MapHost(params) if curve_host is not None else None
   curve_status = CurveStatusPublisher() if curve_host is not None else None
   force_stop_owner = ForceStopRuntime(params) if CP.openpilotLongitudinalControl else None
   takeoff_preferences = TakeoffPreferences(params) if CP.openpilotLongitudinalControl else None
@@ -485,10 +475,8 @@ def starpilot_main():
   if force_stop_owner is not None and 'slcVisionObservation' not in optional_slc:
     optional_slc.append('slcVisionObservation')
   subscribed_services.extend(optional_slc)
-  optional_map = ['gpsLocationExternal', 'gpsLocation', 'onroadEvents'] if map_host is not None else []
-  subscribed_services.extend(optional_map)
   subscribed_services.append('starpilotNavigation')
-  optional_conditional = optional_map + ['starpilotNavigation'] + (['starpilotRadarState'] if conditional_host is not None else []) + optional_slc
+  optional_conditional = ['starpilotNavigation'] + (['starpilotRadarState'] if conditional_host is not None else []) + optional_slc
   sm = messaging.SubMaster(subscribed_services, poll='modelV2',
                            ignore_alive=optional_conditional, ignore_valid=optional_conditional,
                            ignore_avg_freq=optional_conditional)
@@ -503,8 +491,6 @@ def starpilot_main():
         # batch has already begun aging toward the CEM freshness deadline.
         slc_runtime, _ = slc_lifecycle.refresh(time.monotonic_ns(), pending_actions=pending_slc_actions,
                                              pending_cruise=pending_slc_cruise)
-      if map_host is not None:
-        map_host.refresh(time.monotonic_ns())
       sm.update()
       if sm.updated['modelV2']:
         # Only explicit replay uses the recorded model timeline. In a live host,
@@ -671,13 +657,10 @@ def starpilot_main():
                                           conditional_handoff=conditional_handoff,
                                           lead_approach_key=lead_approach_key, force_stop_provider=force_stop_provider,
                                           drive_id=current_start_ns, event=curve_event,
-                                          faster_lead_takeoff=faster_lead_takeoff, wheel_coast=(wheel_coast, params), map_host=map_host,
+                                          faster_lead_takeoff=faster_lead_takeoff, wheel_coast=(wheel_coast, params),
                                           slc_comfort=slc_runtime.comfort_request if slc_runtime is not None else None,
                                           slc_easing=slc_runtime.easing_request if slc_runtime is not None else None,
                                           experimental_speed_nudge=nudge_preferences.sample(now_ns))
-        steering_diagnostic = longitudinal_planner.steering_load.diagnostic()
-        if steering_diagnostic is not None:
-          cloudlog.event('curve.steering_load', **steering_diagnostic)
         if curve_preferences is not None and curve_host is not None and curve_result is not None:
           curve_preferences.persist(curve_host, curve_result, now_ns)
           assert curve_status is not None
@@ -686,8 +669,7 @@ def starpilot_main():
                                                now_ns=now_ns, model_ns=int(sm.logMonoTime['modelV2']),
                                                persistence_status=curve_preferences.status,
                                                road_curvature=curve_geometry[0] if curve_geometry is not None else None,
-                                               applied=bool(longitudinal_planner.last_curve_ceiling_applied and
-                                                            (map_host is None or map_host.winner == 'visual')))
+                                               applied=bool(longitudinal_planner.last_curve_ceiling_applied))
         conditional_sm, conditional_clocks = sm, clock_pair
         if conditional_host is not None and 'REPLAY' not in os.environ:
           assert conditional_authority is not None
@@ -759,8 +741,6 @@ def starpilot_main():
         pm.send('driverAssistance', msg)
 
   finally:
-    if map_host is not None:
-      map_host.close()
     if conditional_host is not None:
       conditional_host.close()
     if conditional_authority is not None:

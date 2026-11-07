@@ -65,7 +65,6 @@ DESCRIPTIONS = {
     "preset in Driving Personalities overrides it; personalities left on Selected Profile use this one."),
   'reset_profiles': 'Restores the default acceleration, braking and following curves and presets.',
   'CurveSpeedController': 'Adjusts cruise speed for curves ahead using available learned cornering preferences.',
-  'CurveSteeringLoadSlowdown': 'With CSC on, slows above 95% on the estimated steering-load bar, up to 1.2 m/s2. From zero, full braking takes 0.5s; release from full braking to zero takes 2s. Actual braking follows demand, with a smooth return to normal control. Keeps your selected cruise speed. Stronger lead, map and vision braking still wins. Also works with a lead; this is not a guarantee of steering capacity.',
   'CurveSpeedControllerNoLead': 'Pauses curve-speed adjustments while following a lead vehicle.',
   'ShowCSCStatus': 'Shows when Curve Speed Controller is adjusting speed on the driving screen.',
   'curve_reset': 'Deletes saved cornering learning so Curve Speed Controller can learn your preferences again.',

@@ -27,7 +27,7 @@ FOLLOW_GAP_LABELS = {FOLLOW_GAP_UP: "Increase Follow Gap", FOLLOW_GAP_DOWN: "Dec
 FEATURE_KEYS = {
   "slc": ("SpeedLimitController", "ShowSpeedLimits", "SLCConfirmation", "SLCConfirmationHigher", "SLCConfirmationLower"),
   "lane": ("LaneCentering", "LaneCenteringPauseOnSignal"),
-  "curve": ("CurveSpeedController", "CurveSpeedControllerNoLead", "CurveSteeringLoadSlowdown", "ShowCSCStatus"),
+  "curve": ("CurveSpeedController", "CurveSpeedControllerNoLead", "ShowCSCStatus"),
   "aol": ("AlwaysOnLateral", "NostalgiaMode"),
   "personalities": ("CustomPersonalities",),  # moved from Long Planner (profiles) 7 Nov 2026
 }

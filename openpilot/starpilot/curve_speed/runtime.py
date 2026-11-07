@@ -74,7 +74,6 @@ class Runtime:
   def __init__(self, document: object = None, *, enabled: bool = False, no_lead: bool = False):
     loaded = LearnedCurve.load(document)
     self.curve: LearnedCurve = loaded.curve
-    self.steering_load_enabled = False
     self.document_valid = loaded.valid
     self.document_reason = loaded.reason
     self.enabled = enabled
@@ -400,7 +399,7 @@ class Runtime:
       excluded = bool(before_learning(frame, None)) if before_learning is not None else False
       return self._result(candidate, None, envelope.binding_distance_m,
                           'following_unknown', False, now,
-                          'map_corner_exclusion' if excluded else 'learning_lead_unknown')
+                          'learning_excluded' if excluded else 'learning_lead_unknown')
     if not allowed:
       self._reset_filter()
       if not self.enabled or not self.document_valid or not frame.system_longitudinal:
@@ -484,7 +483,7 @@ class Runtime:
         learned = True
     else:
       self.last_training_ns = 0
-    learning_reason = ('map_corner_exclusion' if map_exclusion else
+    learning_reason = ('learning_excluded' if map_exclusion else
                        'learning_disabled' if not self.enabled else
                        'invalid_learning_document' if not self.document_valid else
                        'learning_requires_system_longitudinal' if not frame.system_longitudinal else

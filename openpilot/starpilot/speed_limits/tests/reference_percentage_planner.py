@@ -14,7 +14,6 @@ from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.modeld.constants import ModelConstants
 from openpilot.selfdrive.controls.lib.accel_boost import AccelBoost
 from openpilot.starpilot.longitudinal.encouragement import Encouragement
-from openpilot.starpilot.curve_speed.steering_load import SteeringLoad
 from openpilot.starpilot.curve_speed.braking import required_deceleration, compose_braking, CurveResponse
 from openpilot.starpilot.longitudinal.set_speed_comfort import braking_lower_bound, owns_selected_target, SetSpeedComfort, CruiseTransition, UP_JERK as SET_SPEED_UP_JERK, DOWN_JERK as SET_SPEED_DOWN_JERK
 from openpilot.selfdrive.controls.lib.longcontrol import LongCtrlState
@@ -181,7 +180,6 @@ class LongitudinalPlanner:
     self.vehicle_cost_owner = planner_cost_owner(CP)
     self.lead_takeoff = LeadTakeoff()
     self.slow_creep = SlowCreep()
-    self.steering_load = SteeringLoad()
     self.curve_response = CurveResponse()
     self.vehicle_far_follow = far_follow_owner(CP, dt)
     self.vision_stop_buffer = vision_stop_owner(CP)
@@ -197,7 +195,7 @@ class LongitudinalPlanner:
              lead_approach_key: LeadApproachKey | None = None,
              force_stop_provider: Callable[[float], StopPlan] | None = None,
              faster_lead_takeoff: bool = False, takeoff_drive_id: int = 0,
-             now_ns: int | None = None, drive_id: int = 0, wheel_coast=None, slc_comfort=None, slc_easing=None, steering_load_enabled: bool = False, experimental_speed_nudge: bool = True):
+             now_ns: int | None = None, drive_id: int = 0, wheel_coast=None, slc_comfort=None, slc_easing=None, experimental_speed_nudge: bool = True):
     if curve_ceiling is not None and curve_provider is not None:
       raise ValueError('choose explicit Curve ceiling or same-cycle provider')
     if self.plan_drive_id != drive_id:
@@ -206,7 +204,6 @@ class LongitudinalPlanner:
     self.plan_drive_id = drive_id
     faster_takeoffs = bool(faster_lead_takeoff)
     sample_now_ns = self.clock_ns() if now_ns is None else now_ns
-    self.steering_load.prepare(sm, self.CP, sample_now_ns, enabled=steering_load_enabled, drive_id=drive_id)
     if len(sm['carControl'].orientationNED) == 3:
       accel_coast = get_coast_accel(sm['carControl'].orientationNED[1])
     else:
@@ -634,9 +631,6 @@ class LongitudinalPlanner:
         active=profile_eligible and not reset_state and self.mpc.solution_status == 0)
     if preap_acceleration_cap is not None:
       output_a_target = min(output_a_target, preap_acceleration_cap)
-    output_a_target = self.steering_load.apply(float(output_a_target), float(a_prev))
-    if self.steering_load.applied:
-      self.last_curve_ceiling_applied = False
     before_lane_gap = float(output_a_target)
     output_a_target = self.lane_change_gap.limit_acceleration(before_lane_gap)
     after_lane_gap = float(output_a_target)

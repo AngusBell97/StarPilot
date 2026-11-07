@@ -151,7 +151,7 @@ def _onroad_preference(page: str, key: str) -> bool:
   return bool(page not in ("developer", "power") and key and key != SETUP_ACTION and key not in (
     "IsRhdDetected", "AlphaLongitudinalEnabled", "reset_profiles", "curve_reset", "slc_reset",
     "conditional:reset", "conditional:manual_reset",
-  ) and not is_long_confirm_action(key) and not key.startswith(("torque_repair:", "map_memory:")))
+  ) and not is_long_confirm_action(key) and not key.startswith("torque_repair:"))
 
 
 class LiveContextSource:
@@ -453,8 +453,6 @@ def _question(row: FeatureRow, request: FeatureSettingsRequest) -> str:
     return f"{row.label}? This replaces the saved crop; check alignment on the device."
   if key == "slc_reset":
     return f"Reset speed-limit offsets to zero? {row.value}. Saved control may resume if its switch is on."
-  if key.startswith('map_memory:'):
-    return row.label + '? This changes the saved local data.'
   if key == "curve_reset":
     return "Erase learned curve data? Curve Speed Controller keeps its current On or Off choice."
   if key.startswith("conditional:"):

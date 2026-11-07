@@ -387,7 +387,7 @@ def test_native_planner_speed_nudge_off_removes_entire_automatic_floor(factory, 
   assert planner.encouragement.boost == pytest.approx(MAX_BOOST)
 
 
-@pytest.mark.parametrize('host', [None, Mock(runtime=Mock(enabled=True, document_valid=True, steering_load_enabled=True))])
+@pytest.mark.parametrize('host', [None, Mock(runtime=Mock(enabled=True, document_valid=True))])
 def test_plannerd_forwards_speed_nudge_choice_through_both_curve_paths(host):
   from openpilot.selfdrive.controls.plannerd import update_curve_frame
   planner = Mock()
