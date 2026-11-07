@@ -36,5 +36,5 @@ def test_personality_editors_are_grouped_once_and_retain_their_routes():
     assert not any(row.page in ('aggressive', 'standard', 'relaxed', 'traffic') for row in hub.rows)
     grouped = state('personalities')
     assert grouped.title == 'Driving Personalities'
-    assert [row.page for row in grouped.rows] == ['aggressive', 'standard', 'relaxed', 'traffic']
+    assert [row.page for row in grouped.rows if row.page] == ['aggressive', 'standard', 'relaxed', 'traffic']
     assert 'personalities' in PAGES

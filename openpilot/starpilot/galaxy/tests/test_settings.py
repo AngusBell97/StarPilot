@@ -259,7 +259,7 @@ class SettingsGatewayTest(unittest.TestCase):
     self.assertEqual([row["page"] for row in hub["rows"]],
                      ["curve", "slc", "lane", "lane_change", "profiles", "conditional", "torque", "aol", "wheel",
                      "vehicle", "personalities"])
-    self.assertEqual([row["page"] for row in self.page("personalities")["rows"]],
+    self.assertEqual([row["page"] for row in self.page("personalities")["rows"] if row["page"]],
                      ["aggressive", "standard", "relaxed", "traffic"])
     for page in ("slc", "lane", "lane_change", "profiles", "conditional", "conditional/cem", "conditional/ccm",
                  "curve", "torque", "aol", "appearance", "display", "sounds", "pip", "sentry", "personalities",

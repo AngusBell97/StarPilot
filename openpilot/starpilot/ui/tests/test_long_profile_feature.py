@@ -47,7 +47,7 @@ class LongProfileFeatureTests(unittest.TestCase):
     self.path("RelaxedFollow").write_bytes(b"nan")
     self.assertFalse(read_profile_health(self.params).dependencies_valid)
     self.assertIsNone(read_settings(self.params))
-    master = self.row("profiles", "CustomPersonalities")
+    master = self.row("personalities", "CustomPersonalities")
     self.assertTrue(master.available)  # Off remains possible with a corrupt dependent.
     repair = self.row("relaxed", "long_repair:RelaxedFollow")
     self.assertTrue(repair.available)
@@ -57,6 +57,7 @@ class LongProfileFeatureTests(unittest.TestCase):
     self.assertIsNotNone(read_settings(self.params))
 
   def test_onroad_profile_values_edit_but_repair_remains_parked(self):
+    self.params.put_bool("CustomPersonalities", True, block=True)  # following settings are greyed while it is off
     owner = FeatureSettingsOwner(self.params, lambda group: group != "parked_preferences",
                                  vehicle_fingerprint=lambda: self.cp.carFingerprint,
                                  vehicle_params=lambda: self.cp)
@@ -78,13 +79,13 @@ class LongProfileFeatureTests(unittest.TestCase):
   def test_master_on_requires_all_saved_dependencies_valid(self):
     self.assertTrue(read_profile_health(self.params).dependencies_valid)
     self.path("RelaxedJerkDanger").write_bytes(b"201")
-    master = self.row("profiles", "CustomPersonalities")
+    master = self.row("personalities", "CustomPersonalities")
     self.assertFalse(master.available)
     self.assertIsNone(row_change(master))
     self.assertFalse(self.params.get_bool("CustomPersonalities"))
     repair = self.row("relaxed", "long_repair:RelaxedJerkDanger")
     self.assertTrue(self.owner.apply(self.confirm(repair)))
-    master = self.row("profiles", "CustomPersonalities")
+    master = self.row("personalities", "CustomPersonalities")
     self.assertTrue(master.available)
     request = row_change(master)
     self.assertIsNotNone(request)
@@ -105,7 +106,7 @@ class LongProfileFeatureTests(unittest.TestCase):
     self.path("StandardPersonalityProfile").write_bytes(b"bad")
     self.path("CustomPersonalities").write_bytes(b"bad")
     self.assertIsNone(read_settings(self.params))
-    master_repair = self.row("profiles", "long_repair:CustomPersonalities")
+    master_repair = self.row("personalities", "long_repair:CustomPersonalities")
     self.assertIn("to Off", master_repair.label)
     self.assertIn("to Off", long_confirm_question(master_repair))
     self.assertTrue(self.owner.apply(self.confirm(master_repair)))
@@ -141,7 +142,7 @@ class LongProfileFeatureTests(unittest.TestCase):
     self.assertFalse(repair.available)
     self.assertFalse(self.owner.apply(self.confirm(repair)))
     self.assertFalse(self.row("relaxed", "long_reset:relaxed").available)
-    master = self.row("profiles", "CustomPersonalities")
+    master = self.row("personalities", "CustomPersonalities")
     self.assertTrue(master.available)
     request = row_change(master)
     self.assertIsNotNone(request)
@@ -153,11 +154,11 @@ class LongProfileFeatureTests(unittest.TestCase):
     self.params.put_bool("CustomPersonalities", True, block=True)
     self.path("LongitudinalPersonalityProfiles").write_bytes(b"{" + b"x" * 65536)
     self.assertFalse(read_profile_health(self.params).values["LongitudinalPersonalityProfiles"].readable)
-    reset = self.row("profiles", "reset_profiles")
+    reset = self.row("personalities", "reset_profiles")
     self.assertFalse(reset.available)
     self.assertFalse(self.owner.apply(self.confirm(reset)))
     self.assertFalse(self.row("aggressive", "long_reset:aggressive").available)
-    master = self.row("profiles", "CustomPersonalities")
+    master = self.row("personalities", "CustomPersonalities")
     self.assertTrue(master.available)
     request = row_change(master)
     self.assertIsNotNone(request)
