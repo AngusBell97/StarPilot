@@ -82,12 +82,10 @@ export const PAGE_GUIDES = Object.freeze({
   appearance: {
     intro: "Options for the comma's driving screen. Changes save straight away. Widget positions and colours are on Colors & Layout.",
     cards: [
-      { id: "big", title: "Big layout", icon: "bi-layout-sidebar-reverse", rows: [{ label: "Developer Sidebar" }] },
-      { id: "widgets", title: "Widgets", icon: "bi-grid", rows: [{ label: "Use StarPilot Widgets" }, { label: "Wheel brake and acceleration colors" }] },
-      { id: "lead", title: "Lead car (Small layout)", icon: "bi-car-front", rows: [{ label: "Lead Indicator" }, { label: "Lead Info" }] },
-      { id: "camera", title: "Camera (Small layout)", icon: "bi-camera-video", rows: [{ label: "Camera View" }, { label: "Driver Camera on Reverse" }] },
-      { id: "alerts", title: "Alerts and borders", icon: "bi-bell", rows: [{ label: "Hide Personality Alerts" }, { label: "C4 amber signal border" },
-        { label: "C4 red blind-spot border" }] },
+      // One card, no sub-headings (the user's choice, 7 Nov); rows keep the layout editor's order.
+      { id: "appearance", title: "", rows: ["Developer Sidebar", "Use StarPilot Widgets", "Wheel brake and acceleration colors",
+        "Lead Indicator", "Lead Info", "Camera View", "Driver Camera on Reverse", "Hide Personality Alerts", "C4 amber signal border",
+        "C4 red blind-spot border"].map(label => ({ label })) },
     ],
   },
   // Speed Limit Controller: what only works while the controller is on is greyed while it is off. Show speed limit signs
