@@ -616,7 +616,7 @@ export const SettingsPage = {
                 <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
                 <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
-              <template v-if="card.guide"><div class="gx-section__header gx-guide__header"><i class="bi" :class="card.icon" aria-hidden="true"></i><h3 class="gx-section__title">{{ card.title }}</h3></div>
+              <template v-if="card.guide && card.title"><div class="gx-section__header gx-guide__header"><i class="bi" :class="card.icon" aria-hidden="true"></i><h3 class="gx-section__title">{{ card.title }}</h3></div>
                 <p v-if="card.intro" class="gx-guide__intro">{{ card.intro }}</p></template>
               <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
               <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index" :class="{ 'gx-guide__sub': row.guideSub }"
