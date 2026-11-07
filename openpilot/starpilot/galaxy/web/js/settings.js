@@ -12,7 +12,7 @@ import { CloudProviderPage } from "./cloud-provider.js"
 import { GxNotice } from "./notice.js"
 import { route } from "./route-state.js"
 import { GxTrail } from "./trail.js"
-import { pageGuide, guidedRows, guidedCards } from "./page-guides.js"
+import { pageGuide, guidedRows, guidedCards, guideSaveValue } from "./page-guides.js"
 
 const post = (fetcher, path, body, signal) => fetcher(path, {
   method: "POST", credentials: "same-origin", cache: "no-store", signal,
@@ -424,6 +424,7 @@ export const SettingsPage = {
     this.pathRequest?.abort(); this.feed.stop()
   },
   methods: {
+    guideSaveValue,
     rememberPathPage(data) {
       if (typeof data?.page !== "string" || typeof data.title !== "string") return
       this.state.pageTitles[data.page] = data.title
@@ -618,8 +619,8 @@ export const SettingsPage = {
               <template v-if="card.guide"><div class="gx-section__header gx-guide__header"><i class="bi" :class="card.icon" aria-hidden="true"></i><h3 class="gx-section__title">{{ card.title }}</h3></div>
                 <p v-if="card.intro" class="gx-guide__intro">{{ card.intro }}</p></template>
               <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
-              <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index"
-                :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)" :test-alert="state.data.page === 'sounds' ? testAlert : null"
+              <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index" :class="{ 'gx-guide__sub': row.guideSub }"
+                :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, guideSaveValue(row, value))" :test-alert="state.data.page === 'sounds' ? testAlert : null"
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
               <SettingsPage v-if="card.include && mode === 'local'" :key="'include:' + card.include.page" bare embedded menu-mode :mode="mode" :unauthorized="unauthorized"
                 :initial-page="card.include.page" :title="card.title" :only-rows="card.include.rows" />

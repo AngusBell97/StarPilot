@@ -46,7 +46,8 @@ assert.deepEqual(driving.children[2].children.map(node => node.label), ["Long Pl
 // Merged pages and moved rows.
 assert.deepEqual(PAGE_COMPANIONS.profiles, { page: "conditional", heading: "Conditional Driving Modes" })
 assert.deepEqual(PAGE_COMPANIONS.power, { page: "data", heading: "Data Uploads" })
-assert.deepEqual(PAGE_COMPANIONS.lane_change.onlyRows, ["Turn Signal Guidance"])
+// Turn Signal Guidance sits inside Lane Changes' own "Turns at junctions" card (page-guides.js), not a companion page.
+assert.equal(PAGE_COMPANIONS.lane_change, undefined)
 assert.deepEqual(PAGE_HIDDEN_ROWS.torque, ["Turn Signal Guidance"])
 assert.equal(settingsSearchPath({ page: "torque", label: "Turn Signal Guidance" }), "/settings/page/lane_change")
 assert.equal(settingsSearchPath({ page: "data", label: "Always Allow Uploads" }), "/settings/page/power")

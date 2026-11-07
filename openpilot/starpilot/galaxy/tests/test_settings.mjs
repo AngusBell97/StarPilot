@@ -151,7 +151,8 @@ assert.equal(SettingsPage.computed.pageDescription.call({ state: { data: {page: 
 // Driving Screen Widgets opens the layout editor on its Display tab; target switches go through the router.
 assert.match(SettingsPage.template, /:initial-panel="state\.layoutPanel" @target="openLayoutTarget"/)
 assert.doesNotMatch(SettingsPage.template, /Use Colors &amp; Layout to arrange widgets and change colors/)
-assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"lane_change"}}}), /Configure lane-change assistance, signal timing, steering pace and following gap\./)
+// Lane Changes takes its intro from page-guides.js.
+assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"lane_change"}}}), /Signal, and StarPilot steers you into the lane on that side\./)
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"profiles"}}}), /Adjust acceleration, braking and following for each driving personality\./)
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"traffic"}}}), /Tune low-speed following and jerk, blending toward Relaxed at higher speeds\./)
 const app = (await import('node:fs')).readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8')

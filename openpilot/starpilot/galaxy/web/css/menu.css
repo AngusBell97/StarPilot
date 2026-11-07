@@ -70,3 +70,6 @@
 .gx-settings--bare .gx-settings__section.gx-card { margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
   backdrop-filter: none; -webkit-backdrop-filter: none; }
 .gx-settings--bare .gx-settings__section > .gx-row:first-child { border-top: 1px solid var(--outline); }
+/* A row that belongs to the row above it (e.g. Nudgeless delay under Nudge or nudgeless). */
+.gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 24px); }
+@media (max-width: 520px) { .gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 14px); } }
