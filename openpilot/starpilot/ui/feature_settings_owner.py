@@ -1140,20 +1140,29 @@ class FeatureSettingsOwner:
       strength_supported = runtime_supported(self.vehicle_params())
       allowed = strength_supported and ((configurable and lateral_context) or (not parked and self.authority("lane_live")))
       lane_enabled, _, _ = self._value("LaneCentering")
+      # Everything below the master switch greys out while it is off; Restore defaults can still reset those rows.
+      lane_on = lane_enabled == "1"
+      lane_off_reason = "Turn on Lane Centering first"
+
+      def lane_child(row: FeatureRow, reason: str | None = None) -> FeatureRow:
+        valid = bool(row.choices) or row.step > 0  # switches lose their choices, sliders their step, on an invalid saved value
+        if allowed and not lane_on and valid:
+          reason = lane_off_reason
+        return replace(row, default_reset_available=allowed and parked and valid,
+                       **({"reason": reason} if reason is not None else {}))
+
       rows.extend((self._bool_row("LaneCentering", "Enable Lane Centering", allowed),
-                   replace(self._bool_row("LaneCenteringPauseOnSignal", "Pause on signal", allowed and lane_enabled == "1"),
-                           default_reset_available=allowed and parked and self._value("LaneCenteringPauseOnSignal")[2] and
-                           self._value("LaneCenteringPauseOnSignal")[0] in ("0", "1")),
-                   self._number_row("LaneCenterOffset", "Lane offset", allowed),
-                   replace(self._number_row("LaneCenteringE2EAuthority", "Model path preference", allowed, scale=100, unit="%"),
-                           reason="Higher values let a confident model path reduce lane-centering correction when it differs from the lane center")))
+                   lane_child(self._bool_row("LaneCenteringPauseOnSignal", "Pause on signal", allowed and lane_on)),
+                   lane_child(self._number_row("LaneCenterOffset", "Lane offset", allowed and lane_on)),
+                   lane_child(self._number_row("LaneCenteringE2EAuthority", "Model path preference", allowed and lane_on, scale=100, unit="%"),
+                              "Higher values let a confident model path reduce lane-centering correction when it differs from the lane center")))
       strength_row = self._number_row("LaneCenteringStrength", "Lane Centering Strength",
-                                      allowed and strength_supported, scale=100 / STRENGTH_BASELINE, unit="%")
-      rows.append(replace(strength_row,
+                                      allowed and lane_on, scale=100 / STRENGTH_BASELINE, unit="%")
+      rows.append(lane_child(replace(strength_row,
                           value=str(round(float(strength_row.value))) if strength_row.step > 0 else strength_row.value,
                           default_value=str(round(float(strength_row.default_value))) if strength_row.default_value is not None else None,
-                          minimum=33, maximum=round(STRENGTH_MAX / STRENGTH_BASELINE * 100), step=1 if strength_row.step > 0 else 0,
-                          reason="100% is normal; lower values reduce centering and higher values strengthen it" if strength_supported else
+                          minimum=33, maximum=round(STRENGTH_MAX / STRENGTH_BASELINE * 100), step=1 if strength_row.step > 0 else 0),
+                          "100% is normal; lower values reduce centering and higher values strengthen it" if strength_supported else
                           "Not available with this vehicle configuration"))
     elif page == FeaturePage.LANE_CHANGE:
       title = "Lane Changes"
@@ -1649,6 +1658,10 @@ class FeatureSettingsOwner:
           number = max(low, number * STRENGTH_BASELINE / 100)
         elif key == "LaneCenteringE2EAuthority":
           number /= 100
+        if (key in ("LaneCenterOffset", "LaneCenteringE2EAuthority", "LaneCenteringStrength") and
+            self._value("LaneCentering")[0] != "1" and
+            not (reset_default and math.isclose(number, float(self._default(key)), rel_tol=0, abs_tol=1e-9))):
+          return False  # greyed while Lane Centering is off; only Restore defaults may reset them
         if not valid or not math.isfinite(float(current)) or not low <= float(current) <= high or not math.isfinite(number) or not low <= number <= high:
           return False
         if key == "ForceStopDistanceOffset" and not number.is_integer():

@@ -109,7 +109,10 @@ def restore(params, row, request, owner=None):
   """Return the request in the owner's original units; never change IsMetric."""
   if category(row) is None: return request
   shown = project(params, row, owner)
-  if (not shown.available or request.dependencies != shown.dependencies or request.expected != row.source or
+  # Restore defaults may reset a greyed row (its master switch is off) to its exact native default.
+  inactive_reset = (not row.available and row.default_reset_available and not request.direction and
+                    selection(params, category(row))[0] is not None and request.value == shown.default_value)
+  if (not (shown.available or inactive_reset) or request.dependencies != shown.dependencies or request.expected != row.source or
       request.display_unit != shown.display_unit):
     raise ValueError("Slider units or saved settings changed; refresh settings")
   if request.direction:
