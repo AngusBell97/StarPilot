@@ -110,14 +110,35 @@ assert.equal(guidedCards("profiles", []), null)
 assert.equal(pageGuide("constructor"), null)
 
 // Every label a guide relies on still exists in the device code (a Dom rename would otherwise drop a row into "More settings").
-const source = ["../../ui/lane_change_feature.py", "../../ui/conditional_feature.py", "../../ui/feature_settings_owner.py"]
+const source = ["../../ui/lane_change_feature.py", "../../ui/conditional_feature.py", "../../ui/feature_settings_owner.py",
+  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py"]
   .map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n")
 for (const guide of Object.values(PAGE_GUIDES)) {
   for (const spec of [...(guide.cards || []).flatMap(card => card.rows), ...(guide.rows || [])]) {
     assert.ok(source.includes(`"${spec.label}"`) || source.includes(`'${spec.label}'`), `device code no longer has the row "${spec.label}"`)
     for (const need of [...(spec.needs || []), ...(spec.showWhen ? [spec.showWhen] : [])]) {
-      assert.ok(source.includes(`"${need.label}"`), `device code no longer has the row "${need.label}"`)
+      assert.ok(source.includes(`"${need.label}"`) || source.includes(`'${need.label}'`), `device code no longer has the row "${need.label}"`)
     }
   }
 }
 console.log("page guides ok")
+
+// Speed Limit Controller: the offsets, timing and re-engagement pages are greyed (and cannot be opened) while it is off;
+// Show speed limit signs and Limit sources stay active. The page keeps its own layout.
+const slcRows = (value) => [row("Speed Limit Controller", value, { reason: "device text" }), row("Show speed limit signs", "On"),
+  { label: "Speed-limit offsets", value: "Offsets for each speed range", page: "slc/offsets", available: true, action: false, reason: "" },
+  { label: "Limit sources", value: "Primary and secondary limits", page: "slc/sources", available: true, action: false, reason: "" },
+  { label: "Timing and confirmation", value: "Profile-based slowing", page: "slc/timing", available: true, action: false, reason: "" },
+  { label: "Manual speed and re-engagement", value: "Zone recall", page: "slc/reengagement", available: true, action: false, reason: "" }]
+const slcOff = guidedRows("slc", slcRows("Off"))
+assert.deepEqual(slcOff.map(r => [r.label, r.available]), [["Speed Limit Controller", true], ["Show speed limit signs", true],
+  ["Speed-limit offsets", false], ["Limit sources", true], ["Timing and confirmation", false], ["Manual speed and re-engagement", false]])
+assert.equal(slcOff[2].reason, "Turn on Speed Limit Controller to use this. ")
+assert.equal(slcOff[0].reason, "device text", "the page keeps its own text")
+assert.ok(guidedRows("slc", slcRows("On")).every(r => r.available))
+assert.equal(guidedCards("slc", []), null, "the SLC page keeps its own layout")
+const reengage = (restore) => guidedRows("slc/reengagement", [row("Remember manual speed for each limit", "On"), row("Restore SLC speed on re-engagement", restore)])
+assert.equal(reengage("Off")[0].available, false)
+assert.match(reengage("Off")[0].reason, /^Turn on Restore SLC speed on re-engagement to use this\./)
+assert.equal(reengage("On")[0].available, true)
+console.log("slc guides ok")
