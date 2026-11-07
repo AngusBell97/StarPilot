@@ -59,8 +59,10 @@ DESCRIPTIONS = {
                         'Selected acceleration profiles, stop detection and vehicle limits still apply.'),
   'CustomPersonalities': 'Uses your following-time and jerk settings for the selected driving personality.',
   'profile:stopped_gap': 'Adds this distance to the following gap behind a stopped lead vehicle.',
-  'profile:global_acceleration': 'Chooses the acceleration curve used by personalities set to Selected Profile.',
-  'profile:global_braking': 'Chooses the braking response used by personalities set to Selected Profile.',
+  'profile:global_acceleration': ("Sets the acceleration curve for every driving personality. A personality's own Acceleration " +
+    "preset in Driving Personalities overrides it; personalities left on Selected Profile use this one."),
+  'profile:global_braking': ("Sets the braking response for every driving personality. A personality's own Braking " +
+    "preset in Driving Personalities overrides it; personalities left on Selected Profile use this one."),
   'reset_profiles': 'Restores the default acceleration, braking and following curves and presets.',
   'CurveSpeedController': 'Adjusts cruise speed for curves ahead using available learned cornering preferences.',
   'CurveSteeringLoadSlowdown': 'With CSC on, slows above 95% on the estimated steering-load bar, up to 1.2 m/s2. From zero, full braking takes 0.5s; release from full braking to zero takes 2s. Actual braking follows demand, with a smooth return to normal control. Keeps your selected cruise speed. Stronger lead, map and vision braking still wins. Also works with a lead; this is not a guarantee of steering capacity.',

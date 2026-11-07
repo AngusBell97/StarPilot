@@ -876,7 +876,7 @@ class SettingsGatewayTest(unittest.TestCase):
 
   def test_global_profiles_use_existing_owner_and_remain_editable_onroad(self):
     page = self.page("profiles")
-    index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Selected Deceleration Profile")
+    index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Deceleration Profile")
     self.assertEqual(page["rows"][index]["value"], "Comfort")
     self.assertEqual(page["rows"][index]["choices"], ["StarPilot Default", "Normal", "Comfort", "Sport"])
     intent = self.gateway.preview(page["view"], index, 0, self.session, self.generation, value="Sport")
@@ -904,7 +904,7 @@ class SettingsGatewayTest(unittest.TestCase):
     self.assertEqual(document["selectedDecelerationProfile"], "sport")
     self.assertNotIn("globalBrakingResponse", document)
     self.assertEqual(document["profiles"]["aggressive"]["braking"], previous)
-    acceleration = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Selected Acceleration Profile")
+    acceleration = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Acceleration Profile")
     page = self.page("profiles")
     intent = self.gateway.preview(page["view"], acceleration, 1, self.session, self.generation)
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
@@ -1580,7 +1580,7 @@ class SettingsHttpTest(SettingsHttpFixture):
     def preview():
       status, page, _ = self.request("/api/settings/pages/profiles", cookie=cookie)
       self.assertEqual(status, 200)
-      index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Selected Deceleration Profile")
+      index = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Deceleration Profile")
       status, result, _ = self.request("/api/settings/preview", cookie=cookie,
         payload={"view": page["view"], "row": index, "value": "Comfort"})
       self.assertEqual(status, 200)

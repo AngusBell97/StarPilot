@@ -1209,9 +1209,9 @@ class FeatureSettingsOwner:
         rows.append(self._bool_row("DisengageOnAccelerator", "Disengage on Accelerator Pedal", self.authority("preferences")))
       document, raw, valid = self._document()
       for category, field, label, choices in (
-        ('acceleration', 'selectedAccelerationProfile', 'Selected Acceleration Profile',
+        ('acceleration', 'selectedAccelerationProfile', 'Acceleration Profile',
          ('dom_default', 'standard', 'eco', 'sport', 'sport_plus')),
-        ('braking', 'selectedDecelerationProfile', 'Selected Deceleration Profile',
+        ('braking', 'selectedDecelerationProfile', 'Deceleration Profile',
          ('dom_default', 'standard', 'eco', 'sport')),
       ):
         selected = document[field] if document is not None else ('dom_default' if category == 'acceleration' else DEFAULT_DECELERATION_PROFILE)
@@ -1219,8 +1219,8 @@ class FeatureSettingsOwner:
                                preset_label(selected) if valid else 'Invalid document', raw,
                                tuple(preset_label(choice) for choice in choices) if valid else (),
                                available=allowed and valid,
-                               reason=(CATEGORY_HELP[category] if category == 'braking' else
-                                       'Personalities set to Selected Profile follow this choice; explicit overrides stay unchanged.'),
+                               reason=("Used by every driving personality unless its own preset in Driving Personalities overrides it." +
+                                       (" " + CATEGORY_HELP[category] if category == 'braking' else "")),
                                default_value=preset_label('dom_default' if category == 'acceleration' else DEFAULT_DECELERATION_PROFILE)))
       unit_value, unit_raw, unit_valid = self._value("IsMetric")
       unit_valid = unit_valid and unit_value in ("0", "1") and self._readable("IsMetric")

@@ -109,7 +109,7 @@ class TestOffroadConfigurationPages(unittest.TestCase):
       'lane_change': ('Allow lane changes', 'Minimum lane-change speed', 'Automatic Lane Changes', 'Lane Change Speed'),
       'slc': ('Speed Limit Controller', 'Show speed limit signs'),
       'slc/timing': ('Confirm lower limits', 'Confirm higher limits'),
-      'profiles': ('Short press', 'Hold', 'Force Stop', 'Selected Acceleration Profile', 'Selected Deceleration Profile'),
+      'profiles': ('Short press', 'Hold', 'Force Stop', 'Acceleration Profile', 'Deceleration Profile'),
       'torque': ('Steering Controller', 'Turn Assist', 'Lat Accel', 'Friction'),
       'wheel': ('Short press', 'Hold', 'Distance long press', 'MODE press', 'Star button'),
     }
