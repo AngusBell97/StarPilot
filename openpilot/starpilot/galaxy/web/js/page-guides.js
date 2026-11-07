@@ -5,31 +5,33 @@
 
 const LANE_TURN_SPEED = row => (row.unit === "km/h" ? "32 km/h" : "20 mph")
 const ALLOW = { label: "Allow lane changes", value: "On" }
-const NUDGELESS = { label: "Automatic Lane Changes", value: "On" }
+// Wheel nudge required is the device's Automatic Lane Changes switch the other way round (nudge required = automatic off).
+const NUDGELESS = { label: "Automatic Lane Changes", value: "On", note: "Turn off Wheel nudge required to use this." }
 const CLOSE_GAP = { label: "Close lane-change gap", value: "On" }
 
-// Row options: help (text or row => text), display (label shown instead of the device's), values (device value → shown
-// value), needs (rows that must be on, else greyed), showWhen (row that must be on, else hidden), sub (indented under
-// the row above), placeholder (greyed stand-in while the device leaves the row out because its switch is off).
+// Row options: help (text or row => text; none keeps the device's text), display (label shown instead of the device's),
+// values (device value → shown value), needs (rows that must have a value, else greyed, with the need's note or
+// "Turn on <row>"), showWhen (same, else hidden), sub (indented under the row above), placeholder (greyed stand-in while
+// the device leaves the row out because its switch is off). A card with no title has no header.
 export const PAGE_GUIDES = Object.freeze({
   lane_change: {
     intro: "Signal, and StarPilot steers you into the lane on that side. Changes save straight away; a lane change that has " +
       "already started finishes on the settings it started with.",
     cards: [
       {
-        id: "lane-changes", title: "Lane changes", icon: "bi-signpost-split",
-        intro: "Allow lane changes is the main switch: with it off, nothing in this card does anything.",
+        id: "lane-changes", title: "",
         rows: [
-          { label: "Allow lane changes",
-            help: "On: when you signal, StarPilot can move the car into the next lane. Off: signalling never starts a lane change." },
-          { label: "Automatic Lane Changes", display: "Nudge or nudgeless", values: { Off: "Nudge", On: "Nudgeless" }, needs: [ALLOW],
-            help: row => "Nudge: signal, then nudge the wheel towards the new lane. Nudgeless: it starts by itself " +
-              (row.value === "On" ? "after the delay below" : "a set time after you signal") + ", if the camera sees a lane there. " +
-              "Neither starts with a car in the blind spot. Called Automatic Lane Changes on the comma's screen." },
-          { label: "Automatic lane-change delay", display: "Nudgeless delay", showWhen: NUDGELESS, needs: [ALLOW], sub: true,
+          { label: "Allow lane changes", display: "Auto lane changes",
+            help: "The main switch. On: when you signal, StarPilot can move the car into the next lane. Off: signalling never starts " +
+              "a lane change, and the settings below do nothing. Called Allow lane changes on the comma's screen." },
+          { label: "Automatic Lane Changes", display: "Wheel nudge required", values: { Off: "On", On: "Off" }, needs: [ALLOW],
+            help: "On: after you signal, nudge the wheel towards the new lane to start. Off (nudgeless): it starts by itself after the " +
+              "Nudgeless delay, if the camera sees a lane there. Neither starts with a car in the blind spot. On the comma's screen " +
+              "this is Automatic Lane Changes, the other way round (Automatic on = no nudge needed)." },
+          { label: "Automatic lane-change delay", display: "Nudgeless delay", needs: [ALLOW, NUDGELESS], sub: true,
             help: "How long after you signal before the lane change starts, giving you time to cancel. The wait starts again if the " +
               "lane or blind spot stops being clear. 0 starts straight away." },
-          { label: "Minimum adjacent lane width", showWhen: NUDGELESS, needs: [ALLOW], sub: true,
+          { label: "Minimum adjacent lane width", needs: [ALLOW, NUDGELESS], sub: true,
             help: "A nudgeless lane change only starts when the camera measures the next lane at least this wide; otherwise nudge " +
               "the wheel. 0 skips the width check." },
           { label: "Minimum lane-change speed", needs: [ALLOW],
@@ -37,10 +39,13 @@ export const PAGE_GUIDES = Object.freeze({
               "start from " + LANE_TURN_SPEED(row) + " whatever this says, because a signal below that means a turn." },
           { label: "One change per signal", needs: [ALLOW],
             help: "On: one lane change each time you signal. To cross another lane, cancel the signal and signal again. " +
-              "Off: keep signalling and it carries on into the next lane (with Nudge, nudge the wheel again for each lane)." },
+              "Off: keep signalling and it carries on into the next lane (with Wheel nudge required on, nudge again for each lane)." },
           { label: "Lane Change Speed", needs: [ALLOW],
             help: "How fast the car moves across once a lane change starts (not a road speed). 10 is the quickest: the driving model's " +
               "own pace, about 3 seconds. Lower numbers soften the steering so it takes longer: 5 is about 6 seconds, 1 about 8." },
+          // Conditional Experimental mode's signal settings: shown as the device describes them, where they always were.
+          { label: "Signal lane detection" },
+          { label: "Signal lane width" },
         ],
       },
       {
@@ -66,20 +71,6 @@ export const PAGE_GUIDES = Object.freeze({
         // Saved with the Steering and Torque page's settings, shown here.
         include: { page: "torque", rows: ["Turn Signal Guidance"] },
         rows: [],
-      },
-      {
-        id: "signal-mode", title: "Experimental mode when signalling", icon: "bi-sign-merge-right",
-        intro: "Conditional Experimental mode can switch to Experimental when you signal below its Signal speed (Long Planner › " +
-          "Conditional Driving Modes › Experimental conditions). These two stop that happening for lane changes, so it only switches " +
-          "for turns. They do nothing in the other driving modes.",
-        rows: [
-          { label: "Signal lane detection",
-            help: "On: when you signal, it looks for a lane on that side. A lane there means a lane change, so the mode stays as it is; " +
-              "no lane means a turn, so it switches to Experimental. Off: every signal below the Signal speed switches to Experimental." },
-          { label: "Signal lane width", needs: [{ label: "Signal lane detection", value: "On" }], sub: true,
-            help: "How wide the space beside the car must be to count as a lane (a lane change) rather than a turn. " +
-              "0 counts nothing as a lane, so every signal switches to Experimental." },
-        ],
       },
     ],
   },
@@ -118,6 +109,7 @@ export function guidedRows(page, rows) {
   const present = (spec, row) => {
     const help = typeof spec.help === "function" ? spec.help(row) : spec.help
     const blocked = unmet(spec)
+    const note = need => need.note || `Turn on ${shownLabel(specs, need.label)} to use this.`
     const map = value => spec.values?.[value] ?? value
     const shown = { ...row, label: spec.display || row.label, guideLabel: row.label, guideSub: !!spec.sub,
       guideHidden: !!spec.showWhen && values.get(spec.showWhen.label) !== spec.showWhen.value }
@@ -125,7 +117,8 @@ export function guidedRows(page, rows) {
       defaultValue: row.defaultValue == null ? row.defaultValue : map(row.defaultValue),
       guideSave: Object.fromEntries(Object.entries(spec.values).map(([saved, label]) => [label, saved])) })
     if (!row.available) return shown
-    return blocked ? { ...shown, available: false, reason: `Turn on ${shownLabel(specs, blocked.label)} to use this. ${help}` }
+    if (help === undefined) return blocked ? { ...shown, available: false, reason: `${note(blocked)} ${row.reason}` } : shown
+    return blocked ? { ...shown, available: false, reason: `${note(blocked)} ${help}` }
       : { ...shown, reason: help }
   }
   const out = rows.map(row => (specs.has(row.label) && !row.heading ? present(specs.get(row.label), row) : row))
@@ -133,7 +126,7 @@ export function guidedRows(page, rows) {
   for (const [label, spec] of specs) {
     if (!spec.placeholder || values.has(label) || !unmet(spec)) continue
     out.push(present(spec, { label, value: spec.placeholder.value, choices: spec.placeholder.choices, available: false, action: false,
-      reason: `Turn on ${shownLabel(specs, unmet(spec).label)} to use this. ` + (typeof spec.help === "function" ? "" : spec.help),
+      reason: (unmet(spec).note || `Turn on ${shownLabel(specs, unmet(spec).label)} to use this.`) + " " + (typeof spec.help === "string" ? spec.help : ""),
       guidePlaceholder: true }))
   }
   return out
