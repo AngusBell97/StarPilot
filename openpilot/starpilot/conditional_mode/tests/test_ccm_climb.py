@@ -167,6 +167,11 @@ class ClimbTests(unittest.TestCase):
     braking = replace(far, accel_mps2=-1.0)
     self.assertFalse(chill(d.run(0.05, lead=braking)))  # far but braking: hand back
     self.assertFalse(chill(Driver().run(3.0, lead=far)))  # a far lead still stops a new climb starting
+    d = Driver()
+    d.run(1.5)
+    for _ in range(5):  # a far lead flickering in and out of detection (drive 63, 1674 s)
+      self.assertTrue(chill(d.run(0.15, lead=far)))
+      self.assertTrue(chill(d.run(0.1)))
 
   def test_steady_easing_ends_a_climb_but_noise_does_not(self):
     speed = 40 * MPH_TO_MPS

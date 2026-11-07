@@ -770,8 +770,10 @@ class ConditionalModePolicy:
         lead_ok = (lead is not None and _lead_valid(lead) and lead.present is False or
                    self._lead_pulling_away(now_s, scene, speed, CLIMB_LEAD_END_GAP_S, CLIMB_LEAD_STOP_AWAY_MPS))
       else:
-        # A far lead that isn't slower lets a clear-road climb carry on; a closer or slower one ends it.
-        lead_ok = lead_clear or self._far_lead_ok(scene, speed)
+        # A far lead that isn't slower lets a clear-road climb carry on; a closer or slower one ends it. The 1.5 s
+        # clear-road wait is for starting a climb: a far lead flickering out of detection doesn't end one.
+        no_lead_now = lead is not None and _lead_valid(lead) and lead.present is False and lead.tracked is False
+        lead_ok = no_lead_now or self._far_lead_ok(scene, speed)
       easing = model_known and self._model_easing(now_s, accel, plan8, speed)
       reason = ('lead' if not lead_ok else
                 'unknown' if not model_known or short is None else
