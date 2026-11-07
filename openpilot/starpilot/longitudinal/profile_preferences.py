@@ -171,12 +171,10 @@ def read_traffic_health(params) -> TrafficHealth:
   values = {"CustomPersonalities": master}
   if not master.valid:
     return TrafficHealth(values, "invalid_master")
-  custom = master.value is True
-  if custom:
-    document = read_document_value(params)
-    values[PERSONALITY_PROFILES_PARAM] = document
+  # Traffic's Following choice (in the document) now decides whether its saved values apply; always read both.
+  values[PERSONALITY_PROFILES_PARAM] = read_document_value(params)
   for key in TRAFFIC_NUMBER_KEYS:
-    raw, readable = _read(params, key) if custom else (None, True)
+    raw, readable = _read(params, key)
     values[key] = (_scalar_value(key, raw, params.get_default_value(key))
                    if readable else SavedValue(raw, None, False, False))
   bad = next((key for key, value in values.items() if not value.valid), None)

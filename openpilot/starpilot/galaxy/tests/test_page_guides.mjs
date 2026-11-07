@@ -111,14 +111,17 @@ assert.equal(pageGuide("constructor"), null)
 
 // Every label a guide relies on still exists in the device code (a Dom rename would otherwise drop a row into "More settings").
 const source = ["../../ui/lane_change_feature.py", "../../ui/conditional_feature.py", "../../ui/feature_settings_owner.py",
-  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py", "../../ui/appearance_owner.py", "../../ui/long_profile_feature.py"]
+  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py", "../../ui/appearance_owner.py", "../../ui/long_profile_feature.py",
+  "../../ui/traffic_feature.py"]
   .map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n")
 // Driving Personalities labels are built by the device code from a name or category; check those builders instead.
 const generated = [
   [/^(Aggressive|Standard|Relaxed|Traffic) Personality$/, 'name.title() + " Personality"'],
-  [/^(Following|Acceleration|Braking)$/, 'rows.append(FeatureRow("", category.title(), ""))'],
-  [/^(Following|Acceleration|Braking) preset$/, 'f"{category.title()} preset"'],
-  [/^(Following|Acceleration|Braking) at \d+ mph$/, `f"{category.title()} at {row.label.removesuffix(' point')}"`],
+  [/^(Acceleration|Braking)$/, "label=category.title()"],
+  [/^Custom (acceleration|braking)$/, 'f"Custom {category}"'],
+  [/^Edit custom (acceleration|braking)$/, 'f"Edit custom {category}"'],
+  [/^Following at \d+ mph$/, `f"Following at {row.label.removesuffix(' point')}"`],
+  [/^\d+ mph point$/, 'f"{speed} mph point"'],
 ]
 for (const [, builder] of generated) assert.ok(source.includes(builder), `device code no longer builds rows with ${builder}`)
 for (const guide of Object.values(PAGE_GUIDES)) {

@@ -355,8 +355,11 @@ def purpose(row):
     parts = key.split(':')
     category = parts[2] if len(parts) >= 3 else None
     if category in CATEGORY_HELP:
+      # Personality-page controls and SLC limits carry their own text; only speed points share one.
+      if len(parts) == 4 and parts[3] in ('custom', 'choice', 'mode', 'slc_limit'):
+        return row.reason
       if len(parts) == 3:
-        return CATEGORY_HELP[category]
+        return row.reason or CATEGORY_HELP[category]
       return {'following': 'Sets following time at this speed. Higher values leave more space.',
               'acceleration': 'Sets the acceleration limit at this speed. Higher values allow stronger acceleration.',
               'braking': 'Sets braking response at this speed. Higher values allow stronger braking.'}[category]

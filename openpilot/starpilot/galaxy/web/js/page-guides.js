@@ -15,14 +15,11 @@ const SLC = { label: "Speed Limit Controller", value: "On" }
 // "Turn on <row>"), showWhen (same, else hidden), hide (never shown here), sub (indented under the row above), placeholder (greyed stand-in while
 // the device leaves the row out because its switch is off). A card with no title has no header. A card's `drops` are
 // dropdown sections that each show listed rows of another page, while its `dropsWhen` row has that value.
-// Driving Personalities (personalities, aggressive, standard, relaxed).
-const PROFILES = ["aggressive", "standard", "relaxed"]
+// Driving Personalities: the hub lists the personalities; each personality page holds all of its settings.
+const PERSONALITIES = ["aggressive", "standard", "relaxed", "traffic"]
 const TITLE = name => name[0].toUpperCase() + name.slice(1)
 const SPEEDS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
 const JERKS = ["Acceleration jerk", "Deceleration jerk", "Speed jerk", "Speed decrease jerk", "Danger jerk"]
-// A personality's following and smoothness rows, in the order its dropdown shows them.
-const FOLLOWING_ROWS = ["Following preset", "Low-speed follow", "High-speed follow", ...SPEEDS.map(speed => `Following at ${speed} mph`),
-  ...JERKS, "Reset Profile to Default"]
 
 export const PAGE_GUIDES = Object.freeze({
   lane_change: {
@@ -113,59 +110,50 @@ export const PAGE_GUIDES = Object.freeze({
     ],
   },
   personalities: {
-    intro: "StarPilot drives with one personality at a time; switch between them on the comma or the wheel. Each one has its own " +
-      "following distance, smoothness, acceleration and braking.",
+    intro: "Each personality has its own acceleration, braking and following distance. Switch personality on the comma or the wheel.",
     cards: [
-      {
-        id: "custom-following", title: "",
-        rows: [
-          { label: "Custom Following and Jerk",
-            help: "On: Aggressive, Standard and Relaxed use your own following distance and smoothness, set below. Off: StarPilot's " +
-              "standard following and smoothness, and those settings are hidden. Acceleration and braking choices work either way." },
-          { label: "Restore saved profiles switch to Off" },
-          { label: "Invalid profile document" },
-        ],
-        dropsWhen: { label: "Custom Following and Jerk", value: "On" },
-        drops: PROFILES.map(name => ({ id: name, title: TITLE(name), page: name, hint: "Following distance and smoothness",
-          rows: FOLLOWING_ROWS })),
-      },
-      {
-        id: "personalities", title: "Acceleration and braking", icon: "bi-speedometer2",
-        rows: [...PROFILES, "traffic"].map(name => ({ label: `${TITLE(name)} Personality`, display: TITLE(name) })),
-      },
+      { id: "personalities", title: "", rows: PERSONALITIES.map(name => ({ label: `${TITLE(name)} Personality`, display: TITLE(name) })) },
     ],
   },
-  ...Object.fromEntries(PROFILES.map(name => [name, personalityGuide(name)])),
+  ...Object.fromEntries(PERSONALITIES.map(name => [name, personalityGuide(name)])),
+  ...Object.fromEntries(PERSONALITIES.map(name => [`${name}/custom_following`, customFollowingGuide(name)])),
+  // The Edit pages for a Custom acceleration or braking curve: just the speed points (the choice is on the personality page).
+  ...Object.fromEntries(PERSONALITIES.flatMap(name => ["acceleration", "braking"].map(category => [`${name}/${category}`, {
+    cards: [{ id: "curve", title: "", rows: SPEEDS.map(speed => ({ label: `${speed} mph point` })) }],
+    rows: [{ label: "Preset", hide: true }, { label: category === "acceleration" ? "SLC acceleration limit" : "SLC braking limit", hide: true }],
+  }]))),
 })
 
-// Aggressive, Standard and Relaxed share one layout. A category's speed points exist only while its preset is Custom.
+// A personality page: Acceleration and Braking (each with its Custom toggle), then Following.
 function personalityGuide(name) {
-  const points = (category, extra = {}) => SPEEDS.map(speed => ({ label: `${category} at ${speed} mph`, sub: true, ...extra }))
+  const category = (id, title, icon) => ({
+    id, title, icon,
+    rows: [{ label: `Custom ${id}` }, { label: title, sub: true }, { label: `Edit custom ${id}`, sub: true },
+      { label: id === "acceleration" ? "SLC acceleration limit" : "SLC braking limit", sub: true }],
+  })
   return {
-    intro: `How ${TITLE(name)} speeds up and brakes. Its following distance and smoothness are on Driving Personalities, ` +
-      "under Custom Following and Jerk.",
+    intro: `How ${TITLE(name)} speeds up, brakes and follows.`,
     cards: [
-      {
-        id: "acceleration", title: "Acceleration", icon: "bi-speedometer2",
-        rows: [{ label: "Acceleration preset", display: "Acceleration" }, { label: "SLC acceleration limit", sub: true }, ...points("Acceleration")],
-      },
-      {
-        id: "braking", title: "Braking", icon: "bi-sign-stop",
-        rows: [{ label: "Braking preset", display: "Braking" }, { label: "SLC braking limit", sub: true }, ...points("Braking")],
-      },
+      category("acceleration", "Acceleration", "bi-speedometer2"),
+      category("braking", "Braking", "bi-sign-stop"),
+      { id: "following", title: "Following distance", icon: "bi-arrows-collapse",
+        rows: [{ label: "Following" }, { label: "Edit custom following", sub: true }] },
     ],
-    // Following and smoothness live in the Driving Personalities dropdown (it embeds this page's rows); the comma's
-    // screen shows "Following" / "Acceleration" / "Braking" as section titles, which the cards replace here.
-    rows: [
-      { label: "Following preset", hide: true,
-        help: "How the gap to the car in front is set. StarPilot Default uses Low-speed and High-speed follow; Close, Medium, Far " +
-          "and Traffic are ready-made gaps by speed; Custom lets you set the gap at each speed. Legacy keeps older curves." },
-      { label: "Low-speed follow", sub: true, hide: true },
-      { label: "High-speed follow", sub: true, hide: true },
-      ...points("Following", { hide: true }),
-      ...JERKS.map(label => ({ label, hide: true })),
-      { label: "Reset Profile to Default", hide: true },
-      ...["Following", "Acceleration", "Braking"].map(label => ({ label, hide: true })),
+  }
+}
+
+// A personality's custom following: Simple or Advanced gap, then smoothness.
+function customFollowingGuide(name) {
+  return {
+    intro: `${TITLE(name)}'s own following gap and smoothness.`,
+    cards: [
+      { id: "gap", title: "Gap", icon: "bi-arrows-collapse",
+        rows: [{ label: "Customisation" }, { label: "Low-speed follow", sub: true }, { label: "High-speed follow", sub: true },
+          ...SPEEDS.map(speed => ({ label: `Following at ${speed} mph`, sub: true }))] },
+      { id: "smoothness", title: "Smoothness", icon: "bi-activity",
+        intro: "Higher values change speed more smoothly but react more slowly. 100% is the base.",
+        rows: [...JERKS.map(label => ({ label })), ...(name === "traffic" ? [{ label: "Higher-speed values" }] : [])] },
+      { id: "reset", title: "", rows: [{ label: "Reset Profile to Default" }] },
     ],
   }
 }

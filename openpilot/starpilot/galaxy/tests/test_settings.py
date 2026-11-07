@@ -913,19 +913,19 @@ class SettingsGatewayTest(unittest.TestCase):
   def test_traffic_saved_controls_and_explicit_follow_repair_use_shared_gateway(self):
     from openpilot.starpilot.longitudinal.profile_runtime import read_traffic_settings
 
-    page = self.page("traffic")
+    page = self.page("traffic/custom_following")
     follow = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Low-speed follow")
     self.assertEqual((page["rows"][follow]["value"], page["rows"][follow]["unit"]), ("0.75", "s"))
-    self.assertIn("inactive while Custom Driving Profiles is Off", page["rows"][follow]["reason"])
+    self.assertIn("Sets following time at low speeds", page["rows"][follow]["reason"])
     self.assertEqual([row["page"] for row in page["rows"] if row["page"]],
                      [])
     intent = self.gateway.preview(page["view"], follow, 1, self.session, self.generation)
     self.assertTrue(self.gateway.confirm(intent["intent"], self.session, self.generation))
     self.assertEqual(self.params.get("TrafficFollow"), 0.8)
-    self.assertEqual(read_traffic_settings(self.params).follow[0], 0.75)
+    self.assertEqual(read_traffic_settings(self.params).follow[0], 0.8)  # Read always; Following decides use.
     path = Path(self.params.get_param_path("TrafficFollow"))
     path.write_bytes(b"0.5")
-    page = self.page("traffic")
+    page = self.page("traffic/custom_following")
     follow = next(i for i, row in enumerate(page["rows"]) if row["label"] == "Low-speed follow")
     self.assertTrue(page["rows"][follow]["action"])
     self.assertEqual(page["rows"][follow]["minimum"], 0.5)

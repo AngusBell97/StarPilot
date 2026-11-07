@@ -83,7 +83,7 @@ from openpilot.starpilot.favorites.actions import (BOOKMARK, CYCLE_PERSONALITY, 
                                                   FORCE_COAST, PULSE_GLIDE, DISENGAGE, TRAFFIC, SWITCHBACK, SCREEN_OFF, FOLLOW_GAP_UP,
                                                   FOLLOW_GAP_DOWN, FOLLOW_GAP_LABELS, mapped_actions)
 from openpilot.starpilot.longitudinal.profile_document import PERSONALITY_PROFILES_PARAM
-from openpilot.starpilot.longitudinal.profile_preferences import read_document_value, read_master_value
+from openpilot.starpilot.longitudinal.profile_preferences import read_document_value
 from openpilot.starpilot.saved_document import commit_exact
 from openpilot.starpilot.longitudinal.profile_document import active_personality_id
 from openpilot.starpilot.ui.lead_follow import NUDGE_STEP_S, encode_profile_document, interpolated_follow_s, nudged_profile_document
@@ -394,21 +394,18 @@ class StarShellSession:
   def _follow_gap_reason(self, state) -> str:
     """Why the follow-gap nudge cannot apply right now; empty when the active profile has a custom following curve."""
     try:
-      master = read_master_value(ui_state.params)
       saved = read_document_value(ui_state.params)
     except (AttributeError, OSError, TypeError, ValueError):
       return "Saved profiles cannot be read"
-    if not master.valid or master.value is not True:
-      return "Turn on Custom Personalities first"
     document = saved.value if saved.valid and isinstance(saved.value, dict) else None
-    if document is None or not document.get("enabled"):
-      return "Personality profiles are not enabled"
+    if document is None:
+      return "Set this personality's Following to Custom (Advanced) first"
     personality_id = ("aggressive", "standard", "relaxed")[int(ui_state.personality)] if not state.traffic_mode else "traffic"
     try:
       preset = document["profiles"][personality_id]["following"]["preset"]
     except (KeyError, TypeError):
       return "Saved profiles cannot be read"
-    return "" if preset == "custom" else f"Set the {personality_id} profile's following to Custom first"
+    return "" if preset == "custom" else f"Set {personality_id.title()}'s Following to Custom (Advanced) first"
 
   def _nudge_follow_gap(self, direction: int) -> bool:
     """Move the active custom following curve at the current speed by one step; saved while driving.

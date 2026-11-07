@@ -154,7 +154,7 @@ assert.doesNotMatch(SettingsPage.template, /Use Colors &amp; Layout to arrange w
 // Lane Changes takes its intro from page-guides.js.
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"lane_change"}}}), /Signal, and StarPilot steers you into the lane on that side\./)
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"profiles"}}}), /Adjust acceleration, braking and following for each driving personality\./)
-assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"traffic"}}}), /Tune low-speed following and jerk, blending toward Relaxed at higher speeds\./)
+assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"traffic"}}}), /^How Traffic speeds up, brakes and follows\.$/)
 const app = (await import('node:fs')).readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8')
 assert.match(app, / initial-panel="widgets"/) // Visuals has its own settings page; the comma editor opens on Widgets
 const filtered = SettingsPage.computed.visibleRows.call({ state: { query: "lane", data: { rows: [
