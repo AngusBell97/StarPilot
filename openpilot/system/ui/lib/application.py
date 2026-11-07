@@ -256,10 +256,6 @@ class GuiApplication:
     self._scaled_height += self._scaled_height % 2
 
     self._render_prepare = {}
-    # Burn-in pixel orbit: whole-frame offset in logical pixels, and the offset in
-    # force while the frame is drawn (scissors follow it; offscreen prepares do not).
-    self._frame_offset: tuple[int, int] = (0, 0)
-    self._active_offset: tuple[int, int] = (0, 0)
     self._render_texture: rl.RenderTexture | None = None
     self._burn_in_shader: rl.Shader | None = None
     self._ffmpeg_proc: subprocess.Popen | None = None
@@ -330,13 +326,6 @@ class GuiApplication:
   @property
   def target_fps(self):
     return self._target_fps
-
-  def set_frame_offset(self, dx: int, dy: int) -> None:
-    self._frame_offset = (int(dx), int(dy))
-
-  @property
-  def frame_offset(self) -> tuple[int, int]:
-    return self._frame_offset
 
   def add_render_prepare(self, callback, cleanup):
     self._render_prepare[callback] = cleanup
@@ -730,13 +719,6 @@ class GuiApplication:
           rl.rl_push_matrix()
           rl.rl_scalef(self._scale, self._scale, 1.0)
 
-        shift_x, shift_y = self._frame_offset
-        shifted = bool(shift_x or shift_y)
-        if shifted:
-          rl.rl_push_matrix()
-          rl.rl_translatef(shift_x, shift_y, 0.0)
-          self._active_offset = (shift_x, shift_y)
-
         # Allow a Widget to still run a function regardless of the stack depth
         for tick in self._nav_stack_ticks:
           tick()
@@ -755,10 +737,6 @@ class GuiApplication:
         if collect_timing:
           update_end = time.monotonic()
           update_cpu_end = time.thread_time()
-
-        if shifted:
-          rl.rl_pop_matrix()
-          self._active_offset = (0, 0)
 
         if self._scale != 1.0:
           rl.rl_pop_matrix()
@@ -876,24 +854,15 @@ class GuiApplication:
     rl.draw_text_ex = _draw_text_ex_scaled
 
   def _patch_scissor_mode(self):
+    if self._scale == 1.0:
+      return
+
     if not hasattr(rl, "_orig_begin_scissor_mode"):
       rl._orig_begin_scissor_mode = rl.begin_scissor_mode
 
-    if self._scale == 1.0:
-      # Scissors are in screen pixels, so they must follow the burn-in frame offset.
-      def _begin_scissor_mode_offset(x, y, width, height):
-        offset_x, offset_y = self._active_offset
-        if offset_x or offset_y:
-          return rl._orig_begin_scissor_mode(int(x) + offset_x, int(y) + offset_y, int(width), int(height))
-        return rl._orig_begin_scissor_mode(x, y, width, height)
-
-      rl.begin_scissor_mode = _begin_scissor_mode_offset
-      return
-
     def _begin_scissor_mode_scaled(x, y, width, height):
-      offset_x, offset_y = self._active_offset
       return rl._orig_begin_scissor_mode(
-        int((x + offset_x) * self._scale), int((y + offset_y) * self._scale),
+        int(x * self._scale), int(y * self._scale),
         int(math.ceil(width * self._scale)), int(math.ceil(height * self._scale)))
 
     rl.begin_scissor_mode = _begin_scissor_mode_scaled

@@ -16,7 +16,6 @@ import json
 from openpilot.starpilot.ui.raylib import rl
 
 from openpilot.starpilot.ui import clip
-from openpilot.starpilot.ui.burn_in import dimmer
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CLOCK_WIDGET, LEAD_DISTANCE_WIDGET, LEAD_INFO_WIDGETS, LEAD_GAP_WIDGET,
                                                          LEAD_SPEED_WIDGET, LEAD_TIME_WIDGET, MODE_WIDGET, RAIL_WIDGETS, STOPPED_TIMER_WIDGET, offset,
@@ -387,13 +386,11 @@ class OnroadView:
     compact = self.fonts.profile == Profile.COMPACT
     for key in LEAD_INFO_WIDGETS:
       if compact:
-        with dimmer.scope(key):
-          self._lead_text(state, key, center_shift)
+        self._lead_text(state, key, center_shift)
       else:
         self._lead_text(state, key, center_shift)
     if compact:
-      with dimmer.scope(LEAD_GAP_WIDGET):
-        self._lead_gap(state, center_shift)
+      self._lead_gap(state, center_shift)
     else:
       self._lead_gap(state, center_shift)
 
@@ -491,8 +488,7 @@ class OnroadView:
         if large or key in UNDIMMED_WIDGETS or key.startswith("pip_"):
           draw()
         else:
-          with dimmer.scope(key):
-            draw()
+          draw()
     if pending and (only_widget is None or only_widget == ('cruise_limits' if large else 'speed_limit')) and not driver_camera:
       self._slc_actions(state)
 
@@ -648,16 +644,12 @@ class OnroadView:
         self._prepare_compact_fade()
         rl.draw_texture_ex(self._fade, rl.Vector2(0, 0), 0, 1, rl.WHITE)
         if state.alert.size == AlertSize.NONE and not driver_camera:
-          with dimmer.scope("speed_limit"):
-            self.compact_hud._speed_limit_sign(state)
-          with dimmer.scope("max_speed"):
-            self.compact_hud.render_max_speed(state)
-          with dimmer.scope("steering_wheel"):
-            self.compact_hud.render_steering_wheel(state)
+          self.compact_hud._speed_limit_sign(state)
+          self.compact_hud.render_max_speed(state)
+          self.compact_hud.render_steering_wheel(state)
           if placement(state.customization, "compact", "torque_bar")["enabled"]:
             self.torque_bar.render(frame, state, 536)
-          with dimmer.scope(LANE_BAR_WIDGET):
-            draw_lane_bar(frame, state, 536, fonts=self.fonts, projection=bool(self.projection_viewport))
+          draw_lane_bar(frame, state, 536, fonts=self.fonts, projection=bool(self.projection_viewport))
           if not manual_slc_confirmation(self.fonts.profile, state):
             self._slc_actions(state)
           if state.stopped_duration_s is not None:
@@ -668,12 +660,9 @@ class OnroadView:
           monitor_layer(frame, state)
       self.navigation.render(state)
       if not ordered:
-        with dimmer.scope(MODE_WIDGET):
-          self._driving_mode(state)
-        with dimmer.scope(CLOCK_WIDGET):
-          self._clock(state)
-        with dimmer.scope("weather"):
-          self._weather(state)
+        self._driving_mode(state)
+        self._clock(state)
+        self._weather(state)
         if not driver_camera:
           self._lead_widgets(state)
       if not ordered and not driver_camera and manual_slc_confirmation(self.fonts.profile, state):
@@ -687,17 +676,13 @@ class OnroadView:
     if not driver_camera and not state.customization.get("widgetOrder", {}).get("compact"):
       rail = rl.Rectangle(0, 0, 536, 240)
       if use_stock:
-        with dimmer.scope("model_confidence"):
-          stock_layer(rail, state)
-        with dimmer.scope("following_distance"):
-          self.compact_sidebar.render_personality(rail, state)
+        stock_layer(rail, state)
+        self.compact_sidebar.render_personality(rail, state)
       else:
-        with dimmer.scope("rail"):
-          self.compact_sidebar.render(rail, state)
+        self.compact_sidebar.render(rail, state)
     clip.begin_scissor_mode(0, 0, 476, 240)
     try:
-      with dimmer.scope("border"):
-        rl.draw_rectangle_rounded_lines_ex(rl.Rectangle(4, 4, 468, 232), 0.12, 16, 8, color)
+      rl.draw_rectangle_rounded_lines_ex(rl.Rectangle(4, 4, 468, 232), 0.12, 16, 8, color)
     finally:
       clip.end_scissor_mode()
     render_compact_half_borders(state, state.observed_ns / 1e9 if state.observed_ns else rl.get_time())

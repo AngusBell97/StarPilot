@@ -20,7 +20,6 @@ from openpilot.starpilot.ui.onroad_widget_style import draw_widget_frame
 from openpilot.starpilot.ui.wheel_feedback import WheelFeedbackFade
 from openpilot.starpilot.ui.speed_limit_widget import SpeedLimitWidget
 from openpilot.starpilot.ui.moon import draw_moon
-from openpilot.starpilot.ui.burn_in import dimmer
 from openpilot.starpilot.ui.onroad_personality import PersonalityWidget
 
 
