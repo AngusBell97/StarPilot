@@ -111,7 +111,7 @@ assert.equal(pageGuide("constructor"), null)
 
 // Every label a guide relies on still exists in the device code (a Dom rename would otherwise drop a row into "More settings").
 const source = ["../../ui/lane_change_feature.py", "../../ui/conditional_feature.py", "../../ui/feature_settings_owner.py",
-  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py"]
+  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py", "../../ui/appearance_owner.py"]
   .map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n")
 for (const guide of Object.values(PAGE_GUIDES)) {
   for (const spec of [...(guide.cards || []).flatMap(card => card.rows), ...(guide.rows || [])]) {
