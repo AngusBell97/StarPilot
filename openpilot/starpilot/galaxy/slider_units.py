@@ -108,14 +108,28 @@ def project(params, row, owner=None):
     deps += comma_deps
   dest = target(row, index, metric)
   factor = SI[row.unit] / SI[dest]
+  if dest == row.unit:
+    return replace(row, unit=dest, display_unit=dest, dependencies=deps)
+  # Converted: show clean steps in the new units (e.g. 0.05 m rather than 0.03048 m). The display step is never finer
+  # than the setting's own step, so each shown value saves to a distinct value on the setting's own grid (restore).
+  step = display_step(row.step * factor)
+  shown = lambda value: number(round(round(float(value) * factor / step) * step, 6)) if _numeric(value) else value
+  low = math.ceil(row.minimum * factor / step - 1e-9) * step
+  high = math.floor(row.maximum * factor / step + 1e-9) * step
   converted = replace(row, unit=dest, display_unit=dest, dependencies=deps,
     label=convert_text(row.label, row.unit, dest),
-    value=number(float(row.value) * factor) if _numeric(row.value) else row.value,
-    minimum=row.minimum * factor, maximum=row.maximum * factor, step=row.step * factor,
-    default_value=number(float(row.default_value) * factor) if _numeric(row.default_value) else row.default_value,
-    presets=tuple((number(float(v) * factor), convert_text(label, row.unit, dest)) if _numeric(v) else (v, label)
-                  for v, label in row.presets))
+    value=shown(row.value), minimum=round(low, 6), maximum=round(high, 6), step=step,
+    default_value=shown(row.default_value),
+    presets=tuple((shown(v), convert_text(label, row.unit, dest)) if _numeric(v) else (v, label) for v, label in row.presets))
   return replace(converted, reason=help_text(converted.reason, converted.unit))
+
+
+NICE_STEPS = (0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000)
+
+
+def display_step(converted_step):
+  """The smallest clean step that is at least the setting's own step in the shown units."""
+  return next((nice for nice in NICE_STEPS if nice >= converted_step * (1 - 1e-9)), converted_step)
 
 
 def _numeric(value):
@@ -143,9 +157,9 @@ def restore(params, row, request, owner=None):
     restored = row.default_value  # Keep the exact native reset, including off-grid SI defaults.
   else:
     restored_value = value * SI[shown.unit] / SI[row.unit]
-    grid = (restored_value - row.minimum) / row.step
-    if math.isclose(grid, round(grid), abs_tol=1e-6, rel_tol=0):
-      restored_value = row.minimum + round(grid) * row.step
+    # Save on the setting's own grid: a clean shown value (1.5 m) becomes the nearest value the setting takes (4.9 ft).
+    restored_value = row.minimum + round((restored_value - row.minimum) / row.step) * row.step
+    restored_value = min(max(restored_value, row.minimum), row.maximum)
     if math.isclose(restored_value, round(restored_value), abs_tol=1e-7, rel_tol=0):
       restored_value = round(restored_value)
     restored = number(restored_value)
