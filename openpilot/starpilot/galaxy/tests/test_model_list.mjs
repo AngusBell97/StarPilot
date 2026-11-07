@@ -60,7 +60,11 @@ const list = template.slice(template.indexOf('<ul v-else class="gx-model-list"')
 assert.doesNotMatch(list, /m\.version|gx-model-item__id|\{\{ m\.value \}\}/, "the pair pickers keep the version; the list does not")
 assert.match(template, /class="gx-model-tag" :class="'gx-model-tag--' \+ hardwareTag\(m\)\.tone"/)
 assert.match(template, /<span v-if="isPairable\(m\)" class="gx-model-tag gx-model-tag--pair"/)
-assert.match(template, /gx-chip--selected gx-model-active"><i aria-hidden="true" class="bi bi-check-circle-fill"><\/i>/)
+// Active Small / Big sit with the hardware tag, not by the name; the row itself gets the glowing border.
+assert.match(template, /hardwareTag\(m\)\.label \}\}<\/span>\s*<span v-for="role in activeRoles\(m\)" :key="role" class="gx-model-tag gx-model-tag--active">\{\{ role \}\}<\/span>/)
+assert.doesNotMatch(template.slice(template.indexOf('class="gx-model-item__title"'), template.indexOf('class="gx-model-item__meta"')), /activeRoles/)
+const css = readFileSync(new URL("../web/css/model-list.css", import.meta.url), "utf8")
+assert.match(css, /\.gx-model-list > \.gx-model-item--active \{[^}]*border: 1\.5px solid var\(--primary\)[^}]*box-shadow: 0 0 22px var\(--primary-glow\)/)
 assert.deepEqual([true, false, undefined].map(requiresGpu => hardwareTag({ requiresGpu }).tone), ["egpu", "small", "unknown"])
 
 // Sorts: newest, name, size; ties fall back to the name.

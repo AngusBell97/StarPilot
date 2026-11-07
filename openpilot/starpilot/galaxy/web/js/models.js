@@ -947,7 +947,6 @@ export const ModelsPage = {
                   <strong v-else>{{ m.label || m.value }}</strong>
                   <span v-if="isPolaris(m)" class="gx-chip gx-polaris-badge"><span class="gx-polaris-badge__star" aria-hidden="true">✦</span> StarPilot Custom</span>
                   <button v-if="isPolaris(m)" type="button" class="gx-icon-btn gx-model-about" aria-label="About Polaris models" title="About Polaris models" @click="polarisAbout = true"><i class="bi bi-question-circle" aria-hidden="true"></i></button>
-                  <span v-for="role in activeRoles(m)" :key="role" class="gx-chip gx-chip--selected gx-model-active"><i aria-hidden="true" class="bi bi-check-circle-fill"></i> {{ role }}</span>
                   <span v-for="role in pairRoles(m)" :key="role" class="gx-chip">{{ role }}</span>
                   <span v-if="m.communityFavorite" class="gx-chip">Community Favorite</span>
                   <span v-if="m.builtin" class="gx-chip">Built-in</span>
@@ -955,6 +954,7 @@ export const ModelsPage = {
                 </div>
                 <div class="gx-model-item__meta">
                   <span class="gx-model-tag" :class="'gx-model-tag--' + hardwareTag(m).tone" :title="hardwareTag(m).title || null">{{ hardwareTag(m).label }}</span>
+                  <span v-for="role in activeRoles(m)" :key="role" class="gx-model-tag gx-model-tag--active">{{ role }}</span>
                   <span v-if="isPairable(m)" class="gx-model-tag gx-model-tag--pair" title="An eGPU variant is published, so this model can be part of a model pair"><i aria-hidden="true" class="bi bi-bezier2"></i> Pairable</span>
                   <span class="gx-model-item__facts"><span v-if="m.released" :aria-label="'Released '+ m.released">{{ m.released }}</span><span>{{ fileSizeText(m) }}</span></span>
                 </div>

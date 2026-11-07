@@ -55,11 +55,13 @@ button.gx-chip.gx-model-chip[aria-pressed="true"] { background: var(--primary); 
 .gx-model-item { display: flex; align-items: center; gap: var(--sp-3); min-height: 60px; padding: 10px var(--sp-4); border-top: 1px solid var(--outline); }
 .gx-model-item:first-child { border-top: 0; }
 .gx-model-item:hover { background: rgba(255, 255, 255, .02); }
-.gx-model-item--active { background: color-mix(in srgb, var(--primary) 16%, transparent); box-shadow: inset 4px 0 0 var(--primary); }
-.gx-model-item--active:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); }
-.gx-model-active { gap: 4px; }
-.gx-model-active i { color: inherit; font-size: .85em; }
 .gx-model-item.gx-model-card--polaris { border-color: var(--outline); }
+/* Active models lift out of the list as a rounded card with a purple glowing border. */
+.gx-model-list > .gx-model-item--active { margin: 6px 10px; border: 1.5px solid var(--primary); border-radius: 16px;
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  box-shadow: 0 0 22px var(--primary-glow), inset 0 0 18px color-mix(in srgb, var(--primary) 8%, transparent); }
+.gx-model-list > .gx-model-item--active:hover { background-color: color-mix(in srgb, var(--primary) 14%, transparent); }
+.gx-model-list > .gx-model-item--active + .gx-model-item { border-top: 0; }
 .gx-model-item__main { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .gx-model-item__title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .gx-model-item__title strong { font-weight: var(--fw-bold); overflow-wrap: anywhere; }
@@ -68,12 +70,13 @@ button.gx-chip.gx-model-chip[aria-pressed="true"] { background: var(--primary); 
 .gx-model-item__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; color: var(--text-muted); font-size: .8rem; line-height: 1.45; }
 .gx-model-item__facts > span:not(:last-child)::after { content: "·"; margin: 0 6px; color: var(--text-muted); opacity: .6; }
 
-/* Tags: green eGPU, blue Small, orange Pairable. */
+/* Tags: green eGPU, blue Small, orange Pairable, purple Active Small / Big. */
 .gx-model-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid; border-radius: var(--radius-full); font-size: .7rem; font-weight: 700; line-height: 1.6; white-space: nowrap; }
 .gx-model-tag i { font-size: .9em; }
 .gx-model-tag--egpu { color: #6ee7a0; background: rgba(110, 231, 160, .12); border-color: rgba(110, 231, 160, .4); }
 .gx-model-tag--small { color: #7cc4ff; background: rgba(124, 196, 255, .12); border-color: rgba(124, 196, 255, .4); }
 .gx-model-tag--pair { color: #fdba74; background: rgba(253, 186, 116, .12); border-color: rgba(253, 186, 116, .4); }
+.gx-model-tag--active { color: var(--on-primary); background: var(--primary); border-color: var(--primary); }
 .gx-model-tag--unknown { color: var(--text-muted); background: transparent; border-color: var(--outline); }
 [data-theme="light"] .gx-model-tag--egpu { color: #15803d; background: rgba(21, 128, 61, .08); border-color: rgba(21, 128, 61, .35); }
 [data-theme="light"] .gx-model-tag--small { color: #1d4ed8; background: rgba(29, 78, 216, .08); border-color: rgba(29, 78, 216, .35); }
