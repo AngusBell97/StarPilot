@@ -60,11 +60,11 @@ const list = template.slice(template.indexOf('<ul v-else class="gx-model-list"')
 assert.doesNotMatch(list, /m\.version|gx-model-item__id|\{\{ m\.value \}\}/, "the pair pickers keep the version; the list does not")
 assert.match(template, /class="gx-model-tag" :class="'gx-model-tag--' \+ hardwareTag\(m\)\.tone"/)
 assert.match(template, /<span v-if="isPairable\(m\)" class="gx-model-tag gx-model-tag--pair"/)
-// Active Small / Big sit with the hardware tag, not by the name; the row itself gets the glowing border.
+// Active Small / Big sit with the hardware tag, not by the name; the tag alone marks the row (no border or tint).
 assert.match(template, /hardwareTag\(m\)\.label \}\}<\/span>\s*<span v-for="role in activeRoles\(m\)" :key="role" class="gx-model-tag gx-model-tag--active">\{\{ role \}\}<\/span>/)
 assert.doesNotMatch(template.slice(template.indexOf('class="gx-model-item__title"'), template.indexOf('class="gx-model-item__meta"')), /activeRoles/)
 const css = readFileSync(new URL("../web/css/model-list.css", import.meta.url), "utf8")
-assert.match(css, /\.gx-model-list > \.gx-model-item--active \{[^}]*border: 1\.5px solid var\(--primary\)[^}]*box-shadow: 0 0 22px var\(--primary-glow\)/)
+assert.doesNotMatch(css, /\.gx-model-item--active \{/)
 assert.deepEqual([true, false, undefined].map(requiresGpu => hardwareTag({ requiresGpu }).tone), ["egpu", "small", "unknown"])
 
 // Sorts: newest, name, size; ties fall back to the name.
@@ -89,6 +89,9 @@ assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pai
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "pair", pairableFilter: false }), true)
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pairableFilter: true }), true)
 
+// The Active Small / Big pickers use the list's Small / eGPU tags.
+assert.match(template, /for="gx-model-small">Active <span class="gx-model-tag gx-model-tag--small"[^>]*>Small<\/span><\/label>/)
+assert.match(template, /for="gx-model-big">Active <span class="gx-model-tag gx-model-tag--egpu"[^>]*>eGPU<\/span><\/label>/)
 // Browse models opens from its header (closed by default); refresh sits beside the search.
 assert.equal(ModelsPage.data().browseOpen, false)
 assert.match(template, /class="gx-section__header gx-model-collapse" :aria-expanded="String\(browseOpen\)" aria-controls="gx-model-browse-panel"/)
@@ -100,7 +103,6 @@ assert.match(template, /<template v-if="status.refreshing">Checking for new mode
 // Galaxy's server no longer checks the catalog by itself while the page polls.
 const server = readFileSync(new URL("../server.py", import.meta.url), "utf8")
 assert.match(server, /ModelManager\(parked=authority\.parked, refresh_catalog=False\)/)
-assert.match(css, /\.gx-model-list > \.gx-model-item--active \{[^}]*border-radius: 0;/)
 
 const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8")
 assert.match(html, /css\/model-list\.css/)

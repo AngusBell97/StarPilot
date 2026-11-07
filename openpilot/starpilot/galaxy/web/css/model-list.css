@@ -9,6 +9,8 @@
 .gx-model-mode > button:disabled { opacity: .5; cursor: not-allowed; }
 .gx-model-mode__hint { color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.45; }
 .gx-model-choose .gx-model-laboratory { display: grid; gap: var(--sp-3); }
+/* Active Small / Big pickers carry the same Small / eGPU tags as the model list. */
+.gx-model-control__label { display: inline-flex; align-items: center; gap: 8px; }
 
 /* Jetlink: a card that opens from its header (collapsed by default). */
 button.gx-model-collapse { width: 100%; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -56,13 +58,7 @@ button.gx-chip.gx-model-chip[aria-pressed="true"] { background: var(--primary); 
 .gx-model-item:first-child { border-top: 0; }
 .gx-model-item:hover { background: rgba(255, 255, 255, .02); }
 .gx-model-item.gx-model-card--polaris { border-color: var(--outline); }
-/* Active models: a square purple glowing border round the row. */
-.gx-model-list > .gx-model-item--active { position: relative; z-index: 1; margin: 0; border: 1.5px solid var(--primary); border-radius: 0;
-  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
-  box-shadow: 0 0 22px var(--primary-glow), inset 0 0 18px color-mix(in srgb, var(--primary) 8%, transparent); }
-.gx-model-list > .gx-model-item--active:hover { background-color: color-mix(in srgb, var(--primary) 14%, transparent); }
-.gx-model-list > .gx-model-item--active + .gx-model-item { border-top: 0; }
-.gx-model-list > .gx-model-item--active + .gx-model-item--active { margin-top: 6px; }
+/* Active models are marked only by their purple Active Small / Big tag (no row border or tint). */
 .gx-model-item__main { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .gx-model-item__title { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .gx-model-item__title strong { font-weight: var(--fw-bold); overflow-wrap: anywhere; }
