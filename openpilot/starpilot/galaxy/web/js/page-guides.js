@@ -12,8 +12,18 @@ const SLC = { label: "Speed Limit Controller", value: "On" }
 
 // Row options: help (text or row => text; none keeps the device's text), display (label shown instead of the device's),
 // values (device value → shown value), needs (rows that must have a value, else greyed, with the need's note or
-// "Turn on <row>"), showWhen (same, else hidden), sub (indented under the row above), placeholder (greyed stand-in while
-// the device leaves the row out because its switch is off). A card with no title has no header.
+// "Turn on <row>"), showWhen (same, else hidden), hide (never shown here), sub (indented under the row above), placeholder (greyed stand-in while
+// the device leaves the row out because its switch is off). A card with no title has no header. A card's `drops` are
+// dropdown sections that each show listed rows of another page, while its `dropsWhen` row has that value.
+// Driving Personalities (personalities, aggressive, standard, relaxed).
+const PROFILES = ["aggressive", "standard", "relaxed"]
+const TITLE = name => name[0].toUpperCase() + name.slice(1)
+const SPEEDS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+const JERKS = ["Acceleration jerk", "Deceleration jerk", "Speed jerk", "Speed decrease jerk", "Danger jerk"]
+// A personality's following and smoothness rows, in the order its dropdown shows them.
+const FOLLOWING_ROWS = ["Following preset", "Low-speed follow", "High-speed follow", ...SPEEDS.map(speed => `Following at ${speed} mph`),
+  ...JERKS, "Reset Profile to Default"]
+
 export const PAGE_GUIDES = Object.freeze({
   lane_change: {
     intro: "Signal, and StarPilot steers you into the lane on that side. Changes save straight away; a lane change that has " +
@@ -104,7 +114,63 @@ export const PAGE_GUIDES = Object.freeze({
           "Off: the signal does not guide turns, and lane changes can start from the Minimum lane-change speed." },
     ],
   },
+  personalities: {
+    intro: "StarPilot drives with one personality at a time; switch between them on the comma or the wheel. Each one has its own " +
+      "following distance, smoothness, acceleration and braking.",
+    cards: [
+      {
+        id: "custom-following", title: "",
+        rows: [
+          { label: "Custom Following and Jerk",
+            help: "On: Aggressive, Standard and Relaxed use your own following distance and smoothness, set below. Off: StarPilot's " +
+              "standard following and smoothness, and those settings are hidden. Acceleration and braking choices work either way." },
+          { label: "Restore saved profiles switch to Off" },
+          { label: "Invalid profile document" },
+        ],
+        dropsWhen: { label: "Custom Following and Jerk", value: "On" },
+        drops: PROFILES.map(name => ({ id: name, title: TITLE(name), page: name, hint: "Following distance and smoothness",
+          rows: FOLLOWING_ROWS })),
+      },
+      {
+        id: "personalities", title: "Acceleration and braking", icon: "bi-speedometer2",
+        rows: [...PROFILES, "traffic"].map(name => ({ label: `${TITLE(name)} Personality`, display: TITLE(name) })),
+      },
+    ],
+  },
+  ...Object.fromEntries(PROFILES.map(name => [name, personalityGuide(name)])),
 })
+
+// Aggressive, Standard and Relaxed share one layout. A category's speed points exist only while its preset is Custom.
+function personalityGuide(name) {
+  const points = (category, extra = {}) => SPEEDS.map(speed => ({ label: `${category} at ${speed} mph`, sub: true, ...extra }))
+  return {
+    intro: `How ${TITLE(name)} speeds up and brakes. Its following distance and smoothness are on Driving Personalities, ` +
+      "under Custom Following and Jerk.",
+    cards: [
+      {
+        id: "acceleration", title: "Acceleration", icon: "bi-speedometer2",
+        rows: [{ label: "Acceleration preset", display: "Acceleration" }, { label: "SLC acceleration limit", sub: true }, ...points("Acceleration")],
+      },
+      {
+        id: "braking", title: "Braking", icon: "bi-sign-stop",
+        rows: [{ label: "Braking preset", display: "Braking" }, { label: "SLC braking limit", sub: true }, ...points("Braking")],
+      },
+    ],
+    // Following and smoothness live in the Driving Personalities dropdown (it embeds this page's rows); the comma's
+    // screen shows "Following" / "Acceleration" / "Braking" as section titles, which the cards replace here.
+    rows: [
+      { label: "Following preset", hide: true,
+        help: "How the gap to the car in front is set. StarPilot Default uses Low-speed and High-speed follow; Close, Medium, Far " +
+          "and Traffic are ready-made gaps by speed; Custom lets you set the gap at each speed. Legacy keeps older curves." },
+      { label: "Low-speed follow", sub: true, hide: true },
+      { label: "High-speed follow", sub: true, hide: true },
+      ...points("Following", { hide: true }),
+      ...JERKS.map(label => ({ label, hide: true })),
+      { label: "Reset Profile to Default", hide: true },
+      ...["Following", "Acceleration", "Braking"].map(label => ({ label, hide: true })),
+    ],
+  }
+}
 
 export const pageGuide = page => (typeof page === "string" && Object.hasOwn(PAGE_GUIDES, page) ? PAGE_GUIDES[page] : null)
 
@@ -133,7 +199,7 @@ export function guidedRows(page, rows) {
     const note = need => need.note || `Turn on ${shownLabel(specs, need.label)} to use this.`
     const map = value => spec.values?.[value] ?? value
     const shown = { ...row, label: spec.display || row.label, guideLabel: row.label, guideSub: !!spec.sub,
-      guideHidden: !!spec.showWhen && values.get(spec.showWhen.label) !== spec.showWhen.value }
+      guideHidden: !!spec.hide || !!spec.showWhen && values.get(spec.showWhen.label) !== spec.showWhen.value }
     if (spec.values) Object.assign(shown, { value: map(row.value), choices: (row.choices || []).map(map),
       defaultValue: row.defaultValue == null ? row.defaultValue : map(row.defaultValue),
       guideSave: Object.fromEntries(Object.entries(spec.values).map(([saved, label]) => [label, saved])) })
@@ -170,8 +236,12 @@ export function guidedCards(page, entries, query = "") {
     return [card.title, card.intro, ...card.include.rows.flatMap(label => [label, typeof otherSpecs.get(label)?.help === "string"
       ? otherSpecs.get(label).help : ""])].join(" ").toLocaleLowerCase()
   }
+  // Dropdowns show while their switch (`dropsWhen`, a row on this page) has its value; never during a page search.
+  const current = new Map(entries.map(({ row }) => [row.guideLabel ?? row.label, row.value]))
+  const dropsShown = card => !needle && (!card.dropsWhen || current.get(card.dropsWhen.label) === card.dropsWhen.value)
   const cards = guide.cards.map(card => ({ id: card.id, title: card.title, icon: card.icon, intro: card.intro, guide: true,
-    include: card.include && (!needle || includeText(card).includes(needle)) ? card.include : null, entries: [] }))
+    include: card.include && (!needle || includeText(card).includes(needle)) ? card.include : null,
+    drops: card.drops && dropsShown(card) ? card.drops : null, entries: [] }))
   const more = { id: "more", title: "More settings", icon: "bi-sliders", intro: "", guide: true, include: null, entries: [] }
   const specOf = entry => specs.get(entry.row.guideLabel ?? entry.row.label)
   for (const entry of entries) {
@@ -181,6 +251,6 @@ export function guidedCards(page, entries, query = "") {
   }
   for (const card of cards) card.entries.sort((a, b) => specOf(a).order - specOf(b).order)
   const repair = more.entries.some(({ row }) => row.confirm || row.repairValue)
-  const shown = (repair ? [more, ...cards] : [...cards, more]).filter(card => card.entries.length || card.include)
+  const shown = (repair ? [more, ...cards] : [...cards, more]).filter(card => card.entries.length || card.include || card.drops)
   return shown.length ? shown : [cards[0]]
 }

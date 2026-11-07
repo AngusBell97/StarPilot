@@ -29,7 +29,7 @@ FEATURE_KEYS = {
   "lane": ("LaneCentering", "LaneCenteringPauseOnSignal"),
   "curve": ("CurveSpeedController", "CurveSpeedControllerNoLead", "CurveSteeringLoadSlowdown", "ShowCSCStatus"),
   "aol": ("AlwaysOnLateral", "NostalgiaMode"),
-  "profiles": ("CustomPersonalities",),
+  "personalities": ("CustomPersonalities",),  # moved from Long Planner (profiles) 7 Nov 2026
 }
 # Slots saved with a retired visibility key stay assigned and read as unavailable.
 APPEARANCE_KEYS = ("DriverCamera", "StockConfidenceBallWidget", "HideLeadMarker", "LeadInfo", "SignalMetrics", "BlindSpotMetrics",
