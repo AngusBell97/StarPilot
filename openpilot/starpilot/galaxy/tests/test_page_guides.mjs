@@ -111,10 +111,19 @@ assert.equal(pageGuide("constructor"), null)
 
 // Every label a guide relies on still exists in the device code (a Dom rename would otherwise drop a row into "More settings").
 const source = ["../../ui/lane_change_feature.py", "../../ui/conditional_feature.py", "../../ui/feature_settings_owner.py",
-  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py", "../../ui/appearance_owner.py"]
+  "../../ui/slc_menu.py", "../../ui/slc_custom_feature.py", "../../ui/appearance_owner.py", "../../ui/long_profile_feature.py"]
   .map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n")
+// Driving Personalities labels are built by the device code from a name or category; check those builders instead.
+const generated = [
+  [/^(Aggressive|Standard|Relaxed|Traffic) Personality$/, 'name.title() + " Personality"'],
+  [/^(Following|Acceleration|Braking)$/, 'rows.append(FeatureRow("", category.title(), ""))'],
+  [/^(Following|Acceleration|Braking) preset$/, 'f"{category.title()} preset"'],
+  [/^(Following|Acceleration|Braking) at \d+ mph$/, `f"{category.title()} at {row.label.removesuffix(' point')}"`],
+]
+for (const [, builder] of generated) assert.ok(source.includes(builder), `device code no longer builds rows with ${builder}`)
 for (const guide of Object.values(PAGE_GUIDES)) {
   for (const spec of [...(guide.cards || []).flatMap(card => card.rows), ...(guide.rows || [])]) {
+    if (generated.some(([pattern]) => pattern.test(spec.label))) continue
     assert.ok(source.includes(`"${spec.label}"`) || source.includes(`'${spec.label}'`), `device code no longer has the row "${spec.label}"`)
     for (const need of [...(spec.needs || []), ...(spec.showWhen ? [spec.showWhen] : [])]) {
       assert.ok(source.includes(`"${need.label}"`) || source.includes(`'${need.label}'`), `device code no longer has the row "${need.label}"`)

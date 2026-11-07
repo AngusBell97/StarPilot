@@ -301,7 +301,7 @@ export const SettingsPage = {
     const navigation = route.view
     const navigationKey = `${props.initialPage}:${props.initialSection || ""}`
     const saved = navigation.settings?.key === navigationKey ? navigation.settings : null
-    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, testingSound: false, parents: [], pageTitles: {}, developerOpen: props.initialSection === "developer", panelDirection: 1 })
+    const state = reactive({ status: "idle", data: null, pending: null, error: "", query: "", searchOpen: false, section: "lateral", layoutOpen: false, layoutPanel: "widgets", favoritesOpen: false, soundChoicesDirty: false, testingSound: false, parents: [], pageTitles: {}, developerOpen: props.initialSection === "developer", panelDirection: 1, openDrops: {} })
     if (saved) Object.assign(state, { section: saved.section, query: saved.query, searchOpen: saved.searchOpen, parents: saved.parents.slice(), developerOpen: saved.developerOpen })
     const feed = new SettingsFeed({ publish: (update) => Object.assign(state, update), unauthorized: props.unauthorized })
     return { state, feed, sections: SETTINGS_SECTIONS, navigation, navigationKey, restoredPage: saved?.page }
@@ -389,6 +389,9 @@ export const SettingsPage = {
       // A page shown for a few of its rows under another page (onlyRows) stays a plain list.
       const guided = this.onlyRows ? null : guidedCards(this.state.data?.page, this.visibleRows, this.state.query)
       if (guided) return guided
+      // Only some rows, shown under another page: in the order they were asked for.
+      if (this.onlyRows) return [{ title: "", entries: this.visibleRows.filter(({ row }) => !row.heading)
+        .sort((a, b) => this.onlyRows.indexOf(a.row.label) - this.onlyRows.indexOf(b.row.label)) }]
       const titles = []
       const owner = (this.state.data?.rows || []).map((row) => (row.heading ? titles.push(row.label) : titles.length))
       const cards = [{ title: "", entries: [] }, ...titles.map((title) => ({ title, entries: [] }))]
@@ -500,6 +503,8 @@ export const SettingsPage = {
         this.feed.load(page)
       }
     },
+    // A page-guides dropdown loads its page's rows only while open.
+    toggleDrop(id) { this.state.openDrops = { ...this.state.openDrops, [id]: !this.state.openDrops[id] } },
     togglePageSearch() {
       this.state.searchOpen = !this.state.searchOpen
       if (this.state.searchOpen) this.$nextTick(() => this.$refs.pageSearch?.focus())
@@ -625,6 +630,13 @@ export const SettingsPage = {
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
               <SettingsPage v-if="card.include && mode === 'local'" :key="'include:' + card.include.page" bare embedded menu-mode :mode="mode" :unauthorized="unauthorized"
                 :initial-page="card.include.page" :title="card.title" :only-rows="card.include.rows" />
+              <div v-for="drop in (mode === 'local' && card.drops) || []" :key="'drop:' + drop.id" class="gx-guide__drop">
+                <button type="button" class="gx-guide__drop-head" :aria-expanded="!!state.openDrops[drop.id]" @click="toggleDrop(drop.id)">
+                  <i class="bi" :class="state.openDrops[drop.id] ? 'bi-chevron-down' : 'bi-chevron-right'" aria-hidden="true"></i>
+                  <span class="gx-guide__drop-title">{{ drop.title }}</span><span class="gx-guide__drop-hint">{{ drop.hint }}</span></button>
+                <SettingsPage v-if="state.openDrops[drop.id]" :key="'drop-page:' + drop.page" bare embedded menu-mode :mode="mode" :unauthorized="unauthorized"
+                  :initial-page="drop.page" :title="drop.title" :only-rows="drop.rows" />
+              </div>
               <div v-if="!cardIndex && !visibleRows.length && !card.include" class="gx-empty">No matching settings.</div>
             </section>
             <SoundPacks v-if="state.data.page === 'sounds'" :unauthorized="unauthorized" :busy="busy" @installed="refreshSoundChoices" />

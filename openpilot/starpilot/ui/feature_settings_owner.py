@@ -750,6 +750,31 @@ class FeatureSettingsOwner:
               if row.available and not row.repair_value else row for row in rows]
     return rows
 
+  def _custom_following_rows(self, allowed: bool, parked: bool) -> list[FeatureRow]:
+    """Custom Following and Jerk with its repairs: leads the Driving Personalities page (it was on Long Planner)."""
+    _, raw, valid = self._document()
+    health = read_profile_health(self.params)
+    master = health.values["CustomPersonalities"]
+    master_row = self._bool_row("CustomPersonalities", "Custom Following and Jerk",
+                                allowed and (health.dependencies_valid or master.value is True))
+    reason = ("Invalid saved profile settings; restore defaults below" if not health.dependencies_valid else
+              "Uses your own following distance and smoothness (jerk) settings for Aggressive, Standard and Relaxed. "
+              "Acceleration and braking choices work either way.")
+    rows = [replace(master_row, related_source=raw, dependencies=self.long_profiles.dependencies(health),
+                    capability=self.long_profiles.capability(),
+                    reason=reason if master.valid else "Invalid saved master preference")]
+    if not master.valid:
+      rows.append(FeatureRow("long_repair:CustomPersonalities", "Restore saved profiles switch to Off",
+                             "Invalid saved switch", master.raw,
+                             available=parked and allowed and master.readable and self.long_profiles.capability() is not None,
+                             capability=self.long_profiles.capability(), dependencies=self.long_profiles.dependencies(health)))
+    if not valid:
+      rows.append(FeatureRow("reset_profiles", "Invalid profile document", "", raw,
+                             available=parked and allowed and health.values[PERSONALITY_PROFILES_PARAM].readable,
+                             reason="Resets saved curves and presets" if health.values[PERSONALITY_PROFILES_PARAM].readable else
+                                    "Saved document unreadable or too large"))
+    return rows
+
   def _apply_lateral_pause(self, request: FeatureSettingsRequest, *, reset_default: bool = False) -> bool:
     def authorized():
       row = next(row for row in self._lateral_pause_rows(self.authority("preferences")) if row.key == request.key)
@@ -855,8 +880,13 @@ class FeatureSettingsOwner:
                              page=FeaturePage.PERSONALITIES, available=True))
     elif page == FeaturePage.PERSONALITIES:
       title = "Driving Personalities"
-      rows = [FeatureRow("", name.title() + " Personality", "", page=name, available=True)
-              for name in (*PROFILE_NAMES, "traffic")]
+      rows = self._custom_following_rows(configurable and system_long, parked)
+      document, _, valid = self._document()
+      for name in (*PROFILE_NAMES, "traffic"):
+        profile = (document["profiles"][name] if document is not None else default_personality_profiles(False, False)[name]) if valid else None
+        summary = (f"Acceleration: {preset_label(profile['acceleration']['preset'])} · "
+                   f"Braking: {preset_label(profile['braking']['preset'])}") if profile else ""
+        rows.append(FeatureRow("", name.title() + " Personality", summary, page=name, available=True))
     elif page == FeaturePage.VEHICLE:
       title = "Vehicle Settings"
       rows = list(self._alpha_long_rows(parked))
@@ -1231,25 +1261,7 @@ class FeatureSettingsOwner:
                              unit="m" if unit_value == "1" else "ft", available=allowed and valid and unit_valid,
                              dependencies=(("IsMetric", unit_raw),), display_unit="m" if unit_value == "1" else "ft",
                              default_value="0", reason="Adds space behind slow or stopped leads with the StarPilot planner; zero keeps the normal gap."))
-      health = read_profile_health(self.params)
-      master = health.values["CustomPersonalities"]
-      master_row = self._bool_row("CustomPersonalities", "Custom Following and Jerk",
-                                  allowed and (health.dependencies_valid or master.value is True))
-      reason = ("Invalid saved profile settings; restore defaults below" if not health.dependencies_valid else
-                "Enables saved following and jerk settings, plus preserved legacy curves. New acceleration/deceleration selections apply independently.")
-      rows.append(replace(master_row, related_source=raw, dependencies=self.long_profiles.dependencies(health),
-                          capability=self.long_profiles.capability(),
-                          reason=reason if master.valid else "Invalid saved master preference"))
-      if not master.valid:
-        rows.append(FeatureRow("long_repair:CustomPersonalities", "Restore saved profiles switch to Off",
-                               "Invalid saved switch", master.raw,
-                               available=parked and allowed and master.readable and self.long_profiles.capability() is not None,
-                               capability=self.long_profiles.capability(), dependencies=self.long_profiles.dependencies(health)))
-      if not valid:
-        rows.append(FeatureRow("reset_profiles", "Invalid profile document", "", raw,
-                               available=parked and allowed and health.values[PERSONALITY_PROFILES_PARAM].readable,
-                               reason="Resets saved curves and presets" if health.values[PERSONALITY_PROFILES_PARAM].readable else
-                                      "Saved document unreadable or too large"))
+      # Custom Following and Jerk (and its repairs) moved to Driving Personalities, the page it switches.
     elif page == FeaturePage.TRAFFIC:
       title = "Traffic Profile"
       rows.extend(self.traffic_profiles.rows(configurable, system_long, repair_allowed=parked))
@@ -1261,21 +1273,43 @@ class FeatureSettingsOwner:
       allowed = configurable and system_long
       name = page.title()
       health = read_profile_health(self.params)
+      # Settings that do nothing right now are greyed with the reason (profile_runtime.resolve): following, jerk and
+      # the following curve need Custom Following and Jerk; a following curve replaces Low/High-speed follow.
+      document, _, document_valid = self._document()
+      following = ((document["profiles"][page]["following"]["preset"] if document is not None else
+                    default_personality_profiles(False, False)[page]["following"]["preset"]) if document_valid else None)
+      master_off = "" if health.master_on else "Turn on Custom Following and Jerk (Driving Personalities) first"
+      curve_note = (f"Unavailable while Following is set to {preset_label(following)}: that curve replaces this. "
+                    "Choose StarPilot Default to use it.") if following not in (None, "dom_default", "selected_profile") else ""
+      slc_off = "" if self._value("SLCTransitionOffsets")[0] == "1" else "Turn on Use SLC speed-change limits (Long Planner) first"
+
+      def grey(row: FeatureRow, note: str) -> FeatureRow:
+        return replace(row, available=False, reason=note, default_reset_available=parked) if note and row.available else row
+
       for suffix, label in (
         ("Follow", "Low-speed follow"), ("FollowHigh", "High-speed follow"),
         ("JerkAcceleration", "Acceleration jerk"), ("JerkDeceleration", "Deceleration jerk"),
         ("JerkSpeed", "Speed jerk"), ("JerkSpeedDecrease", "Speed decrease jerk"), ("JerkDanger", "Danger jerk")):
         key = name + suffix
         number_row = self._number_row(key, label, allowed)
-        rows.append(replace(number_row, reason=VALUE_HELP[suffix] if number_row.available else number_row.reason)
+        rows.append(grey(replace(number_row, reason=VALUE_HELP[suffix] if number_row.available else number_row.reason),
+                         master_off or (curve_note if suffix in ("Follow", "FollowHigh") else ""))
                     if health.values[key].readable else
                     FeatureRow(key, label, "Invalid saved value", health.values[key].raw,
                                reason="Saved source unreadable or too large"))
       rows.extend(self.long_profiles.rows(page, health, allowed, repair_allowed=parked and allowed))
       for category in PRESETS:
         rows.append(FeatureRow("", category.title(), ""))
-        rows.extend(self.snapshot(f"{page}/{category}", parked=parked, system_long=system_long, lateral_context=lateral_context, metric=False,
-                                  configure_while_driving=configure_while_driving).rows)
+        # One page holds all three categories, so their "Preset" and "N mph point" rows are named by category here;
+        # the category sub-pages (used by the Longitudinal Curves editor) keep their own labels.
+        for row in self.snapshot(f"{page}/{category}", parked=parked, system_long=system_long, lateral_context=lateral_context, metric=False,
+                                 configure_while_driving=configure_while_driving).rows:
+          if row.label == "Preset":
+            row = replace(row, label=f"{category.title()} preset")
+          elif row.label.endswith(" mph point"):
+            row = replace(row, label=f"{category.title()} at {row.label.removesuffix(' point')}")
+          rows.append(grey(row, master_off if category == "following" and row.key else
+                                slc_off if row.key.endswith(":slc_limit") else ""))
     elif "/" in page:
       name, category = page.split("/", 1)
       if name in DOCUMENT_PROFILE_NAMES and category in PRESETS:

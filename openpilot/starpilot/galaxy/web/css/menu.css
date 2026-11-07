@@ -73,3 +73,18 @@
 /* A row that belongs to the row above it (e.g. Nudgeless delay under Nudge or nudgeless). */
 .gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 24px); }
 @media (max-width: 520px) { .gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 14px); } }
+/* Dropdown sections inside a card (page-guides `drops`), e.g. each personality under Custom Following and Jerk. */
+.gx-guide__drop { border-top: 1px solid var(--outline); }
+.gx-guide__drop-head { display: flex; width: 100%; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4);
+  border: 0; background: none; color: var(--on-surface); font: inherit; text-align: left; cursor: pointer; }
+.gx-guide__drop-head:hover { background: rgba(255, 255, 255, 0.03); }
+.gx-guide__drop-head .bi { color: var(--on-surface-variant); }
+.gx-guide__drop-title { font-weight: var(--fw-bold); }
+.gx-guide__drop-hint { margin-left: auto; color: var(--on-surface-variant); font-size: var(--fs-sm); }
+.gx-guide__drop .gx-settings--bare .gx-row { padding-left: calc(var(--sp-4) + 24px); }
+.gx-guide__drop .gx-settings--bare .gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 48px); }
+@media (max-width: 520px) {
+  .gx-guide__drop-hint { display: none; }
+  .gx-guide__drop .gx-settings--bare .gx-row { padding-left: calc(var(--sp-4) + 14px); }
+  .gx-guide__drop .gx-settings--bare .gx-row.gx-guide__sub { padding-left: calc(var(--sp-4) + 28px); }
+}

@@ -255,6 +255,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.assertFalse(self.owner.apply(request))
 
   def test_source_profile_defaults_and_single_numeric_reset(self):
+    self.params.put_bool("CustomPersonalities", True, block=True)  # following settings are greyed while it is off
     self.params.put("StandardFollow", 2.8, block=True)
     row = self._row("standard", "StandardFollow")
     self.assertEqual(float(row.default_value), float(self.params.get_default_value("StandardFollow")))
@@ -458,7 +459,9 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
                                                           vehicle_fingerprint=preset.vehicle_fingerprint)))
     document = required_document(Path(self.params.get_param_path("LongitudinalPersonalityProfiles")).read_bytes())
     self.assertEqual(document["profiles"]["aggressive"]["acceleration"]["preset"], "sport_plus")
-    self.assertIn("Higher values", self._row("aggressive", "AggressiveJerkAcceleration").reason)
+    # Custom Following and Jerk is off here (unset), so the jerk row is greyed with the reason instead of its help.
+    self.assertEqual(self._row("aggressive", "AggressiveJerkAcceleration").reason,
+                     "Turn on Custom Following and Jerk (Driving Personalities) first")
     self.assertFalse(any(row.key == "AggressivePersonalityProfile" for row in self.owner.snapshot(
       "aggressive", parked=True, system_long=True, lateral_context=True, metric=False).rows))
     self.assertIn("Sport+", self._row("aggressive/acceleration", "profile:aggressive:acceleration").value)
@@ -671,7 +674,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     path = Path(self.params.get_param_path("LongitudinalPersonalityProfiles"))
     path.write_bytes(b"{invalid")
     self.params.put_bool("CustomPersonalities", True, block=True)
-    reset = self._row("profiles", "reset_profiles")
+    reset = self._row("personalities", "reset_profiles")
     self.assertFalse(self.owner.apply(FeatureSettingsRequest(reset.key, reset.source, "reset", vehicle_fingerprint=reset.vehicle_fingerprint)))
     self.assertEqual(path.read_bytes(), b"{invalid")
     self.assertTrue(self.owner.apply(FeatureSettingsRequest(reset.key, reset.source, "reset", confirmation=True,
@@ -686,7 +689,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
       carFingerprint=self.fingerprint, openpilotLongitudinalControl=True, pcmCruise=False,
       passive=False, notCar=False, dashcamOnly=False, carVin="VIN1")
     self.params.put("LongitudinalPersonalityProfiles", {}, block=True)
-    row = self._row("profiles", "CustomPersonalities")
+    row = self._row("personalities", "CustomPersonalities")
     request = required_change(row)
     original_replace = os.replace
     replacements = []
@@ -729,7 +732,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.owner.vehicle_params = lambda: SimpleNamespace(
       carFingerprint=self.fingerprint, openpilotLongitudinalControl=True, pcmCruise=False,
       passive=False, notCar=False, dashcamOnly=False, carVin="VIN1")
-    request = required_change(self._row("profiles", "CustomPersonalities"))
+    request = required_change(self._row("personalities", "CustomPersonalities"))
     writes = []
     def replace_after_verified_commit(*args, **kwargs):
       result = saved_document.commit_exact(*args, **kwargs)
@@ -749,7 +752,7 @@ class FeatureSettingsOwnerTests(unittest.TestCase):
     self.owner.vehicle_params = lambda: SimpleNamespace(
       carFingerprint=self.fingerprint, openpilotLongitudinalControl=True, pcmCruise=False,
       passive=False, notCar=False, dashcamOnly=False, carVin="VIN1")
-    request = required_change(self._row("profiles", "CustomPersonalities"))
+    request = required_change(self._row("personalities", "CustomPersonalities"))
     original_fsync = os.fsync
     calls = []
     def competing_edit(fd):
