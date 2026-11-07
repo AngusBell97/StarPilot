@@ -9,6 +9,8 @@
 .gx-model-mode > button:disabled { opacity: .5; cursor: not-allowed; }
 .gx-model-mode__hint { color: var(--text-muted); font-size: var(--fs-sm); line-height: 1.45; }
 .gx-model-choose .gx-model-laboratory { display: grid; gap: var(--sp-3); }
+/* Active Small / Big pickers carry the same Small / eGPU tags as the model list. */
+.gx-model-control__label { display: inline-flex; align-items: center; gap: 8px; }
 
 /* Jetlink: a card that opens from its header (collapsed by default). */
 button.gx-model-collapse { width: 100%; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }

@@ -89,6 +89,9 @@ assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pai
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "pair", pairableFilter: false }), true)
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pairableFilter: true }), true)
 
+// The Active Small / Big pickers use the list's Small / eGPU tags.
+assert.match(template, /for="gx-model-small"><span class="gx-model-tag gx-model-tag--small"[^>]*>Small<\/span> Active Small<\/label>/)
+assert.match(template, /for="gx-model-big"><span class="gx-model-tag gx-model-tag--egpu"[^>]*>eGPU<\/span> Active Big<\/label>/)
 // Browse models opens from its header (closed by default); refresh sits beside the search.
 assert.equal(ModelsPage.data().browseOpen, false)
 assert.match(template, /class="gx-section__header gx-model-collapse" :aria-expanded="String\(browseOpen\)" aria-controls="gx-model-browse-panel"/)

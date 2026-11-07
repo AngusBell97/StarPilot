@@ -825,13 +825,13 @@ export const ModelsPage = {
             <template v-if="driveMode === 'single'">
               <small class="gx-model-mode__hint">One model steers and sets the speed.</small>
               <div class="gx-model-control">
-                <label class="gx-row__label" for="gx-model-small">Active Small · On-device</label>
+                <label class="gx-row__label gx-model-control__label" for="gx-model-small"><span class="gx-model-tag gx-model-tag--small" title="Small model: runs on the comma itself">Small</span> Active Small</label>
                 <GalaxySelect id="gx-model-small" class="gx-field" :value="pendingChoice?.action === 'select-small' ? pendingChoice.value : activeSmallModel" :disabled="selectionUncertain || capabilities.select !== true || status.randomizer" @change="runAction('select-small', installedSmallModels.find(m => m.value === $event.target.value))">
                   <option v-for="m in installedSmallModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
                 </GalaxySelect>
               </div>
               <div class="gx-model-control">
-                <label class="gx-row__label" for="gx-model-big">Active Big · GPU</label>
+                <label class="gx-row__label gx-model-control__label" for="gx-model-big"><span class="gx-model-tag gx-model-tag--egpu" title="Big model: runs on an external GPU">eGPU</span> Active Big</label>
                 <GalaxySelect id="gx-model-big" class="gx-field" :value="pendingChoice?.action === 'select-big' ? pendingChoice.value : activeBigModel" :disabled="selectionUncertain || capabilities.select !== true || status.randomizer || status.jetlinkBig && status.isOnroad !== false" @change="$event.target.value ? runAction('select-big', installedBigModels.find(m => m.value === $event.target.value)) : runAction('select-big')">
                   <option value="">{{ bigNoneLabel }}</option>
                   <option v-for="m in installedBigModels" :key="m.value" :value="m.value" :disabled="!m.selectable">{{ m.label || m.value }}</option>
