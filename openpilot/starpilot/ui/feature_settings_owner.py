@@ -1184,7 +1184,8 @@ class FeatureSettingsOwner:
     elif page == FeaturePage.PROFILES:
       title = "Long Planner"
       rows.append(self._bool_row(PLANNER_SELECTION_KEY, "Use StarPilot Longitudinal Planner", self.authority("preferences"),
-                                 reason="Off uses the upstream planner. Supported longitudinal control stays active. Changes apply on the next drive."))
+                                 reason=("On runs StarPilot's speed features (Speed Limit Controller, Curve Speed Controller, Force Stop, profile tuning). " +
+                                         "Off uses comma's stock planner without them. Applies on the next drive.")))
       allowed = configurable and system_long
       rows.extend(row for row in self.slc_custom.rows(allowed) if row.key == 'SLCTransitionOffsets')
       force_enabled, _, _ = self._value("ForceStops")
