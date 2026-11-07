@@ -139,6 +139,6 @@ def test_galaxy_distance_same_as_comma_follows_comma_distance(tmp_path, comma_me
     Path(params.get_param_path("GalaxySmallDistanceUnits")).write_bytes(galaxy_distance)
   shown = slider_units.project(params, _width_row(comma_metric))
   assert shown.unit == unit
-  assert float(shown.value) == pytest.approx(5 if unit == "ft" else 1.524)
+  assert float(shown.value) == pytest.approx(5 if unit == "ft" else 1.5), "5 ft shows as a clean 1.5 m (0.05 m steps)"
   if galaxy_distance is None:
     assert ("GalaxyRoadDistanceUnits", comma_distance) in shown.dependencies, "a comma units change refreshes the view"
