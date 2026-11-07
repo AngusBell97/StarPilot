@@ -12,6 +12,7 @@ import { CloudProviderPage } from "./cloud-provider.js"
 import { GxNotice } from "./notice.js"
 import { route } from "./route-state.js"
 import { GxTrail } from "./trail.js"
+import { pageGuide, guidedRows, guidedCards } from "./page-guides.js"
 
 const post = (fetcher, path, body, signal) => fetcher(path, {
   method: "POST", credentials: "same-origin", cache: "no-store", signal,
@@ -273,6 +274,8 @@ const SETTINGS_PAGE_INTRO = `
 `
 
 export const SettingsPage = {
+  // Named so a guided page (page-guides.js) can show another page's rows inside one of its cards.
+  name: "SettingsPage",
   emits: ["nested", "open-page"],
   components: { GxDialog, GxState, GxTrail, GalaxySettingRow, OnroadLayoutPage, FavoritesPage, SoundPacks, CloudProviderPage, ReverseProxySettings, GxNotice },
   props: {
@@ -291,6 +294,8 @@ export const SettingsPage = {
     // Show only, or leave out, rows with these labels (a row that now lives on another page).
     onlyRows: { type: Array, default: null },
     hideRows: { type: Array, default: null },
+    // Rows only, no card of its own: shown inside a card of the page above (page-guides.js `include`).
+    bare: { type: Boolean, default: false },
   },
   setup(props) {
     const navigation = route.view
@@ -306,6 +311,7 @@ export const SettingsPage = {
     pageTitle() { return this.state.data?.page && this.state.data.page !== "hub" ? this.state.data.title : this.title },
     pageDescription() {
       const page = this.state.data?.page || this.initialPage
+      if (pageGuide(page)?.intro) return pageGuide(page).intro
       if (this.state.developerOpen || page === "developer") return "Choose developer driving options and cloud services."
       if (page === "conditional" || page.startsWith("conditional/")) return "Choose when to switch between Chill and Experimental. Applies on supported vehicles when StarPilot controls acceleration and braking."
       if (["aggressive", "standard", "relaxed"].includes(page)) return "Adjust acceleration, braking and following for this driving style."
@@ -360,7 +366,7 @@ export const SettingsPage = {
     },
     visibleRows() {
       const needle = this.state.query.trim().toLocaleLowerCase()
-      const rows = this.state.data?.rows || []
+      const rows = guidedRows(this.state.data?.page, this.state.data?.rows || [])
       const inHub = (this.navigationPath || this.initialPage === "hub") && this.state.data?.page === "hub"
       const section = this.activeSection
       const entries = inHub && SECTION_LINKS[section.id]
@@ -380,6 +386,8 @@ export const SettingsPage = {
     },
     // A heading row starts its own card; the rows after it belong to that card even when search hides the heading.
     rowCards() {
+      const guided = guidedCards(this.state.data?.page, this.visibleRows, this.state.query)
+      if (guided) return guided
       const titles = []
       const owner = (this.state.data?.rows || []).map((row) => (row.heading ? titles.push(row.label) : titles.length))
       const cards = [{ title: "", entries: [] }, ...titles.map((title) => ({ title, entries: [] }))]
@@ -580,7 +588,7 @@ export const SettingsPage = {
       </template>
     <OnroadLayoutPage ref="layoutEditor" v-if="state.layoutOpen" :mode="mode" :unauthorized="unauthorized" :initial-panel="state.layoutPanel" @target="openLayoutTarget" @close="closeLayout" />
     <FavoritesPage ref="favoritesEditor" v-else-if="state.favoritesOpen" :mode="mode" :unauthorized="unauthorized" @close="closeFavorites" />
-    <section v-else class="gx-settings" :class="{ 'gx-settings--path': trailEnabled, 'gx-settings--menu': menuMode, 'gx-settings--embedded': embedded }" :aria-label="heading || title" :inert="busy" :aria-busy="busy || undefined">
+    <section v-else class="gx-settings" :class="{ 'gx-settings--path': trailEnabled, 'gx-settings--menu': menuMode, 'gx-settings--embedded': embedded, 'gx-settings--bare': bare }" :aria-label="heading || title" :inert="busy" :aria-busy="busy || undefined">
       <div v-if="menuMode && !embedded" class="gx-settings__header gx-page-header"><h2>{{ heading || state.data?.title || title }}</h2>
         <button v-if="state.data && state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button></div>
       <h3 v-if="embedded && heading" class="gx-menu-embed-title">{{ heading }}</h3>
@@ -588,7 +596,7 @@ export const SettingsPage = {
       <div v-if="pageDescription && !onlyRows" class="gx-settings__summary">${SETTINGS_PAGE_INTRO}</div>
       <GxState v-if="mode !== 'local'">Local settings are unavailable in preview.</GxState>
       <template v-else>
-        <GxNotice v-if="state.data && state.data.vehicleIdentified === false" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
+        <GxNotice v-if="state.data && state.data.vehicleIdentified === false && !bare" tone="info">Vehicle not identified yet. Turn on the car and wait for fingerprinting; vehicle-specific settings will then appear here.</GxNotice>
         <CloudProviderPage ref="cloudProvider" v-if="state.developerOpen" :mode="mode" :unauthorized="unauthorized" />
         <ReverseProxySettings v-if="state.developerOpen" :mode="mode" :unauthorized="unauthorized" />
         <GxState v-if="state.status === 'loading'" loading>Reading your device’s saved preferences…</GxState>
@@ -601,17 +609,21 @@ export const SettingsPage = {
             <div v-if="state.data.page === 'pip'" class="gx-settings__actions gx-actions">
               <button type="button" class="gx-btn gx-btn--tonal" @click="openCropEditor"><i class="bi bi-crop" aria-hidden="true"></i> Crop editor</button>
             </div>
-            <section v-for="(card, cardIndex) in rowCards" :key="card.title || 'main'" class="gx-card gx-settings__section">
-              <div v-if="cardIndex" class="gx-section__header"><i class="bi bi-car-front" aria-hidden="true"></i><span class="gx-section__title">{{ card.title }}</span></div>
-              <div v-else-if="!menuMode" class="gx-section__header"><GxTrail v-if="trailItems.length" :items="trailItems" :disabled="busy" label="Toggle hierarchy" @select="jumpToPage" />
+            <section v-for="(card, cardIndex) in rowCards" :key="card.id || card.title || 'main'" class="gx-card gx-settings__section">
+              <div v-if="cardIndex && !card.guide" class="gx-section__header"><i class="bi bi-car-front" aria-hidden="true"></i><span class="gx-section__title">{{ card.title }}</span></div>
+              <div v-else-if="!cardIndex && !menuMode" class="gx-section__header"><GxTrail v-if="trailItems.length" :items="trailItems" :disabled="busy" label="Toggle hierarchy" @select="jumpToPage" />
                 <template v-else><i class="bi" :class="activeSection.icon" aria-hidden="true"></i><span class="gx-section__title">{{ state.data.page === 'hub' ? activeSection.label : state.data.title }}</span></template>
                 <button v-if="state.data.page !== 'hub' && state.data.rows.length" type="button" class="gx-icon-btn" :aria-label="state.searchOpen ? 'Close page search' : 'Search within this page'" :aria-pressed="state.searchOpen" @click="togglePageSearch"><i class="bi" :class="state.searchOpen ? 'bi-x-lg' : 'bi-search'" aria-hidden="true"></i></button>
                 </div>
+              <template v-if="card.guide"><div class="gx-section__header gx-guide__header"><i class="bi" :class="card.icon" aria-hidden="true"></i><h3 class="gx-section__title">{{ card.title }}</h3></div>
+                <p v-if="card.intro" class="gx-guide__intro">{{ card.intro }}</p></template>
               <div v-if="state.searchOpen && !cardIndex" class="gx-settings__search"><input ref="pageSearch" v-model="state.query" class="gx-field" type="search" aria-label="Search within this page" placeholder="Search within…"></div>
               <GalaxySettingRow v-for="{ row, index } in card.entries" :key="rowKey(row, index)" :row="row" :index="index"
                 :busy="busy" :disabled="!!state.error || !row.available" :save-value="(index, value) => feed.previewValue(index, value)" :test-alert="state.data.page === 'sounds' ? testAlert : null"
                 @open="open" @review="(index, direction) => feed.preview(index, direction)" @reset-default="index => feed.resetDefault(index)" />
-              <div v-if="!cardIndex && !visibleRows.length" class="gx-empty">No matching settings.</div>
+              <SettingsPage v-if="card.include && mode === 'local'" :key="'include:' + card.include.page" bare embedded menu-mode :mode="mode" :unauthorized="unauthorized"
+                :initial-page="card.include.page" :title="card.title" :only-rows="card.include.rows" />
+              <div v-if="!cardIndex && !visibleRows.length && !card.include" class="gx-empty">No matching settings.</div>
             </section>
             <SoundPacks v-if="state.data.page === 'sounds'" :unauthorized="unauthorized" :busy="busy" @installed="refreshSoundChoices" />
           </div>

@@ -59,3 +59,14 @@
 .gx-settings--embedded { margin-top: var(--sp-5); }
 .gx-menu-embed-title { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-bold); }
 .gx-menu-extra { margin-top: var(--sp-4); }
+
+/* Page guides (js/page-guides.js): each card has a title and a short line saying what it covers. */
+.gx-guide__header { min-height: 48px; padding-bottom: var(--sp-1); }
+.gx-guide__header .gx-section__title { font-size: var(--fs-base); }
+.gx-guide__intro { margin: 0; padding: 0 var(--sp-4) var(--sp-3); color: var(--on-surface-variant); font-size: var(--fs-sm); line-height: 1.5;
+  background: rgba(255, 255, 255, 0.02); overflow-wrap: anywhere; }
+/* Another page's rows shown inside a card: rows only, no card of their own. */
+.gx-settings--embedded.gx-settings--bare { margin-top: 0; gap: 0; }
+.gx-settings--bare .gx-settings__section.gx-card { margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none; }
+.gx-settings--bare .gx-settings__section > .gx-row:first-child { border-top: 1px solid var(--outline); }
