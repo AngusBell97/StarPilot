@@ -12,6 +12,7 @@ from opendbc.car.hyundai.values import CAR as HYUNDAI
 from opendbc.car.toyota.interface import CarInterface as ToyotaInterface
 from opendbc.car.toyota.values import CAR as TOYOTA
 from openpilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPlanner
+from openpilot.selfdrive.controls.lib.longitudinal_planner import E2E_BLEND_OUT_S
 from openpilot.starpilot.longitudinal.cruise_ceiling import CruiseCeiling, CurveCeiling
 from openpilot.starpilot.longitudinal.encouragement import BOOST_RATE, Encouragement, MAX_BOOST, SOURCES, NudgePreferences
 from openpilot.starpilot.longitudinal.tests.test_conditional_handoff import Frame, NOW
@@ -243,7 +244,11 @@ def test_native_planner_limits_and_immediate_withdrawal(case):
     current.update(sm, now_ns=now, **options)
     assert current.mpc.solution_status == original.mpc.solution_status == 0
     if tick >= 90:
-      assert current.output_a_target <= original.output_a_target + 1e-6
+      # 7 Nov 2026: leaving Experimental now fades the model out over E2E_BLEND_OUT_S. During that fade the two
+      # planners' MPC start states (which the earlier boost moved apart, and which this test does not align) show
+      # through by well under 0.01 m/s2; the encouragement itself is withdrawn at once (boost == 0 below).
+      tolerance = 5e-3 if case == 'standard' and tick < 90 + round(E2E_BLEND_OUT_S / 0.05) else 1e-6
+      assert current.output_a_target <= original.output_a_target + tolerance
       assert current.encouragement.boost == 0.
       assert current.output_should_stop == original.output_should_stop
 

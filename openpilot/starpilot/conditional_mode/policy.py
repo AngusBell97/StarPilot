@@ -28,6 +28,28 @@ CCM_LEAD_CONFIRM_S = 1.0
 CCM_LAUNCH_CONFIRM_S = 0.0
 CCM_MIN_DWELL_S = 1.2
 CCM_EXIT_BUFFER_S = 0.35
+# Climb mode: Experimental by default; Chill only to bring the car up to the set speed on a clear road.
+CLIMB_CONFIRM_S = 1.0           # every start condition must hold this long
+CLIMB_LEAD_CLEAR_S = 1.5        # no lead car seen for this long
+CLIMB_DONE_MPS = 0.3 * MPH_TO_MPS
+CLIMB_REENTRY_S = 3.0           # Experimental for at least this long after a climb ends
+CLIMB_HELD_S = 3.0              # this long at the target counts as holding speed
+CLIMB_HELD_BAND_MPS = 0.5 * MPH_TO_MPS
+CLIMB_TARGET_RISE_MPS = 1.0 * MPH_TO_MPS
+CLIMB_CALM_ACCEL = -0.05        # model asks at least this much to start a climb
+CLIMB_CALM_3S_MPS = 0.3         # its 3 s plan may sit at most this far below current speed
+CLIMB_CALM_8S_MPS = 0.5         # and its 8 s plan at most this far
+CLIMB_SLOWING_ACCEL = -0.3      # a climb ends when the model asks for this or less
+CLIMB_SLOWING_8S_MPS = 3.0 * MPH_TO_MPS
+CLIMB_SIGNAL_VETO_MPS = 35.0 * MPH_TO_MPS  # below this an indicator means a turn: Experimental
+CLIMB_RECOVER_SPEED_MPS = 15.0 * MPH_TO_MPS
+# Lead pulling away (optional): only a lead well beyond the following distance that keeps moving away.
+CLIMB_LEAD_MIN_GAP_S = 3.0      # start only with the lead at least this far ahead in time
+CLIMB_LEAD_END_GAP_S = 2.5      # hand back to Experimental once the gap closes to this
+CLIMB_LEAD_AWAY_MPS = 1.0       # the lead must be this much faster than us...
+CLIMB_LEAD_AWAY_S = 2.0         # ...for this long before a climb starts
+CLIMB_LEAD_STOP_AWAY_MPS = 0.3  # the climb ends once the lead is no longer pulling away
+CLIMB_LEAD_BRAKE = -0.5         # or the lead brakes
 
 
 class ModeChoice(StrEnum):
@@ -124,6 +146,11 @@ class SceneEvidence:
   open_road_model_stop: bool | None = None
   open_road_headway_s: float | None = None
   open_road_lateral_m: float | None = None
+  # Climb mode evidence; None is unknown, never a negative observation.
+  climb_target_mps: float | None = None  # the speed the planner actually holds for the set speed (Tesla dash-corrected)
+  model_accel_mps2: float | None = None
+  model_speed_3s_mps: float | None = None
+  model_speed_8s_mps: float | None = None
 
 
 @dataclass(frozen=True)
@@ -144,6 +171,9 @@ class ModeSettings:
   ccm_lead: bool = True
   ccm_launch: bool = False
   ccm_allow_chill_in_bends: bool = False
+  ccm_climb: bool = False
+  ccm_climb_on_bend_exit: bool = False
+  ccm_climb_lead: bool = False
 
 
 @dataclass(frozen=True)
@@ -187,6 +217,9 @@ def _valid_settings(settings: ModeSettings) -> bool:
     settings.ccm_lead,
     settings.ccm_launch,
     settings.ccm_allow_chill_in_bends,
+    settings.ccm_climb,
+    settings.ccm_climb_on_bend_exit,
+    settings.ccm_climb_lead,
   )
   return all(_finite(value, high=70.0) for value in numeric) and all(_bool(value) for value in flags)
 
@@ -305,6 +338,19 @@ class ConditionalModePolicy:
     self.ccm_launch_lead = False
     self.ccm_hold_until = 0.0
     self.ccm_false_since: float | None = None
+    self._reset_climb()
+
+  def _reset_climb(self) -> None:
+    self.climbing = False
+    self.climb_allowed = True       # a fresh engagement may climb
+    self.climb_since: float | None = None
+    self.climb_ended_at = -1e9
+    self.climb_lead_seen = -1e9
+    self.climb_held_since: float | None = None
+    self.climb_last_target: float | None = None
+    self.climb_end_reason = ''
+    self.climb_kind = ''            # 'clear' or 'lead'
+    self.climb_away_since: float | None = None
 
   def reset_transition(self, *, settings_edit: bool = False) -> None:
     # Preserve bend evidence across a temporary authority/data interruption.
@@ -417,6 +463,7 @@ class ConditionalModePolicy:
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None
+      self._end_climb(now_s, 'unavailable')
       return self._decision(choice is ModeChoice.CCM, authority, qualified, warm, Reason.SCENE_UNAVAILABLE, 0)
     return self._cem(now_s, authority, warm, scene, settings) if choice is ModeChoice.CEM else self._ccm(now_s, authority, warm, scene, settings)
 
@@ -596,10 +643,128 @@ class ConditionalModePolicy:
     }.get(status_reason, 0)
     return self._decision(self.cem_active, authority, True, warm, reason, status)
 
+  def _end_climb(self, now_s: float, reason: str) -> None:
+    if self.climbing:
+      self.climbing = False
+      self.climb_ended_at = now_s
+      self.climb_end_reason = reason
+    self.climb_since = None
+    self.climb_kind = ''
+
+  def _climb_target(self, scene: SceneEvidence) -> float | None:
+    target = scene.climb_target_mps
+    if target is None or not _finite(target, high=80.0) or target <= 0.0:
+      target = scene.set_speed_mps
+    return target if target is not None and _finite(target, high=80.0) and target > 0.0 else None
+
+  def _climb_observe(self, now_s: float, authority: Authority, scene: SceneEvidence, speed: float) -> None:
+    """Track what lets a climb recover speed.
+
+    Climbs only recover speed that something took away: engaging, a set-speed rise, a lead, a bend, a turn,
+    a stop or slow traffic, or the driver's own input. Experimental slowing on its own from a speed it was
+    holding is treated as deliberate, so no climb follows it.
+    """
+    lead = scene.lead
+    lead_now = lead is not None and (lead.present is True or lead.tracked is True)
+    if lead_now:
+      self.climb_lead_seen = now_s
+    target = self._climb_target(scene)
+    rose = target is not None and self.climb_last_target is not None and target > self.climb_last_target + CLIMB_TARGET_RISE_MPS
+    events = (
+      lead_now,
+      scene.curve_detected is True or scene.curve_raw is True,
+      scene.left_blinker is True or scene.right_blinker is True,
+      scene.standstill is True or speed < CLIMB_RECOVER_SPEED_MPS,
+      scene.stop_light_detected is True or scene.forcing_stop is True or scene.stop_sign_confirmed is True,
+      scene.slow_lead_detected is True or scene.low_speed_stop_scene is True,
+      authority.long_active is not True,  # the driver took over (accelerator) or control paused
+      rose,
+    )
+    if any(events):
+      self.climb_allowed = True
+      self.climb_held_since = None
+    if target is None:
+      self.climb_held_since = None
+      return
+    if self.climb_last_target is None or rose or target < self.climb_last_target:
+      self.climb_last_target = target
+    if not self.climbing and abs(target - speed) <= CLIMB_HELD_BAND_MPS and not any(events):
+      if self.climb_held_since is None:
+        self.climb_held_since = now_s
+      if now_s - self.climb_held_since >= CLIMB_HELD_S:
+        self.climb_allowed = False  # holding speed: from here a slowdown is the model's choice
+    else:
+      self.climb_held_since = None
+
+  def _lead_pulling_away(self, now_s: float, scene: SceneEvidence, speed: float, gap_s: float, away_mps: float) -> bool:
+    """A credible lead far ahead that keeps moving away (the model is not keeping up with it)."""
+    lead = scene.lead
+    if (lead is None or not _lead_valid(lead) or lead.present is not True or lead.distance_m is None or
+        lead.speed_mps is None or lead.accel_mps2 is None or not _finite(lead.distance_m, high=500.0) or
+        not _finite(lead.speed_mps, high=100.0) or not _finite(lead.accel_mps2, low=-20.0, high=20.0)):
+      return False
+    confident = lead.radar or (lead.model_probability is not None and _finite(lead.model_probability, high=1.0) and
+                               lead.model_probability >= 0.9)
+    return bool(confident and lead.distance_m >= gap_s * max(speed, 1.0) and
+                lead.speed_mps >= speed + away_mps and lead.accel_mps2 >= CLIMB_LEAD_BRAKE)
+
+  def _climb_step(self, now_s: float, scene: SceneEvidence, settings: ModeSettings, speed: float, signal: bool) -> bool:
+    """Return True while a climb is active."""
+    target = self._climb_target(scene)
+    lead = scene.lead
+    lead_clear = (lead is not None and _lead_valid(lead) and lead.present is False and lead.tracked is False and
+                  now_s - self.climb_lead_seen >= CLIMB_LEAD_CLEAR_S)
+    accel, plan3, plan8 = scene.model_accel_mps2, scene.model_speed_3s_mps, scene.model_speed_8s_mps
+    model_known = all(v is not None and _finite(v, low=-20.0, high=100.0) for v in (accel, plan3, plan8))
+    short = target - speed if target is not None else None
+    away = settings.ccm_climb_lead and self._lead_pulling_away(now_s, scene, speed, CLIMB_LEAD_MIN_GAP_S, CLIMB_LEAD_AWAY_MPS)
+    if away:
+      if self.climb_away_since is None:
+        self.climb_away_since = now_s
+    else:
+      self.climb_away_since = None
+    if self.climbing:
+      if self.climb_kind == 'lead':
+        lead_ok = (lead is not None and _lead_valid(lead) and lead.present is False or
+                   self._lead_pulling_away(now_s, scene, speed, CLIMB_LEAD_END_GAP_S, CLIMB_LEAD_STOP_AWAY_MPS))
+      else:
+        lead_ok = lead_clear
+      reason = ('lead' if not lead_ok else
+                'unknown' if not model_known or short is None else
+                'done' if short <= CLIMB_DONE_MPS else
+                'model slowing' if accel <= CLIMB_SLOWING_ACCEL or plan8 < speed - CLIMB_SLOWING_8S_MPS else
+                '')
+      if reason:
+        self._end_climb(now_s, reason)
+        if reason == 'done':
+          self.climb_allowed = False  # reached the target: holding from here
+      return self.climbing
+    calm = (model_known and accel >= CLIMB_CALM_ACCEL and plan3 >= speed - CLIMB_CALM_3S_MPS and
+            plan8 >= speed - CLIMB_CALM_8S_MPS)
+    kind = 'clear' if lead_clear else 'lead' if (self.climb_away_since is not None and
+                                                 now_s - self.climb_away_since >= CLIMB_LEAD_AWAY_S) else ''
+    ready = (bool(kind) and self.climb_allowed and calm and not signal and short is not None and
+             speed >= settings.ccm_speed_mps and short > settings.ccm_set_speed_margin_mps and
+             now_s - self.climb_ended_at >= CLIMB_REENTRY_S)
+    if not ready:
+      self.climb_since = None
+      return False
+    if self.climb_since is None:
+      self.climb_since = now_s
+    if now_s - self.climb_since >= CLIMB_CONFIRM_S:
+      self.climbing = True
+      self.climb_kind = kind
+      self.climb_end_reason = ''
+    return self.climbing
+
   def _ccm(self, now_s: float, authority: Authority, warm: bool, scene: SceneEvidence, settings: ModeSettings) -> Decision:
     speed = scene.speed_mps
     if speed is None:
       return self._decision(True, authority, True, warm, Reason.SCENE_UNAVAILABLE, 0)
+    climb = settings.ccm_climb
+    signal = scene.left_blinker is True or scene.right_blinker is True
+    if climb:
+      self._climb_observe(now_s, authority, scene, speed)
     veto_fields = (
       scene.standstill,
       scene.left_blinker,
@@ -614,32 +779,47 @@ class ConditionalModePolicy:
       scene.low_speed_stop_scene,
     )
     launch = settings.ccm_launch and speed < 15.0 * MPH_TO_MPS and scene.launch_candidate is True
-    hard_veto = (scene.left_blinker, scene.right_blinker, scene.traffic_mode, 
+    # Climb mode: an indicator forces Experimental only below the turn speed (a lane change at speed
+    # just pauses new climbs); "climb on bend exit" lets a climb start once the bend itself is over.
+    signal_veto = signal and (not climb or speed < CLIMB_SIGNAL_VETO_MPS)
+    hard_veto = (signal_veto, scene.traffic_mode,
                  scene.slow_lead_detected, scene.stop_light_detected, scene.stop_sign_confirmed,
                  scene.forcing_stop, scene.adjacent_lead_ambiguous)
-    curve_veto = not settings.ccm_allow_chill_in_bends and (self.curve_held or scene.curve_detected is True)
+    bend_held = self.curve_held and not (climb and settings.ccm_climb_on_bend_exit and scene.curve_raw is False)
+    curve_veto = not settings.ccm_allow_chill_in_bends and (bend_held or scene.curve_detected is True)
     if curve_veto or any(value is True for value in hard_veto) or (scene.standstill is True and not launch) or (scene.low_speed_stop_scene is True and not launch):
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None
+      self._end_climb(now_s, 'veto')
       return self._decision(True, authority, True, warm, Reason.CCM_VETO, 0)
     if any(not _bool(value) for value in veto_fields):
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None
+      self._end_climb(now_s, 'unavailable')
       return self._decision(True, authority, True, warm, Reason.SCENE_UNAVAILABLE, 0)
     launch_relevant = speed <= 15.0 * MPH_TO_MPS or self.ccm_active_reason is Reason.CCM_LAUNCH
     if settings.ccm_launch and launch_relevant and (not _bool(scene.launch_candidate) or not _bool(scene.launch_forced_exit) or launch and not _bool(scene.launch_lead)):
       self.ccm_chill = False
       self.ccm_candidate = None
       self.ccm_false_since = None
+      self._end_climb(now_s, 'unavailable')
       return self._decision(True, authority, True, warm, Reason.SCENE_UNAVAILABLE, 0)
+    if climb and not launch and self._climb_step(now_s, scene, settings, speed, signal):
+      # The climb owns Chill; the lead and launch rules restart from scratch afterwards.
+      self.ccm_chill = False
+      self.ccm_candidate = None
+      self.ccm_false_since = None
+      self.ccm_active_reason = Reason.NO_TRIGGER
+      return self._decision(False, authority, True, warm, Reason.CCM_SPEED, 6)
     lead = scene.lead
     candidate = None
     if launch:
       candidate = Reason.CCM_LAUNCH
     elif (
-      lead is not None
+      not climb
+      and lead is not None
       and _lead_valid(lead)
       and not lead.present
       and not lead.tracked

@@ -61,11 +61,16 @@ OPTION_HELP = {
     "lead": "Allow Chill with a stable lead above the with-lead threshold. Slower or braking leads, signals and stops request Experimental immediately. Bends follow Allow Chill in bends.",
     "allow_chill_in_bends": "Let an otherwise eligible Chill request continue through bends. CSC still limits corner speed when enabled. Does not force acceleration or override lead, stop, signal or missing-data checks. Off holds Experimental until the bend is clear.",
     "launch_assist": "Allow a qualified Chill departure from very low speed when the model and lead show it is clear to go. Off keeps ordinary Experimental stop/departure behavior. This option applies only to Conditional Chill.",
+    "climb": "Stay in Experimental, and use Chill only to bring the car up to the set speed: on a clear road, above the climb speed, more than the margin below the set speed, while the model is not slowing. Chill hands back at the set speed, or as soon as a lead appears, a bend starts or the model slows. It only recovers speed that something took away (a lead, bend, turn, stop, set-speed rise or your accelerator); if Experimental eases off on its own from a speed it was holding, it is left alone.",
+    "climb_on_bend_exit": "With climbing on: start the climb as soon as the bend itself is over, instead of 2 seconds after it. Experimental still slows for the bend.",
+    "climb_lead": "With climbing on: also climb when a lead far ahead (at least 3 seconds) has been pulling away for 2 seconds and Experimental is not keeping up. Hands back once the gap closes to 2.5 seconds or the lead stops pulling away.",
   },
 }
 OPTION_LABELS = {
   "cem": {"speed_mps": "Experimental below: no lead", "speed_with_lead_mps": "Experimental below: with lead"},
-  "ccm": {"allow_chill_in_bends": "Allow Chill in bends", "speed_mps": "Chill above: no lead", "speed_with_lead_mps": "Chill above: with lead"},
+  "ccm": {"allow_chill_in_bends": "Allow Chill in bends", "speed_mps": "Chill above: no lead", "speed_with_lead_mps": "Chill above: with lead",
+          "climb": "Chill only to climb to set speed", "climb_on_bend_exit": "Climb on bend exit",
+          "climb_lead": "Keep up with a lead pulling away"},
 }
 SIGNAL_LANE_HELP["signal_lane_detection"] = "When on, restrict the signal condition to turns without an adjacent lane. When off, signalling below the configured speed requests Experimental regardless of adjacent lanes."
 SIGNAL_LANE_HELP["signal_lane_width_m"] = "Minimum adjacent lane width for filtering the signal condition. 0 disables this width filter; the signal speed threshold still applies."

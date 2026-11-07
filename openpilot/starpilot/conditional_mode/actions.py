@@ -34,7 +34,7 @@ SPEED_FIELDS = frozenset(("speed_mps", "speed_with_lead_mps", "signal_speed_mps"
 BOOLEAN_FIELDS = {
   "cem": frozenset(("open_road", "curves", "curves_with_lead", "lead", "slower_lead", "stopped_lead",
                        "stop_lights", "signal_lane_detection")),
-  "ccm": frozenset(("lead", "launch_assist", "allow_chill_in_bends")),
+  "ccm": frozenset(("lead", "launch_assist", "allow_chill_in_bends", "climb", "climb_on_bend_exit", "climb_lead")),
 }
 NUMBER_FIELDS = {
   "cem": frozenset(("speed_mps", "speed_with_lead_mps", "signal_speed_mps", "model_stop_s", "signal_lane_width_m")),

@@ -90,8 +90,11 @@ class RecoveryTests(unittest.TestCase):
       sm['selfdriveState'].experimentalMode=False
       sm.logMonoTime=dict.fromkeys(sm,NOW+45_000_000)
       planner.update(sm,now_ns=NOW+50_000_000,drive_id=DRIVE)
-      self.assertTrue(planner.mode_recovery.applied)
-      self.assertAlmostEqual(planner.output_a_target,-1.17,places=5)
+      # 7 Nov 2026: leaving Experimental fades the model out over E2E_BLEND_OUT_S, which is gentler than the
+      # recovery ramp (-1.17 after one cycle), so the ramp no longer has to act.
+      self.assertFalse(planner.mode_recovery.applied)
+      self.assertLess(planner.output_a_target,-1.17)
+      self.assertGreater(planner.output_a_target,-1.37)
       self.assertFalse(planner.last_curve_ceiling_applied)
       sm['modelV2'].action.desiredAcceleration=-2.0;sm['selfdriveState'].experimentalMode=True
       sm.logMonoTime=dict.fromkeys(sm,NOW+95_000_000)

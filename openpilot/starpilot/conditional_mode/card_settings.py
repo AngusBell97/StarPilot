@@ -67,7 +67,8 @@ class CardSettingsView(ConditionalSettingsOwner):
               cem.open_road, cem.curves, cem.curves_with_lead, cem.lead, cem.slower_lead,
               cem.stopped_lead, cem.stop_lights, cem.model_stop_s, cem.signal_lane_detection,
               cem.signal_lane_width_m, cem.persist_manual, ccm.speed_mps, ccm.speed_with_lead_mps,
-              ccm.set_speed_margin_mps, ccm.lead, ccm.launch_assist, ccm.allow_chill_in_bends, ccm.persist_manual)
+              ccm.set_speed_margin_mps, ccm.lead, ccm.launch_assist, ccm.allow_chill_in_bends, ccm.persist_manual,
+              ccm.climb, ccm.climb_on_bend_exit, ccm.climb_lead)
     except AttributeError:
       return None
 

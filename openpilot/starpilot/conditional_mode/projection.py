@@ -27,6 +27,7 @@ from openpilot.starpilot.conditional_mode.slower_lead import SlowerLeadDetector,
 from openpilot.starpilot.conditional_mode.launch_release import TeslaLaunchRelease, tesla_stationary_zero
 from openpilot.starpilot.conditional_mode.stop import FORD_STOP_NAMES, StopFrame, StopLead, StopLightDetector, StopObservation
 from openpilot.starpilot.conditional_mode.turn_scene import committed_turn_scene
+from openpilot.starpilot.car.tesla import dash_speed as tesla_dash_speed
 from openpilot.starpilot.model_geometry import (
   STANDSTILL_MODEL_PREFIX_NOISE_M as STANDSTILL_MODEL_PREFIX_NOISE_M, STANDSTILL_SPEED_NOISE_MPS, normalized_origin,
   standstill_clear_horizon as _standstill_clear_horizon, standstill_release_speed,
@@ -242,6 +243,34 @@ def _horizon(model) -> float | None:
     return min(length, 500.0)
   except (AttributeError, TypeError, ValueError, OverflowError):
     return None
+
+
+def _model_speed_at(model, seconds: float) -> float | None:
+  """The model's planned speed at a time ahead, from its velocity trajectory; None when unusable."""
+  try:
+    xs, ts = list(model.velocity.x), list(model.velocity.t)
+  except (AttributeError, TypeError, ValueError):
+    return None
+  if len(xs) < 2 or len(xs) != len(ts) or not all(math.isfinite(v) for v in xs + ts):
+    return None
+  if not ts[0] <= seconds <= ts[-1] or any(b <= a for a, b in zip(ts, ts[1:], strict=False)):
+    return None
+  for i in range(1, len(ts)):
+    if seconds <= ts[i]:
+      f = (seconds - ts[i - 1]) / (ts[i] - ts[i - 1])
+      value = xs[i - 1] + f * (xs[i] - xs[i - 1])
+      return value if -1.0 <= value <= 100.0 else None
+  return None
+
+
+def _climb_target(cp, cruise: float | None) -> float | None:
+  """The speed the planner actually holds for the set speed (the Tesla dash-speed correction)."""
+  if cruise is None:
+    return None
+  try:
+    return tesla_dash_speed.planner_target(cruise) if tesla_dash_speed.enabled(cp) else cruise
+  except (AttributeError, TypeError, ValueError, OverflowError):
+    return cruise
 
 
 def _standstill_path_extent(model) -> float | None:
@@ -833,6 +862,11 @@ class SceneProjector:
       launch_lead=chill_observation.launch_status == 'lead' if chill_observation.launch_candidate else None,
       adjacent_lead_ambiguous=adjacent_ambiguous,
       lane_change_chill=lane_change_chill if type(lane_change_chill) is bool else None,
+      climb_target_mps=_climb_target(cp, cruise),
+      model_accel_mps2=(_number(_field(_field(model, 'action'), 'desiredAcceleration'), low=-10., high=10.)
+                        if model_transport_current else None),
+      model_speed_3s_mps=_model_speed_at(model, 3.0) if model_transport_current else None,
+      model_speed_8s_mps=_model_speed_at(model, 8.0) if model_transport_current else None,
     )
     authority = None
     if (

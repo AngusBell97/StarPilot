@@ -204,6 +204,12 @@ CONDITIONS = {
   'signal_lane_width_m': 'Sets the minimum adjacent width that counts as a lane when distinguishing a turn from a lane change.',
   'set_speed_margin_mps': 'Sets the margin below cruise speed required before Conditional Chill selects Chill.',
   'launch_assist': 'Temporarily selects Chill when a tracked lead moves away from a stop and the launch conditions are met.',
+  'allow_chill_in_bends': 'Lets an otherwise eligible Chill request continue through bends instead of returning to Experimental.',
+  'climb': ('Keeps Experimental, and uses Chill only to bring the car up to the set speed on a clear road while the ' +
+    'driving model is not slowing. Chill hands back at the set speed or when a lead, bend or model slowdown appears.'),
+  'climb_on_bend_exit': 'Starts a climb as soon as a bend is over, instead of 2 seconds after it. Experimental still slows for the bend.',
+  'climb_lead': ('Also climbs when a lead far ahead keeps pulling away and Experimental is not keeping up. Hands back ' +
+    'once the gap closes or the lead stops pulling away.'),
   'persist_manual': 'Remembers your manual driving-mode choice across drives. Changing this setting resets that choice to Automatic.',
 }
 

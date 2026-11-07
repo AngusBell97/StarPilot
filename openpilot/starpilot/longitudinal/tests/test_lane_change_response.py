@@ -186,7 +186,13 @@ def test_native_protection_revokes_an_already_active_response(context):
     from openpilot.selfdrive.controls.lib.longitudinal_planner import E2E_ADMIT_CYCLES
     start=30+E2E_ADMIT_CYCLES-1
   assert not any(r[3] for r in records[start:]),records
-  if context=='model':assert all(r[1]<=-.7+1e-6 for r in records[start:])
+  if context=='model':
+    # 7 Nov 2026: the model's request then fades in over E2E_BLEND_IN_S: it never returns above the raised
+    # request it replaced, and is in full once the fade completes.
+    from openpilot.selfdrive.controls.lib.longitudinal_planner import E2E_BLEND_IN_S
+    full=start+round(E2E_BLEND_IN_S/0.05)+1
+    assert all(r[1]<records[start-1][1] for r in records[start:full]),records
+    assert all(r[1]<=-.7+1e-6 for r in records[full:])
   if context=='second_lead':assert min(r[1] for r in records[30:])<0.  # magnitude belongs to native MPC
 
 

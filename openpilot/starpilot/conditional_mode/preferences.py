@@ -54,6 +54,10 @@ class CCMOptions:
   launch_assist: bool = False
   allow_chill_in_bends: bool = False
   persist_manual: bool = False
+  # Climb mode (7 Nov 2026): Experimental by default, Chill only to climb to the set speed.
+  climb: bool = False
+  climb_on_bend_exit: bool = False
+  climb_lead: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,9 @@ class SavedPreferences:
       ccm_lead=self.ccm.lead,
       ccm_launch=self.ccm.launch_assist,
       ccm_allow_chill_in_bends=self.ccm.allow_chill_in_bends,
+      ccm_climb=self.ccm.climb,
+      ccm_climb_on_bend_exit=self.ccm.climb_on_bend_exit,
+      ccm_climb_lead=self.ccm.climb_lead,
     )
 
 
@@ -108,7 +115,8 @@ def _validate(preferences: SavedPreferences) -> None:
     raise PreferenceError('invalid stop, lane, or set-speed margin value')
   booleans = (cem.open_road, cem.curves, cem.curves_with_lead, cem.lead, cem.slower_lead,
               cem.stopped_lead, cem.stop_lights, cem.signal_lane_detection, cem.persist_manual,
-              ccm.lead, ccm.launch_assist, ccm.allow_chill_in_bends, ccm.persist_manual)
+              ccm.lead, ccm.launch_assist, ccm.allow_chill_in_bends, ccm.persist_manual,
+              ccm.climb, ccm.climb_on_bend_exit, ccm.climb_lead)
   if not all(type(value) is bool for value in booleans):
     raise PreferenceError('invalid conditional-mode boolean')
 
@@ -126,11 +134,14 @@ def _invalid_json_constant(value: str):
   raise PreferenceError(f'invalid JSON constant: {value}')
 
 
+_CCM_OPTIONAL = frozenset(('allow_chill_in_bends', 'climb', 'climb_on_bend_exit', 'climb_lead'))
+
+
 def _typed_section(value: object, section_type: type[CEMOptions] | type[CCMOptions]):
   expected = {field.name for field in fields(section_type)}
-  # The sole optional extension preserves old documents as Off without a write.
-  if section_type is CCMOptions and type(value) is dict and set(value) == expected - {'allow_chill_in_bends'}:
-    value = {**value, 'allow_chill_in_bends': False}
+  # Optional extensions preserve old documents as Off without a write.
+  if section_type is CCMOptions and type(value) is dict and expected - _CCM_OPTIONAL <= set(value) <= expected:
+    value = {**{name: False for name in _CCM_OPTIONAL}, **value}
   if type(value) is not dict or set(value) != expected:
     raise PreferenceError('missing or unknown conditional-mode option')
   return section_type(**cast(dict[str, Any], value))
@@ -177,9 +188,10 @@ def encode_preferences(preferences: SavedPreferences) -> bytes:
     'cem': {field.name: getattr(preferences.cem, field.name) for field in fields(CEMOptions)},
     'ccm': {field.name: getattr(preferences.ccm, field.name) for field in fields(CCMOptions)},
   }
-  # Off retains old-reader compatibility, including after turning the toggle off.
-  if preferences.ccm.allow_chill_in_bends is False:
-    document['ccm'].pop('allow_chill_in_bends')
+  # Off retains old-reader compatibility, including after turning a toggle off.
+  for name in sorted(_CCM_OPTIONAL):
+    if getattr(preferences.ccm, name) is False:
+      document['ccm'].pop(name)
   return json.dumps(document, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
 
 

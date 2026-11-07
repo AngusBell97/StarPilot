@@ -57,6 +57,12 @@ from openpilot.starpilot.lateral.lane_change_preferences import LaneChangePolicy
 E2E_ADMIT_CYCLES = 4
 E2E_IMMEDIATE_BRAKE = -1.5
 E2E_IMMEDIATE_SPEED = 2.5
+# Mode-change blend (7 Nov 2026). After admission, the model's restraint fades in over E2E_BLEND_IN_S and out over
+# E2E_BLEND_OUT_S on an S-curve, so a change between Chill and Experimental is never a step in the request. Braking
+# that matters skips the fade: a stop, an FCW, a forced stop, launch speed, or the model asking for E2E_URGENT_BRAKE.
+E2E_BLEND_IN_S = 0.8
+E2E_BLEND_OUT_S = 1.2
+E2E_URGENT_BRAKE = -1.0
 
 A_CRUISE_MAX_VALS = [1.6, 1.2, 0.8, 0.6]
 A_CRUISE_MAX_BP = [0., 10.0, 25., 40.]
@@ -89,28 +95,41 @@ def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, angle_steers, CP, dt, 
                      *, a_target_prev: float | None = None, set_speed_comfort: bool = False, set_speed_comfort_scale: float = 1.,
                      set_speed_slowing: bool = False, profile_owned: bool = False,
                      transition=None, transition_now_ns=0, transition_enabled=False, transition_protected=False, curve_deceleration=None,
-                     curve_response=None, curve_active=False, curve_response_enabled=False, curve_other_accel=math.inf):
+                     curve_response=None, curve_active=False, curve_response_enabled=False, curve_other_accel=math.inf,
+                     e2e_weight: float | None = None):
   positive_comfort = bool(set_speed_comfort and not profile_owned and v_cruise > v_ego)
-  max_accel = ACCEL_MAX if e2e else get_max_accel(v_ego)
-  if selected_acceleration_max is not None and not e2e:
-    max_accel = selected_acceleration_max
-  if profile is not None:
-    max_accel = min(max_accel, profile.acceleration_max, ACCEL_MAX)
 
-  if selected_acceleration_max is not None:
-    max_accel = min(max_accel, selected_acceleration_max, ACCEL_MAX)
+  def cruise_limits(experimental: bool) -> tuple[float, float]:
+    limit = ACCEL_MAX if experimental else get_max_accel(v_ego)
+    if selected_acceleration_max is not None and not experimental:
+      limit = selected_acceleration_max
+    if profile is not None:
+      limit = min(limit, profile.acceleration_max, ACCEL_MAX)
 
-  # Transient steering/throttle holds do not complete an acquired recovery.
-  recovery_max_accel = max_accel
-  if not e2e:
-    a_total_max = np.interp(v_ego, _TAKEOFF_TOTAL_BP, _TAKEOFF_TOTAL_MAX) if faster_takeoffs else np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
-    a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
-    a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
-    max_accel = min(max_accel, a_x_allowed)
-    if not allow_throttle:
-      clipped_accel_coast = max(accel_coast, ACCEL_MIN)
-      coast_limit = np.interp(v_ego, [MIN_ALLOW_THROTTLE_SPEED, MIN_ALLOW_THROTTLE_SPEED*2], [max_accel, clipped_accel_coast])
-      max_accel = min(max_accel, coast_limit)
+    if selected_acceleration_max is not None:
+      limit = min(limit, selected_acceleration_max, ACCEL_MAX)
+
+    # Transient steering/throttle holds do not complete an acquired recovery.
+    recovery = limit
+    if not experimental:
+      a_total_max = np.interp(v_ego, _TAKEOFF_TOTAL_BP, _TAKEOFF_TOTAL_MAX) if faster_takeoffs else np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
+      a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
+      a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
+      limit = min(limit, a_x_allowed)
+      if not allow_throttle:
+        clipped_accel_coast = max(accel_coast, ACCEL_MIN)
+        coast_limit = np.interp(v_ego, [MIN_ALLOW_THROTTLE_SPEED, MIN_ALLOW_THROTTLE_SPEED*2], [limit, clipped_accel_coast])
+        limit = min(limit, coast_limit)
+    return float(limit), float(recovery)
+
+  weight = float(e2e_weight) if e2e_weight is not None and math.isfinite(e2e_weight) else (1. if e2e else 0.)
+  weight = min(max(weight, 0.), 1.)
+  if weight <= 0. or weight >= 1.:
+    max_accel, recovery_max_accel = cruise_limits(weight >= 1.)
+  else:
+    (chill_max, chill_recovery), (exp_max, exp_recovery) = cruise_limits(False), cruise_limits(True)
+    max_accel = chill_max + weight * (exp_max - chill_max)
+    recovery_max_accel = chill_recovery + weight * (exp_recovery - chill_recovery)
 
   cruise_min = max(ACCEL_MIN, -profile.cruise_brake_magnitude) if profile is not None else max(ACCEL_MIN, base_brake_floor)
   if cruise_brake_floor is not None:
@@ -180,6 +199,9 @@ class LongitudinalPlanner:
     self.e2e_admitted: bool | None = None  # None: no mode history yet, adopt the published mode without a hold
     self.e2e_proposal_cycles = 0
     self.e2e_blip_log_ns = 0
+    self.e2e_phase: float | None = None  # mode-change blend position, 0 = Chill, 1 = Experimental
+    self.e2e_weight = 0.
+    self.e2e_blend_from: float | None = None
 
     self.v_desired_filter = FirstOrderFilter(init_v, 2.0, self.dt)
     self.a_cruise = init_a
@@ -433,6 +455,10 @@ class LongitudinalPlanner:
     e2e_admitted = self.admit_e2e(bool(sm['selfdriveState'].experimentalMode), reset_state=reset_state, v_ego=float(v_ego),
                                   model_accel=float(output_a_target_e2e), model_stop=bool(output_should_stop_e2e),
                                   now_ns=sample_now_ns)
+    e2e_weight = self.blend_e2e(e2e_admitted, reset_state=reset_state, v_ego=float(v_ego),
+                                model_accel=float(output_a_target_e2e), model_stop=bool(output_should_stop_e2e),
+                                now_ns=sample_now_ns)
+    e2e_active = e2e_weight >= 0.5  # yes/no consumers follow the blend's midpoint
 
     relevant_lead = any(braking_lead_relevant(lead, v_ego) for lead in
                         (sm['radarState'].leadOne, sm['radarState'].leadTwo))
@@ -550,7 +576,7 @@ class LongitudinalPlanner:
                           if curve.effective_mps is not None and not reset_state and profile_eligible and
                           (coast_plan is None or coast_plan.brake_floor is None and not coast_plan.force_decel) and
                           not self.force_stop_plan.forcing else None)
-    self.a_cruise = get_cruise_accel(e2e_admitted, v_cruise, v_ego,
+    self.a_cruise = get_cruise_accel(e2e_active, v_cruise, v_ego,
                                      self.a_cruise, steer_angle_without_offset, self.CP, self.dt,
                                      accel_coast, self.allow_throttle, cruise_profile, slc_floor,
                                      base_brake_floor=global_floor, selected_acceleration_max=selected_acceleration, faster_takeoffs=faster_takeoffs,
@@ -560,7 +586,8 @@ class LongitudinalPlanner:
                                      curve_deceleration=curve_deceleration,
                                      curve_response=self.curve_response,
                                      curve_other_accel=min(float(output_a_target_mpc), float(output_a_target_e2e) if
-                                       e2e_admitted else math.inf),
+                                       e2e_active else math.inf),
+                                     e2e_weight=e2e_weight,
                                      curve_active=bool(curve.effective_mps is not None and v_cruise == curve.effective_mps and
                                        curve_ceiling is not None and curve_ceiling.apex_speed_mps is not None),
                                      curve_response_enabled=bool(profile_eligible and not reset_state and
@@ -604,15 +631,20 @@ class LongitudinalPlanner:
     gap_mpc_target = self.lane_change_gap.comfort_target(
       float(output_a_target_mpc), cruise=float(self.a_cruise), previous=float(a_prev),
       positive_jerk=float(np.interp(v_ego, A_CRUISE_MAX_BP, J_CRUISE_VALS)),
-      experimental=bool(e2e_admitted and output_a_target_e2e < 0.),
+      experimental=bool(e2e_admitted and output_a_target_e2e < 0.),  # a protective veto: admission, not the blend
       blocked=bool(gap_vetoes), block_reasons=gap_vetoes)
     candidates = [(gap_mpc_target, self.mpc.source, output_should_stop_mpc),
                   (self.a_cruise, LongitudinalPlanSource.cruise, cruise_should_stop)]
-    if e2e_admitted:
-      candidates.append((output_a_target_e2e, LongitudinalPlanSource.e2e, output_should_stop_e2e))
 
     mpc_source = self.mpc.source
     output_a_target, self.mpc.source, _ = min(candidates, key=lambda c: c[0])
+    # The model's restraint enters with the blend weight: at 1 this is exactly the old minimum, at 0 it is Chill.
+    if e2e_weight > 0. and output_a_target_e2e < output_a_target:
+      output_a_target = output_a_target + e2e_weight * (output_a_target_e2e - output_a_target)
+      if e2e_active:
+        self.mpc.source = LongitudinalPlanSource.e2e
+    if e2e_admitted:
+      candidates.append((output_a_target_e2e, LongitudinalPlanSource.e2e, output_should_stop_e2e))
     # While the lane-change Chill window is open, release braking at 2 m/s^3 and rise at cruise jerk; never lower.
     output_a_target = self.lane_change_chill.shape(
       float(output_a_target), previous=float(a_prev), dt=self.dt,
@@ -621,7 +653,7 @@ class LongitudinalPlanner:
     # an equal or lower SLC ceiling retain their own attribution.
     self.last_curve_ceiling_applied = (curve.effective_mps is not None and v_cruise == curve.effective_mps and
                                       not self.force_stop_plan.forcing and not sm["controlsState"].forceDecel and self.a_cruise < output_a_target_mpc and
-                                      (not e2e_admitted or self.a_cruise < output_a_target_e2e))
+                                      (not e2e_active or self.a_cruise < output_a_target_e2e))
     self.output_should_stop = self.force_stop_plan.should_stop or any(should_stop for _, _, should_stop in candidates)
     if conditional_handoff is None:
       self.experimental_release.reset()
@@ -725,6 +757,30 @@ class LongitudinalPlanner:
       cloudlog.event('lane_change_gap', **lane_gap_diagnostic)
 
     self.v_desired_filter.x = self.v_desired_filter.x + self.dt * (self.output_a_target + a_prev) / 2.0
+
+  def blend_e2e(self, admitted: bool, *, reset_state: bool, v_ego: float, model_accel: float, model_stop: bool,
+                now_ns: int) -> float:
+    """Move the mode-change blend towards the admitted mode; return the model's weight (0 Chill .. 1 Experimental)."""
+    if reset_state or self.e2e_phase is None:
+      self.e2e_phase = 1. if admitted else 0.
+    elif admitted:
+      urgent = (model_stop or self.fcw or self.force_stop_plan.forcing or v_ego <= E2E_IMMEDIATE_SPEED or
+                model_accel <= E2E_URGENT_BRAKE)
+      self.e2e_phase = 1. if urgent else min(1., self.e2e_phase + self.dt / E2E_BLEND_IN_S)
+    else:
+      self.e2e_phase = max(0., self.e2e_phase - self.dt / E2E_BLEND_OUT_S)
+    p = self.e2e_phase
+    weight = p * p * (3. - 2. * p)
+    # One event per blend, logged when it starts, for drive reviews.
+    moving = 0. < p < 1.
+    if moving and self.e2e_blend_from is None:
+      self.e2e_blend_from = self.e2e_weight
+      cloudlog.event('longitudinal.mode_blend', towards='experimental' if admitted else 'chill', v_ego=round(v_ego, 2),
+                     model_accel=round(model_accel, 3))
+    elif not moving:
+      self.e2e_blend_from = None
+    self.e2e_weight = weight
+    return weight
 
   def admit_e2e(self, experimental: bool, *, reset_state: bool, v_ego: float, model_accel: float, model_stop: bool,
                 now_ns: int) -> bool:
