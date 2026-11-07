@@ -33,6 +33,7 @@ from openpilot.starpilot.ui.rainbow_path import RainbowPath
 from openpilot.starpilot.ui.road_colors import edge_gradient, lane_color, path_mode, solid_gradient
 from openpilot.starpilot.ui.onroad_customization import ROAD_COLORS
 from openpilot.system.ui.lib.shader_polygon import Gradient, draw_polygon
+from openpilot.starpilot.lateral.lane_feedback import MAX_CORRECTION as LANE_CAP  # Dom's fixed lane correction cap
 
 
 CEM_SCENE_REASONS = {"cem_stop_light": "STOP LIGHT", "cem_lead": "LEAD", "cem_curve": "CURVE"}
@@ -100,7 +101,7 @@ def sample_state(scene: str, document: dict) -> OnroadState:
                      longitudinal_active=longitudinal, stock_cruise_active=False,
                      lead_detected=True, gas_pressed_override=scene == 'slc_pedal',
                      slc_system_long_available=longitudinal, slc_wheel_confirmation_available=longitudinal, torque_utilization=0.78 if lateral else 0.0,
-                     customization=document, lane_correction=.0009 if lateral else 0., lane_correction_limit=.0018,
+                     customization=document, lane_correction=LANE_CAP / 2 if lateral else 0., lane_correction_limit=LANE_CAP,
                      slc_prompt_open=scene == 'slc_pending',
                      visual_preview=OnroadVisualPreview(cem_reason=CEM_SCENE_REASONS.get(scene), layout_sample=True))
 

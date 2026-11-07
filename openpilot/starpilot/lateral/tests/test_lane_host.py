@@ -68,6 +68,8 @@ def probe(output, reference_method=None):
     control.lane_change_preferences = LiveLaneChangePolicy(control.params, now_ns=1_000_000_000)
     control.lane_change_policy = control.lane_change_preferences.applied
     control.lane_change_smoother = LaneChangeSmoother()
+    from openpilot.starpilot.longitudinal.lane_change_gap import LaneChangePace  # StarPilot local: lane-change pace
+    control.lane_change_pace = LaneChangePace()
     control.torque_host = None  # Explicit feature-off state for the manually constructed Controls fixture.
     control.torque_learning_allowed = False
     control.longitudinal_inputs.gm_start_enabled = False

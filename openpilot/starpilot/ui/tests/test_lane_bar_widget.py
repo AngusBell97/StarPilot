@@ -53,7 +53,7 @@ def test_projection_optional_migration_and_independent_placement(viewport):
   assert default_document()['layouts']['large'][KEY]['enabled'] is False
 
 
-def draw(profile,document=None,*,torque=0,correction=.0009,limit=.0018,viewport=None,**changes):
+def draw(profile,document=None,*,torque=0,correction=.0006,limit=.0012,viewport=None,**changes):
   if document is None:
     document=default_document();document['layouts'][profile][KEY]['enabled']=True
   state=replace(sample_state('engaged',document),**(dict(camera_available=True,visual_preview=None,lane_correction=correction,lane_correction_limit=limit)|changes))
@@ -89,7 +89,7 @@ def test_fixed_track_has_independent_placement_and_fits_its_editor_box(profile):
   assert base[0][1].a==63 and base[1][1].a==229
 
 
-@pytest.mark.parametrize('cap',[.0012,.0018,.0024])
+@pytest.mark.parametrize('cap',[.0012])  # Dom's lane centring: one fixed cap
 @pytest.mark.parametrize('fraction',[-1,-.25,.25,1])
 def test_live_cap_and_signed_fill_unchanged(cap,fraction):
   calls,texts=draw('compact',correction=cap*fraction,limit=cap)
