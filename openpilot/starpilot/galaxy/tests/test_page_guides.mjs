@@ -30,7 +30,7 @@ assert.deepEqual(layout(laneRows()), [
     "5 Nudgeless delay=0.2 sub", "6 Minimum adjacent lane width=0 sub", "2 Minimum lane-change speed=5", "7 Close lane-change gap=Off",
     "8 Lane-change follow gap=0.75 grey sub", "11 Faster lane change when close=Off grey sub"], ["Turn Signal Guidance"]],
 ], "rows keep their device positions (saving goes by position); the greyed stand-in for Faster comes after them")
-assert.match(guidedRows("lane_change", laneRows()).find(r => r.label === "Close lane-change gap").reason, /^For overtaking a slower car: works only when you pull out/)
+assert.match(guidedRows("lane_change", laneRows()).find(r => r.label === "Close lane-change gap").reason, /^When you signal to overtake, the car stops dropping back/)
 
 // Signal lane detection / width live under Experimental conditions: hidden here, shown there as Lane Changes rows.
 assert.deepEqual(PAGE_HIDDEN_ROWS.lane_change, ["Signal lane detection", "Signal lane width"])
@@ -84,7 +84,7 @@ assert.match(SettingsPage.template, /<template v-if="card\.guide && card\.title"
 
 // Speed text follows the device's units.
 assert.match(guidedRows("lane_change", laneRows({ "Minimum lane-change speed": { unit: "km/h" } }))
-  .find(r => r.label === "Minimum lane-change speed").reason, /start from 32 km\/h/)
+  .find(r => r.label === "Minimum lane-change speed").reason, /from 32 km\/h while Turn Signal Guidance is on/)
 
 // Nothing disappears: a row the guide does not know goes to "More settings" (first when it is a repair).
 assert.deepEqual(layout([...laneRows(), row("A new Dom setting", "Off")]).at(-1), ["More settings", ["11 A new Dom setting=Off"]])

@@ -8,10 +8,10 @@ from openpilot.starpilot.ui.feature_settings_state import SLC_OFFSET_KEYS
 from openpilot.starpilot.conditional_mode.ccm_page import HELP_BY_LABEL as CCM_HELP_BY_LABEL
 
 DESCRIPTIONS = {
-  'DisengageOnAccelerator': 'When enabled, pressing the accelerator pedal will disengage openpilot.',
+  'DisengageOnAccelerator': 'Pressing the accelerator disengages openpilot.',
   'ReduceMotion': 'Reduces interface animations for a steadier display.',
-  'IsMetric': "The comma's own speed units. Metric shows km/h on the driving screen; Imperial uses mph. The comma's settings use these units, distances on the driving screen follow Comma distance units, and saved speed-limit offsets keep their real meaning.",
-  'IsRhdDetected': 'Sets the initial steering-wheel side used by driver monitoring. Applies next drive; automatic side detection continues.',
+  'IsMetric': 'km/h or mph on the comma.',
+  'IsRhdDetected': 'Which side the steering wheel is on, for driver monitoring.',
   'lane_change:turn_signal_guidance': 'Uses your turn signal to help the model choose a turning path at intersections.',
   'AlphaLongitudinalEnabled': ('Requests StarPilot speed control instead of factory ACC. May disable Automatic Emergency Braking. ' +
                               'Applies after the next startup; exact vehicle takeover checks remain required.'),
@@ -26,16 +26,16 @@ DESCRIPTIONS = {
   'lane_change:close_gap_fast_pace': 'Temporarily uses Lane Change Speed 10 when starting an eligible close approach, based on gap and closing speed. Your saved speed and steering limits stay unchanged.',
   'lane_change:close_gap_seconds': 'Sets the minimum following-time reserve for preparation and early-response checks. Closing speed and lead braking may require more space; both detected leads remain protected.',
   'lane_change:reset': 'Restores the default lane-change assistance, signal timing, pace and gap settings.',
-  'LaneCentering': 'Uses detected lane lines to help keep the vehicle centered in its lane.',
-  'LaneCenteringPauseOnSignal': 'Pauses lane-centering correction while a turn signal is on.',
-  'LaneCenterOffset': 'Moves the lane-centering target left or right of the detected lane center.',
-  'LaneCenteringE2EAuthority': 'Lets a confident driving-model path reduce lane-centering correction when the model path differs from the lane center.',
-  'LaneCenteringStrength': 'Set how much correction lane centering requests. Higher values request more correction; lower values request less. Strength controls the amount requested, while Correction response time controls how quickly it changes. Increasing strength does not raise the maximum correction limit.',
-  'PauseLateralSpeed': 'Pauses steering assistance below this speed. Zero disables the speed-based pause.',
-  'PauseLateralOnSignal': 'Limits the low-speed steering pause to times when a turn signal is on.',
-  'LateralResumeDelay': 'Waits before resuming steering after signaling ends, if speed fell below half the steering-pause threshold.',
-  'AlwaysOnLateral': 'Keeps steering assistance available independently of cruise control on supported vehicles.',
-  'AolBrakePauseSpeedMps': 'Pauses Always On Lateral during braking below this speed. Zero disables this brake-speed pause.',
+  'LaneCentering': 'Steers toward the centre of the lane using the lane lines.',
+  'LaneCenteringPauseOnSignal': 'Stops centring while a turn signal is on.',
+  'LaneCenterOffset': 'Shifts the target left or right of the lane centre.',
+  'LaneCenteringE2EAuthority': 'Higher lets a confident driving-model path override centring more.',
+  'LaneCenteringStrength': 'How much correction centring adds. Higher is stronger.',
+  'PauseLateralSpeed': 'Pauses steering below this speed. 0 turns this off.',
+  'PauseLateralOnSignal': 'Only pause below that speed while a turn signal is on.',
+  'LateralResumeDelay': 'Waits this long after the signal ends before steering resumes.',
+  'AlwaysOnLateral': 'Keeps steering on when cruise control is off.',
+  'AolBrakePauseSpeedMps': 'Pauses steering while braking below this speed. 0 turns this off.',
   'NostalgiaMode': 'Lets the Ioniq 5 or Ioniq 6 left paddle pause acceleration and braking while Always On Lateral keeps steering.',
   'TurnAssist': 'Uses steering-angle feedback to assist rolling low-speed turns above the vehicle minimum steering speed.',
   'LateralControllerSelection': 'Chooses the stock steering controller or the vehicle-specific StarPilot controller.',
@@ -44,37 +44,32 @@ DESCRIPTIONS = {
   'torque_prepare_firestar': 'Prepares steering settings for a tuning-request recording. Turning it off restores the previous settings.',
   'SteerLatAccel': 'Sets the legacy lateral-acceleration-to-torque conversion. Review the vehicle-specific tuning profile before applying it.',
   'SteerFriction': 'Sets legacy steering friction compensation. Review the vehicle-specific tuning profile before applying it.',
-  'UseStarPilotLongitudinalPlanner': ("On uses StarPilot's planner, which runs Speed Limit Controller, Curve Speed Controller, Force Stop, " +
-    "driving profile tuning and the other StarPilot speed features. Off uses comma's stock openpilot planner: " +
-    "those features stop working, but Conditional Driving Modes still runs."),
+  'UseStarPilotLongitudinalPlanner': ("On: StarPilot's planner, which runs Speed Limit Controller, Curve Speed Controller, Force Stop " +
+                                        "and profile tuning. Off: comma's stock planner without them."),
   'CustomCruise': 'Sets how much a short cruise-button press changes the set speed.',
   'CustomCruiseLong': 'Sets how much holding a cruise button changes the set speed.',
   'ReverseCruise': 'Swaps the Toyota short-press and held-press cruise-speed increments.',
-  'ForceStops': 'Commits to stops detected by the driving model. Press the accelerator to continue.',
-  'ForceStopDistanceOffset': 'Moves the planned stopping point. Positive values stop farther forward; negative values stop earlier.',
-  'LeadApproachBuffer': 'Gradually adds following distance when approaching a slower or braking lead vehicle.',
-  'ExperimentalSpeedNudge': ('Gently recovers toward set speed when Experimental mode hesitates on a clear road. ' +
-                            'Leads, stops, curve limits and driver overrides retain priority.'),
-  'FasterLeadTakeoff': ('Improves launches from a stop and responds sooner when a lead starts moving. ' +
-                        'Selected acceleration profiles, stop detection and vehicle limits still apply.'),
+  'ForceStops': 'Stops for stops the driving model sees. Press the accelerator to go.',
+  'ForceStopDistanceOffset': 'Moves where the car stops. Positive stops further forward; negative stops earlier.',
+  'LeadApproachBuffer': 'Adds following distance when closing on a slower or braking car.',
+  'ExperimentalSpeedNudge': ('Eases Experimental back up to your set speed when it hesitates on a clear road.'),
+  'FasterLeadTakeoff': ('Pulls away from a stop sooner and quicker when the car ahead moves.'),
   'CustomPersonalities': 'Uses your following-time and jerk settings for the selected driving personality.',
-  'profile:stopped_gap': 'Adds this distance to the following gap behind a stopped lead vehicle.',
-  'profile:global_acceleration': ("Sets the acceleration curve for every driving personality. A personality's own Acceleration " +
-    "preset in Driving Personalities overrides it; personalities left on Selected Profile use this one."),
-  'profile:global_braking': ("Sets the braking response for every driving personality. A personality's own Braking " +
-    "preset in Driving Personalities overrides it; personalities left on Selected Profile use this one."),
+  'profile:stopped_gap': 'Extra gap to leave behind a stopped car.',
+  'profile:global_acceleration': ('Acceleration for every personality, unless its own Acceleration preset overrides it.'),
+  'profile:global_braking': ('Braking for every personality, unless its own Braking preset overrides it.'),
   'reset_profiles': 'Restores the default acceleration, braking and following curves and presets.',
-  'CurveSpeedController': 'Adjusts cruise speed for curves ahead using available learned cornering preferences.',
-  'CurveSpeedControllerNoLead': 'Pauses curve-speed adjustments while following a lead vehicle.',
-  'ShowCSCStatus': 'Shows when Curve Speed Controller is adjusting speed on the driving screen.',
-  'curve_reset': 'Deletes saved cornering learning so Curve Speed Controller can learn your preferences again.',
+  'CurveSpeedController': 'Slows for curves ahead, using what it has learned about how you corner.',
+  'CurveSpeedControllerNoLead': "Doesn't slow for curves while following a car.",
+  'ShowCSCStatus': 'Shows on the driving screen when CSC is slowing.',
+  'curve_reset': 'Deletes what CSC has learned so it starts again.',
   'SpeedLimitController': 'Adjusts the set speed to accepted speed limits using your source priority and offsets.',
   'ShowSpeedLimits': 'Shows recognized speed-limit signs on the driving screen.',
   'SLCConfirmation': 'Auto adopts new limits immediately. With Automatic adoption off, + accepts and − declines within 10 seconds.',
   'SLCAdvanceSeconds': 'Offers mapped limits early using road distance and current speed. Existing adoption and confirmation settings still apply.',
-  'SLCPriority1': 'Chooses the first source checked for a fresh speed limit.',
-  'SLCPriority2': 'Chooses the source used when the primary source has no fresh speed limit.',
-  'slc_reset': 'Resets saved speed-limit offsets while retaining valid configured speed ranges.',
+  'SLCPriority1': 'Checked first for the speed limit.',
+  'SLCPriority2': 'Used when the primary source has no limit.',
+  'slc_reset': 'Sets every offset back to zero.',
   'reset_calibration': 'Clears saved camera and steering calibration. The device recalibrates on the next drive.',
   'reset_driver_monitoring': 'Clear saved wheel-side detection. Automatic detection restarts on the next drive.',
   'AlwaysAllowUploads': 'Allows queued full logs and videos to upload over metered networks. This uses mobile data.',
@@ -103,10 +98,10 @@ DESCRIPTIONS = {
   'TeslaWakeOnCAN': 'Wakes comma when the Tesla wakes up, before you press the brake.',
   'RadarRecoveryAlert': 'Play a chime and show a brief message when a radar fault clears. You must re-engage manually.',
   'CameraView': 'Chooses the camera view shown on the driving screen.',
-  'DeveloperSidebar': 'Shows live developer metrics on the right of the Big driving screen. Off gives that space back to the road view.',
+  'DeveloperSidebar': 'Live developer metrics on the right of the Big layout.',
   'DriverCamera': 'Shows the driver camera while reversing.',
   'StockConfidenceBallWidget': 'Uses StarPilot driving widgets in place of the stock confidence ball.',
-  'HidePersonalityAlerts': 'Hides the alert shown when the driving personality changes on the comma and Android Auto.',
+  'HidePersonalityAlerts': 'Hides the alert when the driving personality changes.',
   'ShowBrakeStatus': 'Colors the steering wheel to show braking and acceleration.',
   'HideLeadMarker': 'Shows the lead-vehicle indicator on the driving screen.',
   'LeadInfo': 'Shows the lead vehicle distance or speed beside its indicator.',
@@ -146,7 +141,7 @@ DESCRIPTIONS = {
   'sentry:sensitivity': 'Sets how large an acceleration change must be to count as parked motion. Lower values detect smaller changes.',
   'sentry:warning': 'Sets how long detected motion must persist before a warning is recorded.',
   'sentry:reset': 'Turns off parked motion monitoring and restores its sensitivity and warning persistence defaults.',
-  'conditional:mode': 'Chooses Chill, Experimental or automatic switching based on the configured driving conditions.',
+  'conditional:mode': 'Chill, Experimental, or switch automatically using the conditions below.',
   'conditional:reset': 'Restores the default conditional driving-mode settings.',
   'conditional:manual_reset': 'Returns both remembered manual driving-mode choices to Automatic.',
   'FordPrefLateralControl': ('Chooses BluePilot Curvature, BluePilot Angle or StarPilot Controller. Mach-E and classic Explorer' +
@@ -194,18 +189,18 @@ INITIALIZATION = {
 CONDITIONS = {
   'speed_mps': 'Sets the speed threshold for automatic mode switching without a tracked lead vehicle.',
   'speed_with_lead_mps': 'Sets the speed threshold for automatic mode switching while tracking a lead vehicle.',
-  'signal_speed_mps': 'Requests Experimental below this speed while signaling, subject to the configured adjacent-lane check.',
-  'open_road': 'Requests Experimental on an open road without a tracked lead. On Tesla Model 3/Y, entry needs 2 seconds at set speed with a fresh model that is not braking or stopping. Returns to Chill after more than 1 mph below set speed for over 2 seconds, or after stable following for 0.5 seconds. Other CEM conditions still apply.',
-  'curves': 'Requests Experimental for curves without a tracked lead vehicle.',
-  'curves_with_lead': 'Requests Experimental for curves while tracking a lead vehicle.',
+  'signal_speed_mps': 'Experimental below this speed while signalling for a turn.',
+  'open_road': 'Experimental on an open road with no car ahead.',
+  'curves': 'Experimental for bends with no car ahead.',
+  'curves_with_lead': 'Also uses Experimental for bends when following a car. Needs Curves on.',
   'lead': 'Uses a tracked lead vehicle as a condition for automatic mode switching.',
-  'slower_lead': 'Requests Experimental when approaching a slower lead vehicle.',
-  'stopped_lead': 'Requests Experimental for a detected stopped lead vehicle.',
-  'stop_lights': 'Requests Experimental for detected traffic lights and stop scenes.',
-  'model_stop_s': 'Sets how far ahead in time to look for a stop predicted by the driving model.',
-  'signal_lane_detection': ('Distinguishes a turn from a lane change using the space beside the car. A signal ' +
-    'requests Experimental only when no adjacent lane is detected.'),
-  'signal_lane_width_m': 'Sets the minimum adjacent width that counts as a lane when distinguishing a turn from a lane change.',
+  'slower_lead': 'Experimental when closing on a slower car. Needs Lead vehicle on.',
+  'stopped_lead': 'Experimental for a stopped car ahead. Needs Lead vehicle on.',
+  'stop_lights': 'Experimental for traffic lights and stops.',
+  'model_stop_s': ('How far ahead, in seconds, to look for a stop the model predicts. 0 turns this off. Needs Stop ' +
+                    'lights on.'),
+  'signal_lane_detection': ("Treats a signal as a turn only when there's no lane beside the car."),
+  'signal_lane_width_m': 'Narrowest gap that counts as a lane for that check.',
   'set_speed_margin_mps': 'Sets the margin below cruise speed required before Conditional Chill selects Chill.',
   'launch_assist': 'Temporarily selects Chill when a tracked lead moves away from a stop and the launch conditions are met.',
   'allow_chill_in_bends': 'Lets an otherwise eligible Chill request continue through bends instead of returning to Experimental.',
@@ -216,7 +211,7 @@ CONDITIONS = {
     'once the gap closes or the lead stops pulling away.'),
   'use': 'Chooses what Conditional Chill uses Chill for: climbing to the set speed, or the classic speed and lead conditions.',
   'after_bend': 'Chooses when Chill may bring the speed back after Experimental has slowed for a bend.',
-  'persist_manual': 'Remembers your manual driving-mode choice across drives. Changing this setting resets that choice to Automatic.',
+  'persist_manual': 'Keeps your manual mode choice across drives.',
 }
 
 
@@ -333,7 +328,7 @@ FLM_DESCRIPTIONS = {
 
 def purpose(row):
   key = row.key
-  if key == "SpeedLimitController" and row.reason.startswith("On uses an independent comma set speed"):
+  if key == "SpeedLimitController" and row.reason.startswith("On: StarPilot sets the speed from the speed limit"):
     return row.reason
   if key in DESCRIPTIONS:
     return DESCRIPTIONS[key]
@@ -345,10 +340,10 @@ def purpose(row):
     section, field = key.split(':')[1:]
     if field in ('speed_mps', 'speed_with_lead_mps'):
       direction, mode = ('below', 'Experimental') if section == 'cem' else ('at or above', 'Chill')
-      lead = 'while following a lead' if field == 'speed_with_lead_mps' else 'without a tracked lead'
-      return f'Requests {mode} {direction} this speed {lead}, when the remaining driving conditions qualify.'
+      lead = 'when following a car' if field == 'speed_with_lead_mps' else 'with no car ahead'
+      return f'{mode} {direction} this speed {lead}.'
     if field == 'lead':
-      return ('Requests Experimental when a qualified slower lead is detected.' if section == 'cem' else
+      return ('Experimental for a slower or stopped car ahead (choose which below).' if section == 'cem' else
               'Allows Chill while following a qualified stable lead above the lead-speed threshold.')
     return CONDITIONS.get(key.rsplit(':', 1)[-1])
   if key.startswith('profile:'):
@@ -357,17 +352,17 @@ def purpose(row):
     if category in CATEGORY_HELP:
       if len(parts) == 3:
         return CATEGORY_HELP[category]
-      return {'following': 'Sets following time at this speed. Higher values leave more space.',
-              'acceleration': 'Sets the acceleration limit at this speed. Higher values allow stronger acceleration.',
-              'braking': 'Sets braking response at this speed. Higher values allow stronger braking.'}[category]
+      return {'following': 'Following time at this speed. Higher leaves more space.',
+              'acceleration': 'Acceleration limit at this speed. Higher is stronger.',
+              'braking': 'Braking limit at this speed. Higher is stronger.'}[category]
   if key.startswith(('Aggressive', 'Standard', 'Relaxed', 'Traffic')):
     if key == 'TrafficFollow':
-      return 'Sets following time at low speeds in Traffic mode, blending toward Relaxed as speed rises.'
+      return 'Following time in slow traffic. Blends to Relaxed as speed rises.'
     suffix = next((name for name in VALUE_HELP if key.endswith(name)), None)
     value = VALUE_HELP.get(suffix)
-    return value + ' Blends toward Relaxed as speed rises in Traffic mode.' if value and key.startswith('Traffic') else value
+    return value + ' Blends to Relaxed as speed rises.' if value and key.startswith('Traffic') else value
   if key in SLC_OFFSET_KEYS:
-    return 'Adds or subtracts this offset from the accepted speed limit within the displayed speed range.'
+    return 'Added to the speed limit in this speed range. Negative goes under.'
   if key.startswith('long_repair:'):
     return 'Restores the default value of this invalid longitudinal setting.'
   if key.startswith('long_reset:'):
@@ -410,12 +405,10 @@ def description(row):
   base = purpose(row)
   if base is None:
     return row.reason
-  if row.key.startswith('conditional:ccm:') and row.label in CCM_HELP_BY_LABEL:
-    # The row's help is the purpose already; only a greyed row's reason ("Turn on ...") is added.
+  if (row.key.startswith('conditional:ccm:') and row.label in CCM_HELP_BY_LABEL) or row.key.startswith('conditional:cem:'):
+    # The purpose already says what the row does; only a greyed row's reason ("Turn on ...") is added.
     return base if row.available or row.reason == base else ' '.join((base, row.reason))
   suffix = INITIALIZATION.get(row.key, '')
-  if row.key.startswith('lane_change:') and row.key not in ('lane_change:close_gap', 'lane_change:close_gap_seconds', 'lane_change:reset'):
-    suffix = 'Changes apply when the current signal and maneuver end; turning assistance off cancels it after the preference refresh.'
   if row.key.startswith('torque:surface:'):
     suffix = row.reason.strip()
     if row.key != 'torque:surface:reset':

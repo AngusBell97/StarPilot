@@ -20,20 +20,19 @@ PRESET_LABELS = {"selected_profile": "Selected Profile","dom_default": "StarPilo
 VALUE_HELP = {
   "Follow": "Following time below 45 mph; higher values leave more space. Blends toward the high-speed value by 70 mph.",
   "FollowHigh": "Following time above 70 mph; higher values leave more space. A selected following curve takes priority.",
-  "JerkAcceleration": "Resists changes in acceleration while speeding up. Higher values favor smoother changes; 100% is the base weight.",
-  "JerkDeceleration": "Resists changes in acceleration while slowing down. Higher values favor smoother changes; 100% is the base weight.",
-  "JerkSpeed": "Smooths acceleration changes while speeding up. Higher values favor gradual responses; 100% is the base weight.",
-  "JerkSpeedDecrease": "Smooths acceleration changes while slowing down. Higher values favor gradual responses; 100% is the base weight.",
-  "JerkDanger": "Weights the planner's penalty for entering a lead vehicle's buffer. Higher values discourage smaller gaps; not a safety limit.",
+  "JerkAcceleration": 'Smooths changes in acceleration when speeding up. Higher is smoother; 100% is normal.',
+  "JerkDeceleration": 'Smooths changes in braking. Higher is smoother; 100% is normal.',
+  "JerkSpeed": 'How gradually speed builds. Higher is more gradual; 100% is normal.',
+  "JerkSpeedDecrease": 'How gradually speed drops. Higher is more gradual; 100% is normal.',
+  "JerkDanger": 'How strongly it avoids closing in on the car ahead. Higher keeps bigger gaps.',
 }
 CATEGORY_HELP = {
-  "acceleration": "Limits acceleration by speed. Comfort is gentler; Sport and Sport+ allow stronger acceleration. " +
-                  "Selected Profile follows the global choice. " +
-                  "An explicit choice overrides it; StarPilot Default keeps vehicle behavior.",
-  "braking": "Comfort/Normal/Sport (m/s²): global 0.6/1.2/2.4; explicit personality 0.5/1.0/2.0. " +
-             "Selected Profile inherits global values. These separate scales preserve existing tuning. " +
-             "StarPilot Default keeps native cruise braking. Lead and stop braking retain priority.",
-  "following": "Sets following time by speed and overrides the low/high-speed values. Default uses those values; higher times leave more space.",
+  "acceleration": ('How hard it accelerates. Comfort is gentler; Sport and Sport+ are stronger. Selected Profile ' +
+                    "uses the Long Planner choice; StarPilot Default keeps the car's own behaviour."),
+  "braking": ('How hard it brakes for speed changes. Comfort is gentler; Sport is stronger. Selected Profile ' +
+               "uses the Long Planner choice; StarPilot Default keeps the car's own braking. Braking for leads " +
+               'and stops is not limited.'),
+  "following": 'Following time by speed; replaces the low- and high-speed follow values. Higher leaves more space.',
 }
 
 

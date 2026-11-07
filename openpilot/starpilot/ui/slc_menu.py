@@ -7,9 +7,9 @@ from openpilot.starpilot.ui.feature_settings_state import FeatureRow
 
 SECTIONS = (
   ("slc/offsets", "Speed-limit offsets", "Offsets for each speed range", frozenset(("slc_reset", *(f"slc:offset:{i}" for i in range(1, 8))))),
-  ("slc/sources", "Limit sources", "Primary and secondary limits; conflicting dashboard fallback waits 5 seconds without Maps", frozenset(("SLCPriority1", "SLCPriority2"))),
-  ("slc/timing", "Timing and confirmation", "Profile-based slowing; mapped zones under 5 seconds are skipped only when both boundaries are known", frozenset(("SLCWarningLeadTime", "SLCLowerLimitTiming", "SLCHigherLimitDistance", "SLCConfirmationLower", "SLCConfirmationHigher"))),
-  ("slc/reengagement", "Manual speed and re-engagement", "Zone recall and engagement speed", frozenset(("SLCRememberManualOffset", "SLCReengageSpeed"))),
+  ("slc/sources", "Limit sources", 'Where speed limits come from', frozenset(("SLCPriority1", "SLCPriority2"))),
+  ("slc/timing", "Timing and confirmation", 'When to slow down or speed up for a new limit', frozenset(("SLCWarningLeadTime", "SLCLowerLimitTiming", "SLCHigherLimitDistance", "SLCConfirmationLower", "SLCConfirmationHigher"))),
+  ("slc/reengagement", "Manual speed and re-engagement", 'Remember and restore your own speed for each limit', frozenset(("SLCRememberManualOffset", "SLCReengageSpeed"))),
 )
 SLC_PAGES = tuple(section[0] for section in SECTIONS)
 

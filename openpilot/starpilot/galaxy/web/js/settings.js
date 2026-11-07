@@ -313,21 +313,21 @@ export const SettingsPage = {
       const page = this.state.data?.page || this.initialPage
       if (pageGuide(page)?.intro) return pageGuide(page).intro
       if (this.state.developerOpen || page === "developer") return "Choose developer driving options and cloud services."
-      if (page === "conditional" || page.startsWith("conditional/")) return "Choose when to switch between Chill and Experimental. Applies on supported vehicles when StarPilot controls acceleration and braking."
-      if (["aggressive", "standard", "relaxed"].includes(page)) return "Adjust acceleration, braking and following for this driving style."
+      if (page === "conditional" || page.startsWith("conditional/")) return "Choose when StarPilot switches between Chill and Experimental."
+      if (["aggressive", "standard", "relaxed"].includes(page)) return "Acceleration, braking and following for this personality."
       if (page === "sentry") return this.state.data?.subtitle || "Checking motion monitor…"
       return {
         pip: "Choose when to show the camera and adjust its saved crop. Use the crop editor for a live preview.",
         sounds: "Adjust alert and chime volumes. Test alert plays on your comma while offroad; Auto previews a quiet-cabin starting level. Immediate warnings keep their safety volume ramp.",
         display: "Adjust brightness and screen timing when custom display settings are on.",
         lane_change: "Configure lane-change assistance, signal timing, steering pace and following gap.",
-        profiles: "Adjust acceleration, braking and following for each driving personality.",
-        traffic: "Tune low-speed following and jerk, blending toward Relaxed at higher speeds.",
-        aol: "Keep steering assistance active independently of cruise control.",
+        profiles: "How StarPilot speeds up, brakes and stops.",
+        traffic: "Following and smoothness in slow traffic. Blends to Relaxed as speed rises.",
+        aol: "Keeps steering on when cruise control is off.",
         torque: "Tune how StarPilot applies steering torque.",
-        lane: "Lane centering uses detected lane lines and road edges to calculate a target position, then compares it with the driving model’s predicted path. It adds a limited, smoothed steering correction to the model’s request to bring the path closer to that target.\n\nWith two suitable boundaries, it aims for the centre between them. With only one, it can add correction away from that boundary when the model path comes too close. The model remains the basis for steering, while model preference controls how much it can reduce the added lane-centering correction.",
-        curve: "Set how the vehicle slows for curves ahead.",
-        slc: "Control how speed limits change your set speed.",
+        lane: "Adds a small steering correction to keep the car centred between the lane lines.",
+        curve: "Slows the car for curves ahead.",
+        slc: "Sets your speed from the speed limit, plus your offsets.",
         wheel: "Assign what the steering-wheel controls do.",
         data: "Choose what uploads when the vehicle uses mobile data.",
       }[page] || ""
