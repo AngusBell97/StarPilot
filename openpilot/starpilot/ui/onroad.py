@@ -22,7 +22,7 @@ from openpilot.starpilot.ui.onroad_customization import (LANE_BAR_WIDGET, CLOCK_
                                                          placement, rgba, widget_order, widget_size)
 from openpilot.starpilot.ui.lead_follow import (follow_state, follow_target_text, follow_time_s, lead_distance_text,
                                                 lead_speed_text, lead_time_text)
-from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice
+from openpilot.starpilot.ui.appearance_preferences import CameraViewChoice, distance_units
 
 from openpilot.starpilot.ui.onroad_alerts import AlertRenderer
 from openpilot.starpilot.ui.onroad_border import render_compact_half_borders, render_large_half_borders
@@ -329,8 +329,7 @@ class OnroadView:
     if key == LEAD_SPEED_WIDGET:
       text = lead_speed_text(lead, state.metric)
     elif key == LEAD_DISTANCE_WIDGET:
-      galaxy_metric = state.appearance.lead_distance_metric
-      text = lead_distance_text(lead, state.metric if galaxy_metric is None else galaxy_metric)
+      text = lead_distance_text(lead, distance_units(state.metric, state.appearance.distance_metric))
     else:
       text = lead_time_text(lead, state.speed_mps)
     if not text:

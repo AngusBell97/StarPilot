@@ -10,6 +10,7 @@ from openpilot.starpilot.ui.feature_settings_state import FeatureRow, FeatureSet
 from openpilot.starpilot.ui.slc_offset_feature import SlcOffsetOwner
 
 
+COMMA_UNITS = ("Metric", "Imperial")
 LANGUAGES = json.loads(files("openpilot.selfdrive.ui").joinpath("translations/languages.json").read_text(encoding="utf-8"))
 
 
@@ -24,13 +25,21 @@ class LocalizationSettingsOwner:
     return self.authorized() and self.parked() and not self.params.get_bool("IsDriverViewEnabled")
 
   def snapshot(self):
-    rows = slider_units.rows(self.params, self.authorized())
+    # Comma speed units: the comma's own setting (Dom's Use Metric), shown as Metric / Imperial. Then comma distance
+    # units and Galaxy's own display units (slider_units).
+    raw, readable = read_saved(self.params, "IsMetric", 8)
+    valid = readable and raw in (None, b"0", b"1")
+    rows = [FeatureRow("IsMetric", "Comma speed units", ("Metric" if raw == b"1" else "Imperial") if valid else "Invalid saved value",
+                       raw, COMMA_UNITS if valid else (), available=valid and self.authorized(), default_value="Imperial",
+                       reason="The comma's own speed units: speed, set speed and limits on the driving screen, and the units of "
+                              "the comma's settings. Saved speed-limit offsets keep their real meaning." if valid else "Invalid saved value")]
+    rows += slider_units.rows(self.params, self.authorized())
     for key, label, reason in (
       ("IsRhdDetected", "Right-Hand Drive", "Sets the initial driver-monitoring side for the next drive. Automatic wheel-side detection continues."),
     ):
       raw, readable = read_saved(self.params, key, 8)
       valid = readable and raw in (None, b"0", b"1")
-      allowed = self.authorized() if key == "IsMetric" else self._wheel_side_allowed()
+      allowed = self._wheel_side_allowed()
       if key == "IsRhdDetected" and not allowed:
         reason = "Park the vehicle and close driver camera preview before changing the steering-wheel side."
       rows.append(FeatureRow(key, label, ("On" if raw == b"1" else "Off") if valid else "Invalid saved value",
@@ -43,7 +52,7 @@ class LocalizationSettingsOwner:
                            available=readable and self.authorized() and self.parked(),
                            reason="Display language for Galaxy and the device. Untranslated text uses English. Park before changing language.",
                            default_value="English"))
-    return FeatureSettingsState("localization", "Localization", "Language for Galaxy and the device; Galaxy slider units only. The comma’s unit setting and driving display stay unchanged.",
+    return FeatureSettingsState("localization", "Localization", "Language, the comma’s units, and how Galaxy shows speeds and distances.",
                                 tuple(rows), self.parked())
 
   def apply(self, request):
@@ -56,10 +65,12 @@ class LocalizationSettingsOwner:
       return result.committed and result.verified
     if request.key in slider_units.SPECS:
       return slider_units.apply(self.params, request, self.authorized)
+    if request.key == "IsMetric":
+      if request.value not in COMMA_UNITS or request.expected not in (None, b"0", b"1") or not self.authorized():
+        return False
+      return self.units.change_units(request.value == "Metric", request.expected)
     if request.value not in ("Off", "On") or request.expected not in (None, b"0", b"1") or not self.authorized():
       return False
-    if request.key == "IsMetric":
-      return self.units.change_units(request.value == "On", request.expected)
     if request.key != "IsRhdDetected" or not self._wheel_side_allowed():
       return False
     result = commit_exact(self.params, key=request.key, max_bytes=8,
