@@ -156,7 +156,7 @@ assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"lane
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"profiles"}}}), /Adjust acceleration, braking and following for each driving personality\./)
 assert.match(SettingsPage.computed.pageDescription.call({state:{data:{page:"traffic"}}}), /Tune low-speed following and jerk, blending toward Relaxed at higher speeds\./)
 const app = (await import('node:fs')).readFileSync(new URL('../web/js/app.js', import.meta.url), 'utf8')
-assert.match(app, /:initial-panel="route\.path === '\/appearance' \? 'display' : 'widgets'"/)
+assert.match(app, / initial-panel="widgets"/) // Visuals has its own settings page; the comma editor opens on Widgets
 const filtered = SettingsPage.computed.visibleRows.call({ state: { query: "lane", data: { rows: [
   { label: "SLC", value: "Off", reason: "" }, { label: "Lane Centering", value: "On", reason: "" },
 ] } } })

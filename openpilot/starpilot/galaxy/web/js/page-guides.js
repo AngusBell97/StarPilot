@@ -8,6 +8,7 @@ const ALLOW = { label: "Allow lane changes", value: "On" }
 // Wheel nudge required is the device's Automatic Lane Changes switch the other way round (nudge required = automatic off).
 const NUDGELESS = { label: "Automatic Lane Changes", value: "On", note: "Turn off Wheel nudge required to use this." }
 const CLOSE_GAP = { label: "Close lane-change gap", value: "On" }
+const SLC = { label: "Speed Limit Controller", value: "On" }
 
 // Row options: help (text or row => text; none keeps the device's text), display (label shown instead of the device's),
 // values (device value → shown value), needs (rows that must have a value, else greyed, with the need's note or
@@ -65,6 +66,33 @@ export const PAGE_GUIDES = Object.freeze({
     rows: [
       { label: "Signal lane detection" },
       { label: "Signal lane width", needs: [{ label: "Signal lane detection", value: "On" }] },
+    ],
+  },
+  // Visuals: the comma screen options, grouped as the layout editor grouped them. Device text, saved straight away.
+  appearance: {
+    intro: "Options for the comma's driving screen. Changes save straight away. Widget positions and colours are on Colors & Layout.",
+    cards: [
+      { id: "big", title: "Big layout", icon: "bi-layout-sidebar-reverse", rows: [{ label: "Developer Sidebar" }] },
+      { id: "widgets", title: "Widgets", icon: "bi-grid", rows: [{ label: "Use StarPilot Widgets" }, { label: "Wheel brake and acceleration colors" }] },
+      { id: "lead", title: "Lead car (Small layout)", icon: "bi-car-front", rows: [{ label: "Lead Indicator" }, { label: "Lead Info" }] },
+      { id: "camera", title: "Camera (Small layout)", icon: "bi-camera-video", rows: [{ label: "Camera View" }, { label: "Driver Camera on Reverse" }] },
+      { id: "alerts", title: "Alerts and borders", icon: "bi-bell", rows: [{ label: "Hide Personality Alerts" }, { label: "C4 amber signal border" },
+        { label: "C4 red blind-spot border" }] },
+    ],
+  },
+  // Speed Limit Controller: what only works while the controller is on is greyed while it is off. Show speed limit signs
+  // and Limit sources stay active (the signs use the sources). The page keeps its own layout and text.
+  slc: {
+    rows: [
+      { label: "Speed-limit offsets", needs: [SLC] },
+      { label: "Timing and confirmation", needs: [SLC] },
+      { label: "Manual speed and re-engagement", needs: [SLC] },
+    ],
+  },
+  "slc/reengagement": {
+    rows: [
+      // The memory is only used when restoring the SLC speed on re-engagement (both must be on).
+      { label: "Remember manual speed for each limit", needs: [{ label: "Restore SLC speed on re-engagement", value: "On" }] },
     ],
   },
   // Turn Signal Guidance is saved with Steering and Torque but shown on Lane Changes (above); only its text changes here.
