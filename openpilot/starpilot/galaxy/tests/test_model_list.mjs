@@ -89,6 +89,19 @@ assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pai
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "pair", pairableFilter: false }), true)
 assert.equal(ModelsPage.computed.showLabVariants.call({ driveMode: "single", pairableFilter: true }), true)
 
+// Browse models opens from its header (closed by default); refresh sits beside the search.
+assert.equal(ModelsPage.data().browseOpen, false)
+assert.match(template, /class="gx-section__header gx-model-collapse" :aria-expanded="String\(browseOpen\)" aria-controls="gx-model-browse-panel"/)
+assert.match(template, /<div v-if="browseOpen" id="gx-model-browse-panel">/)
+assert.ok(template.indexOf('gx-model-refresh') > template.indexOf('class="gx-model-searchbar"'), "refresh is in the search row")
+// Catalog checks never use the top banner (it pushed the page down); the header chip reports them.
+assert.match(template, /<GxNotice v-if="status.downloading && !status.refreshing" :title="'Downloading ' \+ downloadTargetLabel">/)
+assert.match(template, /<template v-if="status.refreshing">Checking for new models…<\/template><template v-else-if="refreshNote">/)
+// Galaxy's server no longer checks the catalog by itself while the page polls.
+const server = readFileSync(new URL("../server.py", import.meta.url), "utf8")
+assert.match(server, /ModelManager\(parked=authority\.parked, refresh_catalog=False\)/)
+assert.match(css, /\.gx-model-list > \.gx-model-item--active \{[^}]*border-radius: 0;/)
+
 const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8")
 assert.match(html, /css\/model-list\.css/)
 console.log("Model Manager selector, compact list, tags, filter menu and sorts passed")

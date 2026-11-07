@@ -468,7 +468,9 @@ export const ModelsPage = {
       lab: null, labError: "", labDirty: false, labConfig: { enabled: false, lateralModel: "", longitudinalModel: "" }, focused: false,
       // Single model / Model pair selector: the mode being shown while a change is saving, or before a pair can switch on.
       pairView: null,
-      jetlinkOpen: false, filtersOpen: false }
+      jetlinkOpen: false, filtersOpen: false, browseOpen: false,
+      // Catalog checks report in the Browse models header, never as a banner that pushes the page down.
+      refreshNote: "", trackingRefresh: false }
   },
   computed: {
     currentLabel() { return this.models.find(m => m.value === this.currentModel)?.label || this.currentModel || "" },
@@ -537,6 +539,7 @@ export const ModelsPage = {
         this.activeBigModel = p.activeBigModel || ""
         this.summary = p.summary || { installed: 0, missing: 0, total: 0 }
         this.status = p
+        if (this.trackingRefresh && !p.downloading) { this.trackingRefresh = false; this.noteRefresh(p.progress || "Model list checked") }
         if (this.trackingProgress) {
           if (p.downloading) this.message = ""
           else {
@@ -562,6 +565,7 @@ export const ModelsPage = {
   },
   beforeUnmount() {
     this.disposed = true
+    clearTimeout(this.refreshTimer)
     if (this.filterAway) { document.removeEventListener("pointerdown", this.filterAway); document.removeEventListener("keydown", this.filterAway) }
     this.finishDialog(false)
     document.removeEventListener("visibilitychange", this.visibility)
@@ -655,8 +659,14 @@ export const ModelsPage = {
       return [[pair.lateralModel, "Pair · lateral"], [pair.longitudinalModel, "Pair · longitudinal"]]
         .filter(([id]) => id && id === model.value).map(([, role]) => role)
     },
+    noteRefresh(note) {
+      clearTimeout(this.refreshTimer)
+      this.refreshNote = note || ""
+      this.refreshTimer = setTimeout(() => { this.refreshNote = "" }, 6000)
+    },
     showPairable() {
       this.pairableFilter = true
+      this.browseOpen = true
       this.$nextTick(() => this.$refs.browse?.scrollIntoView({ block: "start" }))
     },
     clearFilters() {
@@ -776,6 +786,12 @@ export const ModelsPage = {
           this.trackingProgress = ["download", "downloadAll", "refresh"].includes(action)
           this.message = this.trackingProgress && this.status.downloading ? "" : (this.trackingProgress && this.status.progress) || result.message ||
             (action.startsWith("select-") ? "Selection saved for the next onroad cycle." : "Saved.")
+          if (action === "refresh") {
+            this.trackingRefresh = this.status.downloading === true
+            if (!this.trackingRefresh) this.noteRefresh(this.message)
+            this.message = ""
+            this.trackingProgress = false
+          }
           if (["download", "downloadAll", "cancel", "delete", "refresh"].includes(action)) this.laboratory.load()
         }
       } finally { if (!this.disposed) { this.pendingChoice = null; this.busy = "" } }
@@ -793,7 +809,7 @@ export const ModelsPage = {
         <GxNotice v-if="message" tone="info">{{ message }}</GxNotice>
         <GxNotice v-if="error" tone="danger" title="Model Manager">{{ error }}</GxNotice>
         <GxNotice v-if="status.isOnroad" tone="warn">Selections apply next onroad cycle. Park before downloading models or changing Jetlink.</GxNotice>
-        <GxNotice v-if="status.downloading" :title="(status.refreshing ? 'Checking ' : 'Downloading ') + downloadTargetLabel">{{ status.progress || 'Keep the device connected until the download finishes.' }}</GxNotice>
+        <GxNotice v-if="status.downloading && !status.refreshing" :title="'Downloading ' + downloadTargetLabel">{{ status.progress || 'Keep the device connected until the download finishes.' }}</GxNotice>
         <section class="gx-card gx-model-choose">
           <div class="gx-section__header">
             <i aria-hidden="true" class="bi bi-sliders"></i>
@@ -902,17 +918,19 @@ export const ModelsPage = {
         </section>
 
         <section ref="browse" class="gx-card gx-model-browse">
-          <div class="gx-section__header">
+          <button type="button" class="gx-section__header gx-model-collapse" :aria-expanded="String(browseOpen)" aria-controls="gx-model-browse-panel" @click="browseOpen = !browseOpen">
             <i aria-hidden="true" class="bi bi-list-ul"></i>
             <span class="gx-section__title">Browse models</span>
-            <span class="gx-section__count"><span class="gx-model-count-word">Showing </span>{{ sorted.length }} of {{ models.length }}</span>
-            <button v-if="status.downloading" type="button" class="gx-btn gx-btn--danger gx-model-btn" :disabled="!actionAvailable('cancel')" @click="runAction('cancel')"><i aria-hidden="true" class="bi bi-stop-circle"></i> {{ status.refreshing ? 'Stop check' : 'Cancel download' }}</button>
-            <!-- The list checks for new models by itself while parked (every 5 minutes at most); this checks right now. -->
-            <button type="button" class="gx-icon-btn gx-model-refresh" :disabled="!actionAvailable('refresh')" aria-label="Check for new models" title="Check for new models" @click="runAction('refresh')"><i aria-hidden="true" class="bi" :class="busy === 'refresh:' || status.refreshing ? 'bi-arrow-repeat gx-model-spin' : 'bi-arrow-clockwise'"></i></button>
-          </div>
+            <span class="gx-section__count" role="status"><template v-if="status.refreshing">Checking for new models…</template><template v-else-if="refreshNote">{{ refreshNote }}</template><template v-else><span class="gx-model-count-word">Showing </span>{{ sorted.length }} of {{ models.length }}</template></span>
+            <i aria-hidden="true" class="bi bi-chevron-down gx-model-collapse__chevron"></i>
+          </button>
+          <div v-if="browseOpen" id="gx-model-browse-panel">
           <div class="gx-panel gx-stack gx-model-tools">
             <div class="gx-model-searchbar">
               <input class="gx-field gx-model-search" type="search" v-model.trim="search" placeholder="Search models" aria-label="Search models">
+              <button v-if="status.downloading" type="button" class="gx-btn gx-btn--danger gx-model-btn" :disabled="!actionAvailable('cancel')" @click="runAction('cancel')"><i aria-hidden="true" class="bi bi-stop-circle"></i> {{ status.refreshing ? 'Stop check' : 'Cancel download' }}</button>
+              <!-- The comma does not check by itself while this page is open; this checks for new models now. -->
+              <button type="button" class="gx-icon-btn gx-model-refresh" :disabled="!actionAvailable('refresh')" aria-label="Check for new models" title="Check for new models" @click="runAction('refresh')"><i aria-hidden="true" class="bi" :class="busy === 'refresh:' || status.refreshing ? 'bi-arrow-repeat gx-model-spin' : 'bi-arrow-clockwise'"></i></button>
               <div ref="filterMenu" class="gx-model-filter">
                 <button ref="filterButton" type="button" class="gx-icon-btn gx-model-filter__button" :class="{'gx-model-filter__button--on': filterCount}" :aria-expanded="String(filtersOpen)" aria-controls="gx-model-filter-menu" aria-haspopup="true"
                   :aria-label="filterCount ? 'Filters, ' + filterCount + ' on' : 'Filters'" title="Filters" @click="toggleFilters"><i aria-hidden="true" class="bi" :class="filterCount ? 'bi-funnel-fill' : 'bi-funnel'"></i><span v-if="filterCount" class="gx-model-filter__count" aria-hidden="true">{{ filterCount }}</span></button>
@@ -987,6 +1005,7 @@ export const ModelsPage = {
               </div>
             </li>
           </ul>
+          </div>
         </section>
       </template>
       <GxDialog v-if="polarisAbout" labelledby="gx-polaris-about-title" @close="polarisAbout = false">
