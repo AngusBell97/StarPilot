@@ -60,6 +60,7 @@ class LateralFeatureSettingsTests(unittest.TestCase):
 
   def test_global_steering_pause_rows_units_defaults_and_angle_vehicle(self):
     from opendbc.car.ford.values import CAR as FORD
+    self.params.put_bool("AlwaysOnLateral", True, block=True)  # the steering-pause rows are greyed while AOL is off
     for angle in (False, True):
       if angle:
         self.cp = interfaces[FORD.FORD_ESCAPE_MK4].get_non_essential_params(FORD.FORD_ESCAPE_MK4)

@@ -29,12 +29,16 @@ class TestAolPageGreying(TestCase):
     by_label = {row["label"]: row for row in rows}
     self.assertTrue(by_label["Enable Always On Lateral"]["available"])
     self.assertFalse(by_label["Brake pause below"]["available"])
-    self.assertTrue(by_label["Brake pause below"]["reason"].endswith("Turn on Always On Lateral first"))
-    self.assertTrue(all(by_label[label]["available"] for label in PAUSE))
+    for label in ("Brake pause below", *PAUSE):
+      with self.subTest(label=label):
+        self.assertFalse(by_label[label]["available"])
+        self.assertTrue(by_label[label]["reason"].endswith("Turn on Always On Lateral first"))
     self.params.put_bool("AlwaysOnLateral", True, block=True)
     by_label = {row["label"]: row for row in self.page()["rows"]}
-    self.assertTrue(by_label["Brake pause below"]["available"])
-    self.assertNotIn("Turn on", by_label["Brake pause below"]["reason"])
+    for label in ("Brake pause below", *PAUSE):
+      with self.subTest(on=label):
+        self.assertTrue(by_label[label]["available"])
+        self.assertNotIn("Turn on", by_label[label]["reason"])
 
   def test_greyed_threshold_refuses_edits(self):
     self.params.put_bool("AlwaysOnLateral", False, block=True)
@@ -43,16 +47,18 @@ class TestAolPageGreying(TestCase):
     with self.assertRaises(SettingsChanged):
       self.gateway.preview(page["view"], index, 0, self.session, self.generation, value=20)
 
-  def test_restore_defaults_resets_greyed_threshold_without_turning_aol_on(self):
-    self.params.put_bool("AlwaysOnLateral", True, block=True)
-    self.params.put("AolBrakePauseSpeedMps", 5.0, block=True)
+  def test_restore_defaults_resets_greyed_rows_without_turning_aol_on(self):
     self.params.put_bool("AlwaysOnLateral", False, block=True)
+    self.params.put("AolBrakePauseSpeedMps", 5.0, block=True)
     recovery = DefaultsRecovery(self.gateway)
+    self.params.put("PauseLateralSpeed", 15.0, block=True)
+    self.params.put("LateralResumeDelay", 2.0, block=True)
     view = recovery.snapshot(self.session, self.generation)
-    rows = [row for row in view["rows"] if row["page"] == "aol" and row["label"] == "Brake pause below"]
-    self.assertEqual(len(rows), 1)
-    self.assertTrue(rows[0]["resetAvailable"] and not rows[0]["available"])
-    pending = recovery.preview(view["view"], [rows[0]["id"]], self.session, self.generation)
+    rows = [row for row in view["rows"] if row["page"] == "aol" and row["label"] in ("Brake pause below", *PAUSE)]
+    self.assertEqual(sorted(row["label"] for row in rows), sorted(("Brake pause below", "Pause steering below", "Steering resume delay")))
+    self.assertTrue(all(row["resetAvailable"] and not row["available"] for row in rows))
+    pending = recovery.preview(view["view"], [row["id"] for row in rows], self.session, self.generation)
     self.assertTrue(recovery.confirm(pending["intent"], self.session, self.generation)["saved"])
     self.assertEqual(self.params.get("AolBrakePauseSpeedMps"), 0.0)
+    self.assertEqual((self.params.get("PauseLateralSpeed"), self.params.get("LateralResumeDelay")), (0.0, 0.0))
     self.assertFalse(self.params.get_bool("AlwaysOnLateral"))

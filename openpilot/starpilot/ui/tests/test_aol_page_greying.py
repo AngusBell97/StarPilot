@@ -35,21 +35,21 @@ class AolPageGreyingTests(unittest.TestCase):
   def test_switch_leads_then_brake_pause_then_steering_pause(self):
     self.assertEqual([row.key for row in self.rows()], ["AlwaysOnLateral", THRESHOLD, *PAUSE_KEYS])
 
-  def test_brake_pause_follows_the_switch_and_steering_pause_does_not(self):
+  def test_every_row_below_the_switch_follows_it(self):
     self.params.put_bool("AlwaysOnLateral", False, block=True)
     rows = {row.key: row for row in self.rows()}
     self.assertTrue(rows["AlwaysOnLateral"].available)
-    self.assertFalse(rows[THRESHOLD].available)
-    self.assertEqual(rows[THRESHOLD].reason, "Turn on Always On Lateral first")
-    self.assertTrue(rows[THRESHOLD].default_reset_available)
-    for key in PAUSE_KEYS:
+    for key in (THRESHOLD, *PAUSE_KEYS):
       with self.subTest(key=key):
-        self.assertTrue(rows[key].available)
-        self.assertNotIn("Always On Lateral", rows[key].reason)
+        self.assertFalse(rows[key].available)
+        self.assertEqual(rows[key].reason, "Turn on Always On Lateral first")
+        self.assertTrue(rows[key].default_reset_available)
     self.params.put_bool("AlwaysOnLateral", True, block=True)
-    threshold = self.row(THRESHOLD)
-    self.assertTrue(threshold.available)
-    self.assertNotIn("Turn on", threshold.reason)
+    rows = {row.key: row for row in self.rows()}
+    for key in (THRESHOLD, *PAUSE_KEYS):
+      with self.subTest(on=key):
+        self.assertTrue(rows[key].available)
+        self.assertNotIn("Turn on", rows[key].reason)
 
   def test_greyed_threshold_refuses_edits_but_accepts_restore_default(self):
     self.params.put_bool("AlwaysOnLateral", True, block=True)
@@ -77,11 +77,26 @@ class AolPageGreyingTests(unittest.TestCase):
     self.assertEqual(self.params.get(THRESHOLD), 0.0)
     self.assertFalse(self.row(THRESHOLD).available)  # repaired and valid, so greyed again while AOL is off
 
-  def test_steering_pause_still_edits_while_aol_is_off(self):
-    self.params.put_bool("AlwaysOnLateral", False, block=True)
-    row = self.row("PauseLateralSpeed")
-    self.assertTrue(self.owner.apply(row_change(row, 1)))
+  def test_steering_pause_edits_only_while_aol_is_on(self):
+    self.params.put_bool("AlwaysOnLateral", True, block=True)
+    self.assertTrue(self.owner.apply(row_change(self.row("PauseLateralSpeed"), 1)))
     self.assertEqual(self.params.get("PauseLateralSpeed"), 1.0)
+    self.params.put_bool("AlwaysOnLateral", False, block=True)
+    for key, value in (("PauseLateralSpeed", "5"), ("PauseLateralOnSignal", "On"), ("LateralResumeDelay", "2")):
+      with self.subTest(key=key):
+        row = self.row(key)
+        request = FeatureSettingsRequest(key, row.source, value, vehicle_fingerprint=row.vehicle_fingerprint,
+                                         capability=row.capability, dependencies=row.dependencies, display_unit=row.display_unit)
+        self.assertFalse(self.owner.apply(request))
+        self.assertFalse(self.owner.apply(request, reset_default=True))  # a "reset" must carry the real default
+    self.assertEqual(self.params.get("PauseLateralSpeed"), 1.0)
+    row = self.row("PauseLateralSpeed")  # Restore defaults still resets a greyed row
+    self.assertTrue(self.owner.apply(FeatureSettingsRequest("PauseLateralSpeed", row.source, row.default_value,
+                                                            vehicle_fingerprint=row.vehicle_fingerprint, capability=row.capability,
+                                                            dependencies=row.dependencies, display_unit=row.display_unit),
+                                     reset_default=True))
+    self.assertEqual(self.params.get("PauseLateralSpeed"), 0.0)
+    self.assertFalse(self.params.get_bool("AlwaysOnLateral"))
 
 
 if __name__ == "__main__":
