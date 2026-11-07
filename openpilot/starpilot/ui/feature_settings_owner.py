@@ -68,7 +68,7 @@ from openpilot.starpilot.panda_wake import KEYS as PANDA_WAKE_KEYS
 from openpilot.starpilot.saved_document import commit_exact
 from openpilot.starpilot.curve_speed.preferences import (
   DOCUMENT_KEY as CURVE_DOCUMENT_KEY, LEGACY_KEY as CURVE_LEGACY_KEY,
-  MASTER_KEY as CURVE_MASTER_KEY, NO_LEAD_KEY as CURVE_NO_LEAD_KEY, STEERING_LOAD_KEY,
+  MASTER_KEY as CURVE_MASTER_KEY, NO_LEAD_KEY as CURVE_NO_LEAD_KEY,
   DOCUMENT_LIMIT as CURVE_DOCUMENT_LIMIT, read_learning,
 )
 from openpilot.starpilot.curve_speed.actions import ACTION_KEYS as CURVE_ACTION_KEYS, apply_learning, learning_snapshot
@@ -96,7 +96,7 @@ BOOL_DEFAULTS = {
   LEAD_TAKEOFF_KEY: False,
   NUDGE_KEY: True,
   "DisengageOnAccelerator": False,
-  CURVE_MASTER_KEY: False, CURVE_NO_LEAD_KEY: False, STEERING_LOAD_KEY: False,
+  CURVE_MASTER_KEY: False, CURVE_NO_LEAD_KEY: False,
   "ShowCSCStatus": False,
   "ForceAutoTuneOff": False, "AlwaysOnLateral": True, "NostalgiaMode": False,
 }
@@ -128,7 +128,7 @@ AOL_LEGACY_THRESHOLD = "PauseAOLOnBrake"
 TORQUE_NUMBERS = LEGACY_KEYS
 LANE_LIVE_KEYS = frozenset(("LaneCentering", "LaneCenteringPauseOnSignal", "LaneCenterOffset",
                             "LaneCenteringE2EAuthority", "LaneCenteringStrength"))
-CURVE_KEYS = frozenset((CURVE_MASTER_KEY, CURVE_NO_LEAD_KEY, STEERING_LOAD_KEY))
+CURVE_KEYS = frozenset((CURVE_MASTER_KEY, CURVE_NO_LEAD_KEY))
 CURVE_PAGE_KEYS = CURVE_KEYS | {"ShowCSCStatus"}
 CRUISE_KEYS = frozenset(("CustomCruise", "CustomCruiseLong"))
 
@@ -184,8 +184,6 @@ class FeatureSettingsOwner:
     self.wheel = WheelFeature(self)
     from openpilot.starpilot.ui.tesla_controls_feature import TeslaControlsFeature
     self.tesla_controls = TeslaControlsFeature(self)
-    from openpilot.starpilot.ui.map_corner_feature import MapCornerFeature
-    self.map_corner = MapCornerFeature(self)
     from openpilot.starpilot.ui.slc_custom_feature import SlcCustomFeature
     self.slc_custom = SlcCustomFeature(self)
 
@@ -1022,20 +1020,21 @@ class FeatureSettingsOwner:
                                  "Invalid saved learning; turn off without changing it" if not learning.valid else
                                  "Adjusts speed for curves while StarPilot controls acceleration and braking" if allowed and curve_supported else
                                  "Curve Speed control is not supported for this vehicle yet" if allowed else master_row.reason))
-      no_lead_row = self._bool_row(CURVE_NO_LEAD_KEY, "Pause while following a lead", allowed and learning.valid)
+      # The settings below the master switch grey out while it is off; Restore defaults can still reset them.
+      curve_on = master == "1"
+      curve_off_reason = "Turn on Curve Speed Controller first"
+      no_lead_row = self._bool_row(CURVE_NO_LEAD_KEY, "Pause while following a lead", allowed and learning.valid and curve_on)
       rows.append(replace(no_lead_row, dependencies=dependencies,
+                          default_reset_available=allowed and parked and learning.valid and no_lead_row.value in ("On", "Off"),
                           reason=no_lead_row.reason if no_lead_row.value not in ("On", "Off") else
                                  "Invalid saved learning" if not learning.valid else
+                                 curve_off_reason if allowed and not curve_on else
                                  "Pauses curve speed adjustments while following a lead vehicle" if allowed else
                                  "Unavailable with the current vehicle or feature settings"))
-      from openpilot.starpilot.curve_speed.steering_load import supported as steering_load_supported
-      load_allowed = allowed and learning.valid and steering_load_supported(vehicle_cp)
-      load_row = self._bool_row(STEERING_LOAD_KEY, "Steering-load slowdown", load_allowed)
-      rows.append(replace(load_row, dependencies=dependencies,
-                          reason="Slows above 95% on the steering bar, up to 1.2 m/s2. Ramps from zero to full braking in 0.5s and releases back to zero over 2s as demand eases. Requires CSC. Stronger existing braking takes priority; also works with a lead." if load_allowed else
-                                 "Available with system-controlled acceleration and braking on supported Teslas"))
-      rows.append(self._bool_row("ShowCSCStatus", "Show Curve status", allowed,
-                                 reason="Display preference only; it does not enable control"))
+      status_row = self._bool_row("ShowCSCStatus", "Show Curve status", allowed and curve_on,
+                                  reason="Display preference only; it does not enable control")
+      rows.append(replace(status_row, default_reset_available=allowed and parked and status_row.value in ("On", "Off"),
+                          reason=curve_off_reason if allowed and not curve_on and status_row.value in ("On", "Off") else status_row.reason))
       rows.append(FeatureRow("", "Saved learning", "Valid" if learning.valid else "Unavailable",
                              reason="Used automatically when Curve Speed Controller is on" if learning.valid else
                                     "Saved data remains untouched; runtime control is disabled"))
@@ -1051,7 +1050,6 @@ class FeatureSettingsOwner:
                              reason="" if learning.resettable else "No saved learning" if learning.valid and not learning.has_samples else
                                     "Park to reset saved learning" if not parked else "Saved learning is currently in use",
                              vehicle_fingerprint=self.vehicle_fingerprint(), dependencies=learning.sources))
-      rows.extend(self.map_corner.rows(parked, metric))
     elif page == FeaturePage.BLUEPILOT:
       title = "BluePilot Controller Options"
       rows.extend(FordBluePilotFeature(self).rows(parked, options=True))
@@ -1413,8 +1411,6 @@ class FeatureSettingsOwner:
     from openpilot.starpilot.ui.slc_custom_feature import KEYS as SLC_CUSTOM_KEYS
     if key in SLC_CUSTOM_KEYS:
       return self.slc_custom.apply(request)
-    if key in ("MapCornerSpeed", "LearnCornerSpeeds") or key.startswith("map_memory:"):
-      return self.map_corner.apply(request)
     if key == "AlwaysOnLateral" and request.value == "Off":
       def authorized_off():
         return (self.authority("preferences") and self._readable(key) and
@@ -1575,10 +1571,6 @@ class FeatureSettingsOwner:
         if not self._readable(source_key) or (request.value != "Off" or key not in ("AlwaysOnLateral",)) and\
            any(not self._readable(name) for name, _ in request.dependencies):
           return False
-      if key == STEERING_LOAD_KEY:
-        from openpilot.starpilot.curve_speed.steering_load import supported as steering_load_supported
-        if request.value != "Off" and not steering_load_supported(self.vehicle_params()):
-          return False
       if key in CURVE_KEYS:
         current_document = self._raw(CURVE_DOCUMENT_KEY)
         expected_dependencies = ((CURVE_DOCUMENT_KEY, current_document),)
@@ -1594,6 +1586,10 @@ class FeatureSettingsOwner:
         from openpilot.starpilot.lateral.lane_runtime import runtime_supported
         if not runtime_supported(self.vehicle_params()):
           return False
+      # Greyed while Curve Speed Controller is off; only Restore defaults may reset them.
+      if (key in (CURVE_NO_LEAD_KEY, "ShowCSCStatus") and self._value(CURVE_MASTER_KEY)[0] != "1" and
+          not (reset_default and request.value == ("On" if self._default(key) == "1" else "Off"))):
+        return False
       if (key == "LaneCenteringPauseOnSignal" and self._value("LaneCentering")[0] != "1" and
           not (reset_default and request.value == ("On" if self._default(key) == "1" else "Off"))):
         return False

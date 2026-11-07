@@ -1,5 +1,0 @@
-offline.capnp derives from pfeiferj/mapd at 8e5eee69f7904ed98eed91ceff4ab5919bec0e3c,
-cereal/offline/offline.capnp. Go annotations are removed; field ordinals retained.
-Source: https://github.com/pfeiferj/mapd
-Map data is supplied separately by the existing offline-map installation.
-This feature does not download or redistribute map data.

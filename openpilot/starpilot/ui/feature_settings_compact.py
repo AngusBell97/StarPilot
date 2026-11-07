@@ -121,8 +121,6 @@ class FeatureSettingsCompact:
                              "saved control may resume if its switch is on; its switch will not change",
                 "curve_reset": "Erase learned curve data? Curve Speed Controller keeps its current On or Off choice.",
                 "reset_profiles": "reset invalid profiles"}.get(row.key, long_confirm_question(row))
-    if row.key.startswith("map_memory:"):
-      question = row.label + "? This changes the saved local data."
     gui_app.push_widget(BigConfirmationDialog(question,
                                                gui_app.texture("icons_mici/settings/device/uninstall.png", 64, 64),
                                                confirmed, red=True))

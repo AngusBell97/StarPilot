@@ -1305,7 +1305,7 @@ class StarShellSession:
     from openpilot.starpilot.ui.feature_settings_state import CURVE_CONFIRM_ACTIONS, CONDITIONAL_CONFIRM_ACTIONS, TORQUE_CONFIRM_ACTIONS, is_long_confirm_action
     from openpilot.starpilot.ui.long_profile_feature import long_confirm_question
     from openpilot.starpilot.ui.controller_feature import SETUP_ACTION, SETUP_QUESTION
-    action_key = row.key if (row.key.startswith("map_memory:") or row.key in TORQUE_CONFIRM_ACTIONS or row.key in ("slc_reset", LANE_CHANGE_RESET, SETUP_ACTION) or
+    action_key = row.key if (row.key in TORQUE_CONFIRM_ACTIONS or row.key in ("slc_reset", LANE_CHANGE_RESET, SETUP_ACTION) or
                              row.key in CURVE_CONFIRM_ACTIONS | CONDITIONAL_CONFIRM_ACTIONS or is_long_confirm_action(row.key)) else "reset_profiles"
     if action_key in CONDITIONAL_CONFIRM_ACTIONS:
       self._confirm_conditional(FeatureSettingsRequest(action_key, row.source, "confirm", confirmation=True,
@@ -1328,17 +1328,13 @@ class StarShellSession:
                              "Saved SLC control may resume if its switch is On; the switch will not change.",
                 "curve_reset": "Reset saved Curve learning? Your Curve Speed Controller On/Off choice will stay the same.",
                 "reset_profiles": "Reset invalid saved Long Planner profiles to defaults?"}.get(action_key, long_confirm_question(row))
-    if action_key.startswith('map_memory:'):
-      question=row.label+'?'
     def confirmed(result: DialogResult) -> None:
       if result == DialogResult.CONFIRM:
         self.feature_request(FeatureSettingsRequest(action_key, row.source, "confirm", confirmation=True,
                                                      related_source=row.related_source,
                                                      vehicle_fingerprint=row.vehicle_fingerprint,
                                                      capability=row.capability, dependencies=row.dependencies))
-    if action_key.startswith("map_memory:"):
-      button="Continue"
-    elif action_key == "torque_adopt":
+    if action_key == "torque_adopt":
       button = "Continue"
     elif action_key in ("torque_rebase", "torque_gain_rebase"):
       button = "Review"
